@@ -16,7 +16,7 @@ export enum CON_NATIVE_FLAGS {
 
 export interface CON_NATIVE_FUNCTION {
     name: string,
-    code: string | (() => {}),
+    code: string | ((arg: any) => string),
     returns: boolean,
     return_type: 'variable' | 'string' | 'pointer' | null,
     arguments: CON_NATIVE_FLAGS[]
@@ -67,7 +67,35 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
         returns: true,
         return_type: "variable",
         arguments: []
-    }
+    },
+    {
+        name: 'CanSee',
+        code: `set rb 0 \nifcansee set rb 1 \n`,
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'CanShootTarget',
+        code: `set rb 0 \nifcanshoottarget set rb 1 \n`,
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'CStat',
+        code: ((arg: number | undefined) => {
+            if(typeof arg !== 'undefined')
+                return `seta[].cstat ${arg} \n`;
+
+            return `geta[].cstat rb \n`
+        }),
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
+        ]
+    },
 ]
 
 export const nativeVars: CON_NATIVE_VAR[] = [
