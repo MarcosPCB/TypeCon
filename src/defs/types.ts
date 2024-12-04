@@ -71,7 +71,9 @@ declare global {
         public isEnemy: boolean;
         public extra: CON_NATIVE<number>;
         public htExtra: CON_NATIVE<number>;
+        public damage: CON_NATIVE<number>;
         public htPicnum: CON_NATIVE<number>;
+        public weaponHit: CON_NATIVE<number>;
         public curAction: CON_NATIVE_POINTER;
         public curMove: CON_NATIVE_POINTER;
         public curAI: CON_NATIVE_POINTER;
@@ -105,6 +107,14 @@ declare global {
         SizeAt(w: number, h: number): CON_NATIVE<void> 
         SizeTo(w: number, h: number, inc_x?: number, inc_y?: number): CON_NATIVE<void> 
         Count(value?: number): CON_NATIVE<number> 
+        Fall(): CON_NATIVE<void>
+        BulletNear(): CON_NATIVE<boolean>
+        HitByWeapon(): CON_NATIVE<boolean>
+        WeaponHit(): CON_NATIVE<number>
+        Squished(): CON_NATIVE<boolean>
+        IsItMoving(): CON_NATIVE<boolean>
+        GetLastPal(): CON_NATIVE<void>
+        PlayerKick(): CON_NATIVE<void>
 
         public Main(): void
     }

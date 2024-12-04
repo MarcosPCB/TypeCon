@@ -100,8 +100,8 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
 
             return `geta[].cstat rb \n`
         }),
-        returns: false,
-        return_type: null,
+        returns: true,
+        return_type: 'variable',
         arguments: [
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
         ]
@@ -132,7 +132,25 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     {
         name: 'SizeTo',
         code: ((arg?: boolean) => {
-            return `geta[].xrepeat ra \ngeta[].yrepeat rb \nifl ra r0 { \nadd ra r2 \nseta[].xrepeat ra \n} \nifl rb r1 { \nadd rb r3 \nseta[].yrepeat rb \n} \n`;
+            return `geta[].xrepeat ra
+geta[].yrepeat rb
+ifl ra r0 {
+add ra r2
+seta[].xrepeat ra
+}
+ifl rb r1 {
+set ra rb
+gettiledata[sprite[].picnum].ysize rd
+mul ra rd
+add ra 8
+shiftr ra 2
+geta[].htfloorz rd
+sub rd sprite[].htceilingz
+ifl ra rd {
+add rb r3
+seta[].yrepeat rb
+}
+} \n`;
         }),
         returns: false,
         return_type: null,
@@ -151,11 +169,60 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
                 return `seta[].htg_t 0 r0 \n`;
             return `geta[].htg_t 0 rb \n`;
         }),
-        returns: false,
-        return_type: null,
+        returns: true,
+        return_type: 'variable',
         arguments: [
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
         ]
+    },
+    {
+        name: 'Fall',
+        code: 'fall \n',
+        returns: false,
+        return_type: null,
+        arguments: []
+    },
+    {
+        name: 'BulletNear',
+        code: 'set rb 0 \nifbulletnear set rb 1 \n',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'HitByWeapon',
+        code: 'set rb 0 \nifhitweapon set rb 1 \n',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'Squished',
+        code: 'set rb 0 \nifsquished set rb 1 \n',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'IsItMoving',
+        code: 'set rb 1 \nifnotmoving set rb 0 \n',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'GetLastPal',
+        code: 'getlastpal \n',
+        returns: false,
+        return_type: null,
+        arguments: []
+    },
+    {
+        name: 'PlayerKick',
+        code: 'pkick \n',
+        returns: false,
+        return_type: null,
+        arguments: []
     },
 ]
 
@@ -231,6 +298,42 @@ export const nativeVars: CON_NATIVE_VAR[] = [
         readonly: true,
         code: 'playerDist',
         init: 0
+    },
+    {
+        name: 'damage',
+        object: 'this',
+        var_type: 'actor',
+        type: 'variable',
+        readonly: true,
+        code: 'htextra',
+        init: -1
+    },
+    {
+        name: 'htExtra',
+        object: 'this',
+        var_type: 'actor',
+        type: 'variable',
+        readonly: true,
+        code: 'htExtra',
+        init: -1
+    },
+    {
+        name: 'weaponHit',
+        object: 'this',
+        var_type: 'actor',
+        type: 'variable',
+        readonly: true,
+        code: 'htPicnum',
+        init: -1
+    },
+    {
+        name: 'htPicnum',
+        object: 'this',
+        var_type: 'actor',
+        type: 'variable',
+        readonly: true,
+        code: 'htPicnum',
+        init: -1
     }
 ]
 
