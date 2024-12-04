@@ -2,8 +2,8 @@ import * as T from '@babel/types';
 import { EBlock, EState, IActor, IBlock, IError, ILabel, IVar, TClassType, TVar } from './types';
 import { escape } from 'querystring';
 import { funcTranslator, IFuncTranslation, initCode, initStates } from './translation';
-import { CActor, EMoveFlags, IAction, IAi, IMove } from './defs/types';
-import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars } from './defs/native';
+import './defs/types';
+import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars, EMoveFlags } from './defs/native';
 
 const errors: IError[] = [];
 var detailLines = false;
@@ -35,6 +35,8 @@ var typeCheck = '';
 var stack: number[] = [];
 
 var labels: ILabel[] = [];
+
+var depth = 0;
 
 function Line(loc: T.SourceLocation) {
   if(detailLines) {
@@ -555,17 +557,22 @@ function Traverse(
         });
       }
       //if(mode == 'function_body') {
-        if(node.arguments.length < f.arguments.length) {
-          errors.push({
-            type: 'error',
-            node: node.type,
-            location: node.loc as T.SourceLocation,
-            message: `Missing parameters in function`
-          });
-          return false;
-        }
 
         const args = node.arguments;
+
+        if(args.length < f.arguments.length) {
+          for(let i = 0; i < f.arguments.length; i ++) {
+            if(!args[i] && !(f.arguments[i] & CON_NATIVE_FLAGS.OPTIONAL)) {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Missing parameters in function`
+              });
+              return false;
+            }
+          }
+        }
 
         if(args.length > 0) {
           let params: string = '';
@@ -575,6 +582,20 @@ function Traverse(
           for(let i = 0; i < args.length; i++) {
             const a = args[i];
 
+            if(a.type == 'NumericLiteral') {
+              if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
+                errors.push({
+                  type: 'error',
+                  node: node.type,
+                  location: node.loc as T.SourceLocation,
+                  message: `Wrong type of parameter for argument for function ${f.name}`
+                });
+                return false;
+              }
+
+              code += `set r${i} ${a.value} \n`;
+            }
+
             if(a.type == 'BinaryExpression' || a.type == 'MemberExpression') {
               if(f.arguments[i] != CON_NATIVE_FLAGS.VARIABLE && f.arguments[i] != CON_NATIVE_FLAGS.CONSTANT) {
                 errors.push({
@@ -583,6 +604,7 @@ function Traverse(
                   location: node.loc as T.SourceLocation,
                   message: `Wrong type of parameter for argument for function ${f.name}`
                 });
+                return false;
               }
 
               if(!Traverse(a, f.arguments[i] == CON_NATIVE_FLAGS.VARIABLE ? 'function_params' : 'retrieval',
@@ -620,9 +642,9 @@ function Traverse(
             params += `r${i} `;
           }
 
-          code += `${f.code} ${params} \n`;
+          code += `${typeof f.code === 'function' ? f.code(true) : `${f.code} ${params} \n`}`;
           code += `state popr${args.length} \n`;
-        } else code += `${f.code} \n`;
+        } else code += `${typeof f.code === 'function' ? f.code() : `${f.code} \n`}`;
 
         typeCheck = '';
         if(f.returns && f.return_type)
@@ -653,6 +675,12 @@ function Traverse(
             const a = args[i];
 
             if(a.type == 'BinaryExpression') {
+              const newMode = f.params[i] == 'variable' ? 'function_params' : 'retrieval';
+              if(!Traverse(a, newMode, i))
+                return false;
+            }
+
+            if(a.type == 'CallExpression') {
               const newMode = f.params[i] == 'variable' ? 'function_params' : 'retrieval';
               if(!Traverse(a, newMode, i))
                 return false;

@@ -1,5 +1,5 @@
 import * as T from '@babel/types';
-import { IAction, IAi, IMove } from './defs/types';
+import './defs/types';
 
 export interface IError {
     type: 'error' | 'warning';

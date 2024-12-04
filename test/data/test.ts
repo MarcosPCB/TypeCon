@@ -1,5 +1,5 @@
 import { Label } from "../../src/defs/native";
-import { CActor, EMoveFlags, IAction, IAi, IMove } from "../../src/defs/types";
+import '../../src/defs/types';
 
 class newEnemy extends CActor {
 
@@ -43,6 +43,8 @@ class newEnemy extends CActor {
         if(this.PlayerDist() > 2048 && this.curAction == Label('idle')) {
             this.PlayAction(Label('idle'));
             this.Move(Label('walkvel'), EMoveFlags.faceplayerslow);
+            this.CStat(2);
+            console.log(this.CStat());
         }
         return;
     }
