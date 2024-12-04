@@ -1,4 +1,3 @@
-import { Label } from "../../src/defs/native";
 import '../../src/defs/types';
 
 class newEnemy extends CActor {

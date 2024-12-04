@@ -2,6 +2,9 @@ import { CON_NATIVE, CON_NATIVE_POINTER } from "./native";
 declare global {
     export type TLabel = string; //Use this to define constants and pointers
 
+    export type pointer = void;
+    export function Label<pointer>(name: string): pointer;
+
     //Interface for declaring actions
     export interface IAction {
         name: TLabel,
