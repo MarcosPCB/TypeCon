@@ -73,6 +73,7 @@ declare global {
         public curMove: CON_NATIVE_POINTER;
         public curAI: CON_NATIVE_POINTER;
         public picnum: CON_NATIVE<number>;
+        public playerDist: CON_NATIVE<number>;
 
         public index: number;
 
@@ -91,7 +92,6 @@ declare global {
             ais?: IAi[]
         )
 
-        PlayerDist(): CON_NATIVE<number> 
         PlayAction(action: string): CON_NATIVE<void>
         Move(move: string, flags: number): CON_NATIVE<void>
         StartAI(ai: string): CON_NATIVE<void>
@@ -100,7 +100,7 @@ declare global {
         CStat(stats?: number): CON_NATIVE<number>
         CStatOR(stats: number): CON_NATIVE<void> 
         SizeAt(w: number, h: number): CON_NATIVE<void> 
-        SizeTo(w: number, h: number): CON_NATIVE<void> 
+        SizeTo(w: number, h: number, inc_x?: number, inc_y?: number): CON_NATIVE<void> 
         Count(value?: number): CON_NATIVE<number> 
 
         public Main(): void

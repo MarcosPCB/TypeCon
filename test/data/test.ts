@@ -40,12 +40,17 @@ class newEnemy extends CActor {
             go = 6;
         }
 
-        if(this.PlayerDist() > 2048 && this.curAction == Label('idle')) {
+        if(this.playerDist > 2048 && this.curAction == Label('idle')) {
             this.PlayAction(Label('idle'));
             this.Move(Label('walkvel'), EMoveFlags.faceplayerslow);
             this.CStat(2);
             console.log(this.CStat());
         }
+
+        this.CStatOR(go);
+        this.SizeTo(6, 6);
+        this.SizeTo(6, 6, 2, 2);
+
         return;
     }
     

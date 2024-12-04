@@ -52,89 +52,25 @@ var rd 0 0
 var rbp 0 0
 var rsp -1 0
 
-gamearray stack `
+//Internal per-actor vars
+var playerDist 0 2
+
+array rstack 16 0
+
+array stack `
 
 export const initStates = `
 defstate pushrall
     add rsp 1
-    setarray stack[rsp] r0
-    
-    add rsp 1
-    setarray stack[rsp] r1
-
-    add rsp 1
-    setarray stack[rsp] r2
-
-    add rsp 1
-    setarray stack[rsp] r3
-
-    add rsp 1
-    setarray stack[rsp] r4
-
-    add rsp 1
-    setarray stack[rsp] r5
-
-    add rsp 1
-    setarray stack[rsp] r6
-
-    add rsp 1
-    setarray stack[rsp] r7
-
-    add rsp 1
-    setarray stack[rsp] r8
-
-    add rsp 1
-    setarray stack[rsp] r9
-
-    add rsp 1
-    setarray stack[rsp] r10
-
-    add rsp 1
-    setarray stack[rsp] r11
-
-    add rsp 1
-    setarray stack[rsp] r12
+    setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
+    copy rstack 0 stack rsp 13
+    add rsp 12
 ends
 
 defstate poprall
-    set r12 stack[rsp]
-    sub rsp 1
-
-    set r11 stack[rsp]
-    sub rsp 1
-
-    set r10 stack[rsp]
-    sub rsp 1
-
-    set r9 stack[rsp]
-    sub rsp 1
-
-    set r8 stack[rsp]
-    sub rsp 1
-
-    set r7 stack[rsp]
-    sub rsp 1
-
-    set r6 stack[rsp]
-    sub rsp 1
-
-    set r5 stack[rsp]
-    sub rsp 1
-
-    set r4 stack[rsp]
-    sub rsp 1
-
-    set r3 stack[rsp]
-    sub rsp 1
-
-    set r2 stack[rsp]
-    sub rsp 1
-
-    set r1 stack[rsp]
-    sub rsp 1
-
-    set r0 stack[rsp]
-    sub rsp 1
+    sub rsp 13
+    copy stack rsp rstack 0 13
+    getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
 ends
 
 defstate pushr1
@@ -149,40 +85,41 @@ ends
 
 defstate pushr2
     add rsp 1
-    setarray stack[rsp] r0
-
+    setarrayseq rstack r0 r1
+    copy rstack 0 stack rsp 2
     add rsp 1
-    setarray stack[rsp] r1
 ends
 
 defstate popr2
-    set r1 stack[rsp]
-    sub rsp 1
-
-    set r0 stack[rsp]
-    sub rsp 1
+    sub rsp 2
+    copy stack rsp rstack 0 2
+    getarrayseq rstack r0 r1
 ends
 
 defstate pushr3
     add rsp 1
-    setarray stack[rsp] r0
-
-    add rsp 1
-    setarray stack[rsp] r1
-
-     add rsp 1
-    setarray stack[rsp] r2
+    setarrayseq rstack r0 r1 r2
+    copy rstack 0 stack rsp 3
+    add rsp 2
 ends
 
 defstate popr3
-    set r2 stack[rsp]
-    sub rsp 1
+    sub rsp 3
+    copy stack rsp rstack 0 3
+    getarrayseq rstack r0 r1 r2
+ends
 
-    set r1 stack[rsp]
-    sub rsp 1
+defstate pushr4
+    add rsp 1
+    setarrayseq rstack r0 r1 r2 r3
+    copy rstack 0 stack rsp 4
+    add rsp 3
+ends
 
-    set r0 stack[rsp]
-    sub rsp 1
+defstate popr4
+    sub rsp 4
+    copy stack rsp rstack 0 4
+    getarrayseq rstack r0 r1 r2 r3
 ends
 
 defstate push

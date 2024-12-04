@@ -51,6 +51,24 @@ function Line(loc: T.SourceLocation) {
   return '';
 }
 
+function GetVar(name: string) {
+  let variable = vars.find(e => e.name == name && e.block == bBlock.length - 1);
+
+  if(!variable)
+    variable = vars.find(e => e.name == name && e.global);
+
+  return variable;
+}
+
+function GetVarIndex(name: string) {
+  let variable = vars.findIndex(e => e.name == name && e.block == bBlock.length - 1);
+
+  if(variable == -1)
+    variable = vars.findIndex(e => e.name == name && e.global);
+
+  return variable;
+}
+
 function GetVarType(node: T.VariableDeclarator) {
   if(node.id.type == 'Identifier') {
     if(node.id.typeAnnotation?.type == 'TSTypeAnnotation') {
@@ -271,7 +289,7 @@ function SuperCall(node: T.CallExpression) {
     for(let i = 0; i < args[3].elements.length; i++) {
       const e = args[3].elements[i] as T.Identifier;
 
-      const variable = vars.findIndex(el => el.name == e.name);
+      const variable = GetVarIndex(e.name);
 
       if(variable == -1) {
         errors.push({
@@ -327,7 +345,7 @@ function SuperCall(node: T.CallExpression) {
       return false;
     }
 
-    const variable = vars.findIndex(el => el.name == args[4].loc?.identifierName);
+    const variable = GetVarIndex(args[4].loc?.identifierName as string);
 
     if(variable == -1) {
       errors.push({
@@ -368,7 +386,7 @@ function SuperCall(node: T.CallExpression) {
     for(let i = 0; i < args[5].elements.length; i++) {
       const e = args[5].elements[i] as T.Identifier;
 
-      const variable = vars.findIndex(el => el.name == e.name);
+      const variable = GetVarIndex(e.name);
 
       if(variable == -1) {
         errors.push({
@@ -417,7 +435,7 @@ function SuperCall(node: T.CallExpression) {
     for(let i = 0; i < args[6].elements.length; i++) {
       const e = args[6].elements[i] as T.Identifier;
 
-      const variable = vars.findIndex(el => el.name == e.name);
+      const variable = GetVarIndex(e.name);
 
       if(variable == -1) {
         errors.push({
@@ -556,161 +574,189 @@ function Traverse(
           message: `Function ${f.name} has no return value to be used in a If statement`
         });
       }
-      //if(mode == 'function_body') {
 
-        const args = node.arguments;
+      const args = node.arguments;
 
-        if(args.length < f.arguments.length) {
-          for(let i = 0; i < f.arguments.length; i ++) {
-            if(!args[i] && !(f.arguments[i] & CON_NATIVE_FLAGS.OPTIONAL)) {
+      if(args.length < f.arguments.length) {
+        for(let i = 0; i < f.arguments.length; i ++) {
+          if(!args[i] && !(f.arguments[i] & CON_NATIVE_FLAGS.OPTIONAL)) {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: `Missing parameters in function`
+            });
+            return false;
+          }
+        }
+      }
+
+      if(args.length > 0) {
+        let params: string = '';
+
+        code += `state pushr${f.arguments.length} \n`;
+
+        for(let i = 0; i < args.length; i++) {
+          const a = args[i];
+
+          if(a.type == 'NumericLiteral') {
+            if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
               errors.push({
                 type: 'error',
                 node: node.type,
                 location: node.loc as T.SourceLocation,
-                message: `Missing parameters in function`
+                message: `Wrong type of parameter for argument for function ${f.name}`
               });
               return false;
             }
+
+            code += `set r${i} ${a.value} \n`;
+          }
+
+          if(a.type == 'Identifier') {
+            if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Wrong type of parameter for argument for function ${f.name}`
+              });
+              return false;
+            }
+
+            const variable = GetVar(a.name);
+
+            if(!variable) {
+                errors.push({
+                  type: 'error',
+                  node: node.type,
+                  location: node.loc as T.SourceLocation,
+                  message: `Unknown keyword or variable at function ${f.name}`
+                });
+                return false;
+            }
+
+            code += `set ra stack[${variable.pointer}] \nset r${i} ra \n`;
+          }
+
+          if(a.type == 'BinaryExpression' || a.type == 'MemberExpression') {
+            if(f.arguments[i] != CON_NATIVE_FLAGS.VARIABLE && f.arguments[i] != CON_NATIVE_FLAGS.CONSTANT) {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Wrong type of parameter for argument for function ${f.name}`
+              });
+              return false;
+            }
+
+            if(!Traverse(a, f.arguments[i] == CON_NATIVE_FLAGS.VARIABLE ? 'function_params' : 'retrieval',
+              f.arguments[i] == CON_NATIVE_FLAGS.VARIABLE ? i : undefined))
+              return false;
+
+            if(f.arguments[i] == CON_NATIVE_FLAGS.CONSTANT) {
+              params += `${ra} `;
+              continue;
+            }
+          }
+
+          if(a.type == 'CallExpression') {
+            if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
+              if(a.callee.type != 'Identifier' || a.callee.name != 'Label') {
+                errors.push({
+                  type: 'error',
+                  node: node.type,
+                  location: node.loc as T.SourceLocation,
+                  message: `Wrong type of parameter for argument label for function ${f.name}`
+                });
+              }
+
+              if(!Traverse(a, 'retrieval'))
+                return false;
+
+              params += `${ra} `;
+              continue;
+            }
+
+            if(!Traverse(a, 'function_params', i))
+              return false;
+          }
+
+          params += `r${i} `;
+        }
+
+        if(args.length < f.arguments.length && f.arguments_default) {
+          for(let i = args.length; i < f.arguments.length; i++) {
+            code += `set r${i} ${f.arguments_default[i]} \n`;
+            params += `r${i} \n`;
           }
         }
 
-        if(args.length > 0) {
-          let params: string = '';
+        code += `${typeof f.code === 'function' ? f.code(true) : `${f.code} ${params} \n`}`;
+        code += `state popr${f.arguments.length} \n`;
+      } else code += `${typeof f.code === 'function' ? f.code() : `${f.code} \n`}`;
 
-          code += `state pushr${args.length} \n`;
-
-          for(let i = 0; i < args.length; i++) {
-            const a = args[i];
-
-            if(a.type == 'NumericLiteral') {
-              if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
-                errors.push({
-                  type: 'error',
-                  node: node.type,
-                  location: node.loc as T.SourceLocation,
-                  message: `Wrong type of parameter for argument for function ${f.name}`
-                });
-                return false;
-              }
-
-              code += `set r${i} ${a.value} \n`;
-            }
-
-            if(a.type == 'BinaryExpression' || a.type == 'MemberExpression') {
-              if(f.arguments[i] != CON_NATIVE_FLAGS.VARIABLE && f.arguments[i] != CON_NATIVE_FLAGS.CONSTANT) {
-                errors.push({
-                  type: 'error',
-                  node: node.type,
-                  location: node.loc as T.SourceLocation,
-                  message: `Wrong type of parameter for argument for function ${f.name}`
-                });
-                return false;
-              }
-
-              if(!Traverse(a, f.arguments[i] == CON_NATIVE_FLAGS.VARIABLE ? 'function_params' : 'retrieval',
-                f.arguments[i] == CON_NATIVE_FLAGS.VARIABLE ? i : undefined))
-                return false;
-
-              if(f.arguments[i] == CON_NATIVE_FLAGS.CONSTANT) {
-                params += `${ra} `;
-                continue;
-              }
-            }
-
-            if(a.type == 'CallExpression') {
-              if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
-                if(a.callee.type != 'Identifier' || a.callee.name != 'Label') {
-                  errors.push({
-                    type: 'error',
-                    node: node.type,
-                    location: node.loc as T.SourceLocation,
-                    message: `Wrong type of parameter for argument label for function ${f.name}`
-                  });
-                }
-
-                if(!Traverse(a, 'retrieval'))
-                  return false;
-
-                params += `${ra} `;
-                continue;
-              }
-
-              if(!Traverse(a, 'function_params', i))
-                return false;
-            }
-
-            params += `r${i} `;
-          }
-
-          code += `${typeof f.code === 'function' ? f.code(true) : `${f.code} ${params} \n`}`;
-          code += `state popr${args.length} \n`;
-        } else code += `${typeof f.code === 'function' ? f.code() : `${f.code} \n`}`;
-
-        typeCheck = '';
-        if(f.returns && f.return_type)
-          typeCheck = f.return_type;
-      //}
+      typeCheck = '';
+      if(f.returns && f.return_type)
+        typeCheck = f.return_type;
     } else {
       const f = funcTranslator[func.index];
+      if(node.arguments.length < f.params.length) {
+        errors.push({
+          type: 'error',
+          node: node.type,
+          location: node.loc as T.SourceLocation,
+          message: `Missing parameters in function`
+        });
+        return false;
+      }
 
-      //if(mode == 'function_body') {
-        if(node.arguments.length < f.params.length) {
-          errors.push({
-            type: 'error',
-            node: node.type,
-            location: node.loc as T.SourceLocation,
-            message: `Missing parameters in function`
-          });
-          return false;
-        }
+      const args = node.arguments;
 
-        const args = node.arguments;
+      if(args.length > 0) {
+        let params: string = '';
 
-        if(args.length > 0) {
-          let params: string = '';
+        code += `state pushr${args.length} \n`;
 
-          code += `state pushr${args.length} \n`;
+        for(let i = 0; i < args.length; i++) {
+          const a = args[i];
 
-          for(let i = 0; i < args.length; i++) {
-            const a = args[i];
-
-            if(a.type == 'BinaryExpression') {
-              const newMode = f.params[i] == 'variable' ? 'function_params' : 'retrieval';
-              if(!Traverse(a, newMode, i))
-                return false;
-            }
-
-            if(a.type == 'CallExpression') {
-              const newMode = f.params[i] == 'variable' ? 'function_params' : 'retrieval';
-              if(!Traverse(a, newMode, i))
-                return false;
-            }
-
-            if(a.type == 'Identifier') {
-              const variable = vars.find(e => e.name == a.name);
-
-              if(!variable) {
-                errors.push({
-                  type: 'error',
-                  node: node.type,
-                  location: node.loc as T.SourceLocation,
-                  message: `Unknown keyword or variable at function ${node.callee.loc?.identifierName}`
-                });
-                return false;
-              }
-
-              code += `set r${i} stack[${variable.pointer}] \n`;
-            }
-
-            params += `r${i} `;
+          if(a.type == 'BinaryExpression') {
+            const newMode = f.params[i] == 'variable' ? 'function_params' : 'retrieval';
+            if(!Traverse(a, newMode, i))
+              return false;
           }
 
-          code += `${f.conName} ${params} \n`;
-          code += `state popr${args.length} \n`;
-        } else code += `${f.conName} \n`;
+          if(a.type == 'CallExpression') {
+            const newMode = f.params[i] == 'variable' ? 'function_params' : 'retrieval';
+            if(!Traverse(a, newMode, i))
+              return false;
+          }
 
-        typeCheck = '';
-      //}
+          if(a.type == 'Identifier') {
+            const variable = GetVar(a.name);
+
+            if(!variable) {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Unknown keyword or variable at function ${node.callee.loc?.identifierName}`
+              });
+              return false;
+            }
+
+            code += `set r${i} stack[${variable.pointer}] \n`;
+          }
+
+          params += `r${i} `;
+        }
+
+        code += `${f.conName} ${params} \n`;
+        code += `state popr${args.length} \n`;
+      } else code += `${f.conName} \n`;
+
+      typeCheck = '';
     }
 
     if(typeof argument !== 'undefined')
@@ -750,7 +796,7 @@ function Traverse(
       if(side.type == 'Identifier') {
         const vName = side.name;
 
-        const variable = vars.find(e => e.name == vName);
+        const variable = GetVar(vName);
 
         if(!variable) {
           errors.push({
@@ -866,7 +912,7 @@ function Traverse(
       }
 
       if(mode == 'conditional' && conditional)
-        code += `set rd ra \nset ra 0 \n${operator} rd rb set ra 1 \n`;
+        code += `set rd ra \nset ra 0 \n${operator} rb rd set ra 1 \n`;
       else code += `${operator} ra rb \n`;
     }
 
@@ -906,7 +952,7 @@ function Traverse(
     if(p.type == 'Identifier') {
       if(o.type == 'ThisExpression') {
         if(block == EBlock.ACTOR) {
-          let v = nativeVars.find(e => (e.name == p.name && e.object == 'this' && e.var_type == 'actor'));
+          let v = nativeVars.find(e => (e.name == p.name && e.object == 'this' && (e.var_type == 'actor' || e.var_type == 'var_actor')));
           if(!v) {
             errors.push({
               type: 'error',
@@ -924,9 +970,17 @@ function Traverse(
 
           if(mode == 'retrieval')
             ra = v.init;
-          
-          //if(mode == 'function_params')
-          code += `geta[].${v.code} ra \n`
+          else {
+            switch(v.var_type) {
+              case 'actor':
+                code += `geta[].${v.code} ra \n`
+                break;
+
+              case 'var_actor':
+                code += `set ra ${v.code} \n`;
+                break;
+            }
+          }
         }
       } else {
         if(mode == 'retrieval') {
@@ -1074,7 +1128,7 @@ function Traverse(
         return false;
       }
 
-      const variable = vars.find(e => e.name == (exp.left as T.Identifier).name);
+      const variable = GetVar((exp.left as T.Identifier).name);
 
       if(!variable) {
         errors.push({
@@ -1182,6 +1236,7 @@ function Traverse(
       });
 
       code += `useractor ${curActor.enemy ? 'enemy' : 'notenemy'} ${curActor.picnum} ${curActor.extra} ${curActor.first_action ? curActor.first_action.name : ''} \n`;
+      code += `findplayer playerDist \n`;
 
       for(let i = 0; i < node.body.body.length; i++) {
         if(!Traverse(node.body.body[i], 'function_body'))

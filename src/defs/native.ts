@@ -5,7 +5,7 @@ export type CON_NATIVE<Type> = Type;
 
 export class CON_NATIVE_POINTER { }
 
-export type CON_NATIVE_TYPE = 'global' | 'player' | 'actor';
+export type CON_NATIVE_TYPE = 'global' | 'player' | 'actor' | 'var_player' | 'var_actor';
 
 export enum CON_NATIVE_FLAGS {
     CONSTANT,
@@ -35,7 +35,8 @@ export interface CON_NATIVE_FUNCTION {
     code: string | ((args?: boolean) => string),
     returns: boolean,
     return_type: 'variable' | 'string' | 'pointer' | null,
-    arguments: CON_NATIVE_FLAGS[]
+    arguments: CON_NATIVE_FLAGS[],
+    arguments_default?: any[]
 }
 
 export interface CON_NATIVE_VAR {
@@ -78,13 +79,6 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
         ]
     },
     {
-        name: 'PlayerDist',
-        code: `findplayer rb`,
-        returns: true,
-        return_type: "variable",
-        arguments: []
-    },
-    {
         name: 'CanSee',
         code: `set rb 0 \nifcansee set rb 1 \n`,
         returns: true,
@@ -115,12 +109,12 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     {
         name: 'CStatOR',
         code: ((args?: boolean) => {
-            return `state push \ngeta[].cstat ra \norvar ra r0 \nseta[].cstat ra \nstate pop \n`;
+            return `geta[].cstat ra \norvar ra r0 \nseta[].cstat ra \n`;
         }),
         returns: false,
         return_type: null,
         arguments: [
-            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
+            CON_NATIVE_FLAGS.VARIABLE
         ]
     },
     {
@@ -131,13 +125,31 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
         returns: false,
         return_type: null,
         arguments: [
-            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE
         ]
     },
     {
         name: 'SizeTo',
         code: ((arg?: boolean) => {
-            return `state push \nstate pushb \ngeta[].xrepeat ra \ngeta[].yrepeat rb \nifl ra r0 { \nadd ra 1 \nseta[].xrepeat ra \n} \nifl rb r1 { \nadd rb 1 \nseta[].yrepeat rb \n} \nstate popb \nstate pop \n`;
+            return `geta[].xrepeat ra \ngeta[].yrepeat rb \nifl ra r0 { \nadd ra r2 \nseta[].xrepeat ra \n} \nifl rb r1 { \nadd rb r3 \nseta[].yrepeat rb \n} \n`;
+        }),
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
+        ],
+        arguments_default: [ 4, 4, 1, 1]
+    },
+    {
+        name: 'Count',
+        code: ((arg?: boolean) => {
+            if(arg)
+                return `seta[].htg_t 0 r0 \n`;
+            return `geta[].htg_t 0 rb \n`;
         }),
         returns: false,
         return_type: null,
@@ -209,6 +221,15 @@ export const nativeVars: CON_NATIVE_VAR[] = [
         type: 'variable',
         readonly: false,
         code: 'extra',
+        init: 0
+    },
+    {
+        name: 'playerDist',
+        object: 'this',
+        var_type: 'var_actor',
+        type: 'variable',
+        readonly: true,
+        code: 'playerDist',
         init: 0
     }
 ]
