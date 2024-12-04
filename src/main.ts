@@ -7,6 +7,7 @@ import * as T from '@babel/types';
 let fileName = '';
 let lineDetail = false;
 let parse_only = false;
+let stack_size = 1024;
 
 for(let i = 0; i < process.argv.length; i++) {
     const a = process.argv[i];
@@ -24,7 +25,13 @@ for(let i = 0; i < process.argv.length; i++) {
     if(a == '-p')
         parse_only = true;
 
+    if(a == '-ss')
+        stack_size = Number(process.argv[i + 1]);
+
 }
+
+if(stack_size < 1024)
+    console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
 console.log(`Parsing ${fileName}`);
 
@@ -40,7 +47,8 @@ fs.writeFileSync(`obj/${path.basename(fileName)}.AST`, JSON.stringify(parsed, nu
 
 if(!parse_only) {
     debugger;
-    const code = Transpiler(parsed, lineDetail, 1024, file.toString());
+    console.log(`Transpiling...`);
+    const code = Transpiler(parsed, lineDetail, stack_size, file.toString());
     if(code) {
         fs.writeFileSync(`compiled/${path.basename(fileName)}.con`, code);
     }
