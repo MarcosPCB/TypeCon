@@ -144,12 +144,14 @@ gettiledata[sprite[].picnum].ysize rd
 mul ra rd
 add ra 8
 shiftr ra 2
+state pushd
 geta[].htfloorz rd
 sub rd sprite[].htceilingz
 ifl ra rd {
 add rb r3
 seta[].yrepeat rb
 }
+state popd
 } \n`;
         }),
         returns: false,
@@ -223,6 +225,22 @@ seta[].yrepeat rb
         returns: false,
         return_type: null,
         arguments: []
+    },
+    {
+        name: 'KillIt',
+        code: 'killit \n',
+        returns: false,
+        return_type: null,
+        arguments: []
+    },
+    {
+        name: 'Glass',
+        code: 'lotsofglass',
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.CONSTANT
+        ]
     },
 ]
 

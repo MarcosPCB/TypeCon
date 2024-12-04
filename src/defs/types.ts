@@ -2,8 +2,9 @@ import { CON_NATIVE, CON_NATIVE_POINTER } from "./native";
 declare global {
     export type TLabel = string; //Use this to define constants and pointers
 
-    export type pointer = void;
-    export function Label<pointer>(name: string): pointer;
+    export interface pointer {}
+    export function Label(name: string): pointer;
+    export type constant = number;
 
     //Interface for declaring actions
     export interface IAction {
@@ -97,9 +98,9 @@ declare global {
             ais?: IAi[]
         )
 
-        PlayAction(action: string): CON_NATIVE<void>
-        Move(move: string, flags: number): CON_NATIVE<void>
-        StartAI(ai: string): CON_NATIVE<void>
+        PlayAction(action: pointer): CON_NATIVE<void>
+        Move(move: pointer, flags: number): CON_NATIVE<void>
+        StartAI(ai: pointer): CON_NATIVE<void>
         CanSee(): CON_NATIVE<boolean>
         CanShootTarget(): CON_NATIVE<boolean>
         CStat(stats?: number): CON_NATIVE<number>
@@ -115,6 +116,8 @@ declare global {
         IsItMoving(): CON_NATIVE<boolean>
         GetLastPal(): CON_NATIVE<void>
         PlayerKick(): CON_NATIVE<void>
+        KillIt(): CON_NATIVE<void>
+        Glass(num: constant): CON_NATIVE<void>
 
         public Main(): void
     }

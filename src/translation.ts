@@ -142,4 +142,24 @@ defstate popb
     sub rsp 1
 ends
 
+defstate pushc
+    add rsp 1
+    setarray stack[rsp] rc
+ends
+
+defstate popc
+    set rc stack[rsp]
+    sub rsp 1
+ends
+
+defstate pushd
+    add rsp 1
+    setarray stack[rsp] rd
+ends
+
+defstate popd
+    set rd stack[rsp]
+    sub rsp 1
+ends
+
 `

@@ -49,6 +49,7 @@ class newEnemy extends CActor {
         this.CStatOR(go);
         this.SizeTo(6, 6);
         this.SizeTo(6, 6, 2, 2);
+        this.Glass(5);
 
         return;
     }

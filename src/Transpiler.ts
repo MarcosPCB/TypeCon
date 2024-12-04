@@ -594,10 +594,19 @@ function Traverse(
       if(args.length > 0) {
         let params: string = '';
 
-        code += `state pushr${f.arguments.length} \n`;
+        if(f.arguments.find(e => e & CON_NATIVE_FLAGS.VARIABLE))
+          code += `state pushr${f.arguments.length} \n`;
+
+        let optional = false;
 
         for(let i = 0; i < args.length; i++) {
           const a = args[i];
+          optional = false;
+
+          if(f.arguments[i] & CON_NATIVE_FLAGS.OPTIONAL) {
+            f.arguments[i] -= CON_NATIVE_FLAGS.OPTIONAL;
+            optional = true;
+          }
 
           if(a.type == 'NumericLiteral') {
             if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
@@ -607,7 +616,16 @@ function Traverse(
                 location: node.loc as T.SourceLocation,
                 message: `Wrong type of parameter for argument for function ${f.name}`
               });
+              if(optional)
+                f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
               return false;
+            }
+
+            if(f.arguments[i] == CON_NATIVE_FLAGS.CONSTANT) {
+              params += `${Math.trunc(a.value)}`;
+              if(optional)
+                f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
+              continue;
             }
 
             code += `set r${i} ${a.value} \n`;
@@ -621,6 +639,8 @@ function Traverse(
                 location: node.loc as T.SourceLocation,
                 message: `Wrong type of parameter for argument for function ${f.name}`
               });
+              if(optional)
+                f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
               return false;
             }
 
@@ -633,54 +653,110 @@ function Traverse(
                   location: node.loc as T.SourceLocation,
                   message: `Unknown keyword or variable at function ${f.name}`
                 });
+                if(optional)
+                  f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
                 return false;
+            }
+
+            if(f.arguments[i] == CON_NATIVE_FLAGS.CONSTANT) {
+              errors.push({
+                type: 'warning',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Using a variable instead of a constant value at ${f.name}. Initialized value will be used`
+              });
+
+              params += `${variable.init} `;
+              if(optional)
+                f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
+              continue;
             }
 
             code += `set ra stack[${variable.pointer}] \nset r${i} ra \n`;
           }
 
           if(a.type == 'BinaryExpression' || a.type == 'MemberExpression') {
-            if(f.arguments[i] != CON_NATIVE_FLAGS.VARIABLE && f.arguments[i] != CON_NATIVE_FLAGS.CONSTANT) {
+            if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
               errors.push({
                 type: 'error',
                 node: node.type,
                 location: node.loc as T.SourceLocation,
                 message: `Wrong type of parameter for argument for function ${f.name}`
               });
+              if(optional)
+                f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
               return false;
             }
 
+            if(f.arguments[i] == CON_NATIVE_FLAGS.CONSTANT
+              && !(a.type == 'MemberExpression' && (a.object as T.Identifier).name == 'EMoveFlags'))
+              errors.push({
+                type: 'warning',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Detected an expression or a variable instead of a constant value at ${f.name}. Result of resolved expression or initilization value will be used`
+              });
+
             if(!Traverse(a, f.arguments[i] == CON_NATIVE_FLAGS.VARIABLE ? 'function_params' : 'retrieval',
-              f.arguments[i] == CON_NATIVE_FLAGS.VARIABLE ? i : undefined))
+              f.arguments[i] == CON_NATIVE_FLAGS.VARIABLE ? i : undefined)) {
+              if(optional)
+                f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
               return false;
+            }
 
             if(f.arguments[i] == CON_NATIVE_FLAGS.CONSTANT) {
               params += `${ra} `;
+              if(optional)
+                f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
               continue;
             }
           }
 
           if(a.type == 'CallExpression') {
-            if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
-              if(a.callee.type != 'Identifier' || a.callee.name != 'Label') {
-                errors.push({
-                  type: 'error',
-                  node: node.type,
-                  location: node.loc as T.SourceLocation,
-                  message: `Wrong type of parameter for argument label for function ${f.name}`
-                });
+            if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL || f.arguments[i] == CON_NATIVE_FLAGS.CONSTANT) {
+              if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
+                if(a.callee.type != 'Identifier' || a.callee.name != 'Label') {
+                  errors.push({
+                    type: 'error',
+                    node: node.type,
+                    location: node.loc as T.SourceLocation,
+                    message: `Wrong type of parameter for argument label for function ${f.name}`
+                  });
+                  if(optional)
+                    f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
+                  return false;
+                }
               }
 
-              if(!Traverse(a, 'retrieval'))
+              if(f.arguments[i] == CON_NATIVE_FLAGS.CONSTANT)
+                errors.push({
+                  type: 'warning',
+                  node: node.type,
+                  location: node.loc as T.SourceLocation,
+                  message: `Detected an expression or a variable instead of a constant value at ${f.name}. Result of resolved expression or initilization value will be used`
+                });
+
+              if(!Traverse(a, 'retrieval')) {
+                if(optional)
+                  f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
                 return false;
+              }
 
               params += `${ra} `;
+              if(optional)
+                f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
               continue;
             }
 
-            if(!Traverse(a, 'function_params', i))
+            if(!Traverse(a, 'function_params', i)) {
+              if(optional)
+                f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
               return false;
+            }
           }
+
+          if(optional)
+            f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
 
           params += `r${i} `;
         }
@@ -693,7 +769,8 @@ function Traverse(
         }
 
         code += `${typeof f.code === 'function' ? f.code(true) : `${f.code} ${params} \n`}`;
-        code += `state popr${f.arguments.length} \n`;
+        if(f.arguments.find(e => e == CON_NATIVE_FLAGS.VARIABLE))
+          code += `state popr${f.arguments.length} \n`;
       } else code += `${typeof f.code === 'function' ? f.code() : `${f.code} \n`}`;
 
       typeCheck = '';
@@ -768,7 +845,7 @@ function Traverse(
   if(node.type == 'BinaryExpression' || node.type == 'LogicalExpression') {
     let typeCheck2 = typeCheck;
     typeCheck = '';
-    const vals: any[] = [2];
+    const vals: any[] = [0, 0];
     for(let i = 1; i >= 0; i--) {
       const side = i == 0 ? node.right : node.left;
 
@@ -776,12 +853,12 @@ function Traverse(
         //code += `set rb ra \n`;
 
       if(side.type == 'NumericLiteral') {
-        if(mode == 'retrieval')
-          vals[i] = side.value;
-        else code += `set ra ${side.value} \n`;
+        //if(mode == 'retrieval')
+        vals[i] = side.value;
+        if(mode != 'retrieval') code += `set ra ${side.value} \n`;
       } 
 
-      //retrieval cannot happened with call expressions
+      //retrieval cannot happen with call expressions
       if(side.type == 'CallExpression') {
         if(i == 0)
           code += `state pushb \n`;
@@ -808,19 +885,19 @@ function Traverse(
           return false;
         }
 
-        if(mode == 'retrieval')
+        //if(mode == 'retrieval')
           vals[i] = variable.init;
-        else code += `set ra stack[${variable.pointer}] \n`;
+        if(mode != 'retrieval') code += `set ra stack[${variable.pointer}] \n`;
       }
 
       if(side.type == 'MemberExpression' || side.type == 'BinaryExpression') {
         if(!Traverse(side, mode))
           return false;
 
-        if(mode == 'retrieval')
-          vals[i] = ra;
+        //if(mode == 'retrieval')
+        vals[i] = ra;
 
-        if(i == 1)
+        if(i == 1 && mode != 'retrieval')
           code += `set rb ra \n`;
       }
 
@@ -831,26 +908,26 @@ function Traverse(
       }
     }
 
-    if(mode == 'retrieval') {
-      ra = vals[0];
-      switch(node.operator) {
-        case '+':
-          ra += vals[1];
-          break;
+    ra = vals[0];
+    switch(node.operator) {
+      case '+':
+        ra += vals[1];
+        break;
 
-        case '-':
-          ra -= vals[1];
-          break;
+      case '-':
+        ra -= vals[1];
+        break;
 
-        case '*':
-          ra *= vals[1];
-          break;
-        
-        case '/':
-          ra /= vals[1];
-          break;
-      }
-    } else {
+      case '*':
+        ra *= vals[1];
+        break;
+      
+      case '/':
+        ra /= vals[1];
+        break;
+    }
+
+    if(mode != 'retrieval') {
       let operator = '';
       let conditional = false;
       switch(node.operator) {
@@ -1076,6 +1153,9 @@ function Traverse(
               sp--;
               return false;
             }
+
+            if(node.declarations[0].init.type != 'ObjectExpression')
+              variable.init = ra;
           }
         }
       }
@@ -1326,7 +1406,7 @@ export default function Transpiler(ast: T.File, lineDetail: boolean, stack_size?
 
   if(errors.length > 0) {
     errors.forEach(e => {
-      console.log(`ERROR: at ${e.node} - ${e.message} at ${e.location.filename} in line ${e.location.start.line}`);
+      console.log(`${e.type.toUpperCase()}: at ${e.node} - ${e.message} at ${e.location.filename} in line ${e.location.start.line}`);
     })
   }
 
