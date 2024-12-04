@@ -9,6 +9,8 @@ const errors: IError[] = [];
 var detailLines = false;
 var code = initCode;
 
+var original = '';
+
 var block: EBlock = EBlock.NONE; //Major block
 var bBlock: IBlock[] = [];
 var vars: IVar[] = [];
@@ -33,6 +35,19 @@ var typeCheck = '';
 var stack: number[] = [];
 
 var labels: ILabel[] = [];
+
+function Line(loc: T.SourceLocation) {
+  if(detailLines) {
+    let text = '/* \n' + original.slice(loc.start.index, loc.end.index + 1);
+
+    if(text.at(-1) == '\n')
+      return text + '*/ \n';
+    
+    return text + '\n*/ \n';
+  }
+
+  return '';
+}
 
 function GetVarType(node: T.VariableDeclarator) {
   if(node.id.type == 'Identifier') {
@@ -445,6 +460,7 @@ function Traverse(
     return true;
 
   if(node.type == 'CallExpression') {      
+    code += Line(node.loc as T.SourceLocation);
     //Class initialization
     if(mode == 'constructor') {
       if(node.callee.type == 'Super') {
@@ -833,6 +849,7 @@ function Traverse(
   }
 
   if(node.type == 'MemberExpression') {
+    code += Line(node.loc as T.SourceLocation);
     const o = node.object;
     const p = node.property;
     let object: any = null;
@@ -903,6 +920,7 @@ function Traverse(
   }
 
   if(node.type == 'ObjectExpression') {
+    code += Line(node.loc as T.SourceLocation);
     for(let i = 0; i < node.properties.length; i++) {
       const p = node.properties[i];
 
@@ -932,6 +950,7 @@ function Traverse(
   }
 
   if(node.type == 'VariableDeclaration') {
+    code += Line(node.loc as T.SourceLocation);
     if(node.declarations[0].type == 'VariableDeclarator') {
       if(node.declarations[0].id.type == 'Identifier') {
         const v = node.declarations[0].id;
@@ -994,6 +1013,8 @@ function Traverse(
       return false;
     }
 
+    code += Line(node.test.loc as T.SourceLocation);
+
     if(!Traverse(node.test, 'conditional'))
       return false;
 
@@ -1012,6 +1033,7 @@ function Traverse(
   }
 
   if(node.type == 'ExpressionStatement') {
+    code += Line(node.loc as T.SourceLocation);
     const exp = node.expression;
     if(exp.type == 'AssignmentExpression') {
       if(mode == 'constructor') {
@@ -1198,11 +1220,13 @@ function Traverse(
   return true;
 }
 
-export default function Transpiler(ast: T.File, lineDetail: boolean, stack_size?: number) {
+export default function Transpiler(ast: T.File, lineDetail: boolean, stack_size?: number, file?: string) {
   if(ast.program.body.length < 1)
     return null; 
 
   detailLines = lineDetail;
+
+  original = file as string;
 
   let depth = 0;
 

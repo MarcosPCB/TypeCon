@@ -40,7 +40,7 @@ fs.writeFileSync(`obj/${path.basename(fileName)}.AST`, JSON.stringify(parsed, nu
 
 if(!parse_only) {
     debugger;
-    const code = Transpiler(parsed, lineDetail);
+    const code = Transpiler(parsed, lineDetail, 1024, file.toString());
     if(code) {
         fs.writeFileSync(`compiled/${path.basename(fileName)}.con`, code);
     }
