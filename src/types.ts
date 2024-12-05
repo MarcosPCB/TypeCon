@@ -22,6 +22,7 @@ export enum EState {
     INIT,
     PARAMS,
     BODY,
+    TERMINATED,
     NONE
 }
 
@@ -30,7 +31,7 @@ export interface IBlock {
     state: EState;
     name: string;
     locals?: 0;
-    args?: 0;
+    args: number;
     stack: number;
     base: number;
 }

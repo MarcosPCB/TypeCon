@@ -49,6 +49,7 @@ class newEnemy extends CActor {
             this.Move(Label('walkvel'), EMoveFlags.faceplayerslow);
             this.CStat(2);
             console.log(this.CStat());
+            return;
         }
 
         this.CStatOR(go);
@@ -57,8 +58,6 @@ class newEnemy extends CActor {
         this.Glass(5);
 
         this.Test(go);
-
-        return;
     }
     
 }

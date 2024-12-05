@@ -8,11 +8,11 @@ export class CON_NATIVE_POINTER { }
 export type CON_NATIVE_TYPE = 'global' | 'player' | 'actor' | 'var_player' | 'var_actor';
 
 export enum CON_NATIVE_FLAGS {
-    CONSTANT,
-    VARIABLE,
-    STRING,
-    LABEL,
-    OPTIONAL
+    CONSTANT = 1,
+    VARIABLE = 2,
+    STRING = 4,
+    LABEL = 8,
+    OPTIONAL = 16
 }
 
 export enum EMoveFlags {

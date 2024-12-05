@@ -137,18 +137,16 @@ function ReturnFromFunction() {
     return;
   }
 
-  if(state == EState.BODY) {
-    if(b.type == EBlock.ACTOR)
-      code += `set rbp ${b.base} \nset rsp ${b.stack} \n`;
-    else if(b.type == EBlock.FUNCTION)
-      code += `set rsp rbp \nstate pop \nset rbp ra \n`;
-  }
+  if(b.type == EBlock.ACTOR)
+    code += `set rbp ${b.base} \nset rsp ${b.stack} \n`;
+  else if(b.type == EBlock.FUNCTION)
+    code += `set rsp rbp \nstate pop \nset rbp ra \n`;
 
-  const diff = sp - b.stack;
+  let diff = b.type == EBlock.FUNCTION ? sp - b.stack - 2 - b.args : sp - b.stack;
   vars.splice(vars.length - 1 - diff, diff);
 
-  sp = b.stack;
-  bp = b.base;
+  sp = b.type == EBlock.FUNCTION ? b.stack - 2 - b.args : b.stack;
+  bp = b.type == EBlock.FUNCTION ? b.stack - 1 - b.args : b.base;
 }
 
 function EndBlock() {
@@ -158,13 +156,15 @@ function EndBlock() {
     return;
   }
 
-  ReturnFromFunction();
+  if(b.state != EState.TERMINATED)
+    ReturnFromFunction();
 
   switch(b.type) {
     case EBlock.ACTOR:
       code += 'enda \n \n';
       break;
 
+    case EBlock.FUNCTION:
     case EBlock.STATE:
       code += 'ends \n \n';
       break;
@@ -490,6 +490,44 @@ function Traverse(
   if(node.type == 'ImportDeclaration')
     return true;
 
+  if(node.type == 'ReturnStatement') {
+    if(node.argument) {
+      const a = node.argument;
+
+      if(a.type == 'Identifier') {
+        const variable = GetVar(a.name);
+
+        if(!variable) {
+          errors.push({
+            type: 'error',
+            node: node.type,
+            location: node.loc as T.SourceLocation,
+            message: `Unknown keyword or variable ${a.name} at return statement`
+          });
+          return false;
+        }
+
+        if(variable.arg !== undefined)
+          code += `set rb r${variable.arg}`;
+        else code += `set ri rsp \nsub ri ${sp - variable.pointer} \nset rb stack[ri] \n`;
+      } else {
+        if(!Traverse(a, mode))
+          return false;
+
+        if(a.type != 'CallExpression')
+          code += `set rb ra \n`;
+      }
+
+    }
+
+    ReturnFromFunction();
+
+    if((bBlock.at(-1) as IBlock).type == EBlock.FUNCTION)
+      code += `terminate \n`;
+    else code += `break \n`;
+    return true;
+  }
+
   if(node.type == 'CallExpression') {      
     code += Line(node.loc as T.SourceLocation);
     //Class initialization
@@ -786,7 +824,7 @@ function Traverse(
         }
 
         code += `${typeof f.code === 'function' ? f.code(true) : `${f.code} ${params} \n`}`;
-        if(f.arguments.find(e => e == CON_NATIVE_FLAGS.VARIABLE))
+        if(f.arguments.find(e => e & CON_NATIVE_FLAGS.VARIABLE))
           code += `state popr${f.arguments.length} \n`;
       } else code += `${typeof f.code === 'function' ? f.code() : `${f.code} \n`}`;
 
@@ -866,7 +904,7 @@ function Traverse(
     typeCheck = '';
     const vals: any[] = [0, 0];
     for(let i = 1; i >= 0; i--) {
-      const side = i == 0 ? node.right : node.left;
+      const side = i == 1 ? node.right : node.left;
 
       //if(mode != 'retrieval' && i == 0)
         //code += `set rb ra \n`;
@@ -1015,7 +1053,7 @@ function Traverse(
       }
 
       if(mode == 'conditional' && conditional)
-        code += `set rd ra \nset ra 0 \n${operator} rb rd set ra 1 \n`;
+        code += `set rd ra \nset ra 0 \n${operator} rd rb set ra 1 \n`;
       else code += `${operator} ra rb \n`;
     }
 
@@ -1183,6 +1221,9 @@ function Traverse(
 
             if(node.declarations[0].init.type != 'ObjectExpression')
               variable.init = ra;
+
+            if(mode != 'retrieval' && traverseMode != 'retrieval')
+              code += `setarray stack[rsp] ra \n`;
           }
         }
       }
@@ -1247,15 +1288,19 @@ function Traverse(
         return false;
       }
 
-      if(!Traverse(exp.right, 'assignment'))
-        return false;
+      if(exp.right.type == 'NumericLiteral')
+        code += `set rb ${exp.right.value} \n`;
+      else {
+        if(!Traverse(exp.right, 'assignment'))
+          return false;
 
-      if(exp.right.type != 'CallExpression')
-        code += `set rb ra \n`;
+        if(exp.right.type != 'CallExpression')
+          code += `set rb ra \n`;
+      }
 
       if(variable.arg != undefined && mode != 'function_params')
         code += `set ra r${variable.arg} \n`;
-      else code += `set rb ra \n${(sp - variable.pointer) != 0
+      else code += `${(sp - variable.pointer) != 0
       ? `set ri rsp \nsub ri ${sp - variable.pointer} \nset ra stack[ri] \n` 
       : `set ra stack[rsp] \n`}`;
 
@@ -1317,7 +1362,8 @@ function Traverse(
         type: EBlock.ACTOR,
         state: EState.BODY,
         stack: sp,
-        base: bp
+        base: bp,
+        args: 0
       })
 
       for(let i = 0; i < node.body.body.length; i++) {
@@ -1351,7 +1397,8 @@ function Traverse(
         state: EState.BODY,
         name: 'Main',
         stack: sp,
-        base: bp
+        base: bp,
+        args: 0,
       });
 
       code += `useractor ${curActor.enemy ? 'enemy' : 'notenemy'} ${curActor.picnum} ${curActor.extra} ${curActor.first_action ? curActor.first_action.name : ''} \n`;
@@ -1361,6 +1408,9 @@ function Traverse(
         if(!Traverse(node.body.body[i], 'function_body'))
           return false;
       }
+
+      if(node.body.body[node.body.body.length - 1].type == 'ReturnStatement')
+        (bBlock.at(-1) as IBlock).state = EState.TERMINATED;
 
       EndBlock();
 
@@ -1445,11 +1495,12 @@ function Traverse(
     }
 
     bBlock.push({
-      type: EBlock.STATE,
+      type: EBlock.FUNCTION,
       state: EState.BODY,
       name: (node.key as T.Identifier).name,
       stack: sp,
-      base: sp
+      base: sp,
+      args: f.arguments.length
     });
 
     funcs.push(f);
@@ -1460,6 +1511,9 @@ function Traverse(
       if(!Traverse(node.body.body[i], 'function_body'))
         return false;
     }
+
+    if(node.body.body[node.body.body.length - 1].type == 'ReturnStatement')
+      (bBlock.at(-1) as IBlock).state = EState.TERMINATED;
 
     EndBlock();
 
