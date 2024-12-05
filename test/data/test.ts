@@ -29,7 +29,7 @@ class newEnemy extends CActor {
     }
 
     Test(arg: number): number {
-        arg += 2;
+        arg += 2 + 2;
         return arg;
     }
 

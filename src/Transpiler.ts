@@ -3,7 +3,7 @@ import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IVar, TClass
 import { escape } from 'querystring';
 import { funcTranslator, IFuncTranslation, initCode, initStates } from './translation';
 import './defs/types';
-import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars, EMoveFlags } from './defs/native';
+import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars, EMoveFlags, CON_NATIVE_FUNCTION } from './defs/native';
 
 const errors: IError[] = [];
 var detailLines = false;
@@ -23,7 +23,7 @@ var curActor: IActor = {
   extra: 0
 }
 
-var funcs: IFunction[] = [];
+var funcs: CON_NATIVE_FUNCTION[] = [];
 
 var sp = -1;
 var bp = 0
@@ -139,7 +139,7 @@ function ReturnFromFunction() {
 
   if(state == EState.BODY) {
     if(b.type == EBlock.ACTOR)
-      code += `set rbp ${b.base} \nset rsp ${b.stack}`;
+      code += `set rbp ${b.base} \nset rsp ${b.stack} \n`;
     else if(b.type == EBlock.FUNCTION)
       code += `set rsp rbp \nstate pop \nset rbp ra \n`;
   }
@@ -162,15 +162,15 @@ function EndBlock() {
 
   switch(b.type) {
     case EBlock.ACTOR:
-      code += '\nenda';
+      code += 'enda \n \n';
       break;
 
     case EBlock.STATE:
-      code += '\nends';
+      code += 'ends \n \n';
       break;
 
     case EBlock.EVENT:
-      code += '\nendevent';
+      code += 'endevent \n \n';
       break;
   }
 
@@ -213,7 +213,7 @@ function TranslateFunc(node: T.Expression | T.SpreadElement ) {
       conFunc = nativeFunctions.findIndex(e => e.name == func);
 
       if(conFunc == -1) {
-        conFunc = funcs.findIndex(e => e.name == func && e.object == object);
+        conFunc = funcs.findIndex(e => e.name == func);
 
         if(conFunc != -1)
           native = 2;
@@ -575,7 +575,11 @@ function Traverse(
     }
 
     if(func.native) {
-      const f = nativeFunctions[func.index];
+      let f: CON_NATIVE_FUNCTION;
+
+      if(func.native == 1)
+        f = nativeFunctions[func.index];
+      else f = funcs[func.index];
 
       if(mode == 'conditional' && !f.returns) {
         errors.push({
@@ -870,7 +874,8 @@ function Traverse(
       if(side.type == 'NumericLiteral') {
         //if(mode == 'retrieval')
         vals[i] = side.value;
-        if(mode != 'retrieval') code += `set ra ${side.value} \n`;
+        if(mode != 'retrieval')
+          code += `set r${i == 0 ? 'a' : 'b'} ${side.value} \n`; 
       } 
 
       //retrieval cannot happen with call expressions
@@ -903,8 +908,8 @@ function Traverse(
         //if(mode == 'retrieval')
         vals[i] = variable.init;
         if(mode != 'retrieval') {
-          if(variable.arg && mode != 'function_params')
-            code += `set ra r${variable.arg}`;
+          if(variable.arg != undefined && mode != 'function_params')
+            code += `set ra r${variable.arg} \n`;
           else code += `${(sp - variable.pointer) != 0
             ? `set ri rsp \nsub ri ${sp - variable.pointer} \nset ra stack[ri] \n` 
             : `set ra stack[rsp] \n`}`;
@@ -1245,8 +1250,11 @@ function Traverse(
       if(!Traverse(exp.right, 'assignment'))
         return false;
 
-      if(variable.arg && mode != 'function_params')
-        code += `set ra r${variable.arg}`;
+      if(exp.right.type != 'CallExpression')
+        code += `set rb ra \n`;
+
+      if(variable.arg != undefined && mode != 'function_params')
+        code += `set ra r${variable.arg} \n`;
       else code += `set rb ra \n${(sp - variable.pointer) != 0
       ? `set ri rsp \nsub ri ${sp - variable.pointer} \nset ra stack[ri] \n` 
       : `set ra stack[rsp] \n`}`;
@@ -1278,6 +1286,9 @@ function Traverse(
       code += `${operator} ra rb \n${(sp - variable.pointer) != 0
         ? `set ri rsp \nsub ri ${sp - variable.pointer} \nsetarray stack[ri] ra \n`
         : `setarray stack[rsp] ra \n`}`;
+
+      if(variable.arg != undefined)
+        code += `set r${variable.arg} ra \n`;
     }
 
     if(exp.type == 'CallExpression') {
@@ -1366,15 +1377,17 @@ function Traverse(
       return false;
     }
 
-    const f: IFunction = {
+    const f: CON_NATIVE_FUNCTION = {
       name: (node.key as T.Identifier).name,
-      args: [],
       returns: false,
-      return_type: CON_NATIVE_FLAGS.VARIABLE,
-      object: block == EBlock.ACTOR ? 'this' : 'global'
+      return_type: 'variable',
+      arguments: [],
+      code: () => {
+        return `state ${curActor.picnum}_${(node.key as T.Identifier).name} \n`;
+      }
     };
 
-    code += `defstate ${curActor.picnum}_${(node.key as T.Identifier).name} \n`;
+    code += `\ndefstate ${curActor.picnum}_${(node.key as T.Identifier).name} \n`;
 
     code += `set ra rbp \nstate push \nset rbp rsp \n`
 
@@ -1389,23 +1402,19 @@ function Traverse(
         if(p.type == 'Identifier') {
           const type = GetVarType(p);
           sp++;
-          f.args.push({
-            name: p.name,
-            type: type == 'integer' ? CON_NATIVE_FLAGS.VARIABLE
-              : (type != 'string' ? CON_NATIVE_FLAGS.LABEL : CON_NATIVE_FLAGS.STRING),
-            variable: {
-              global: false,
-              block: bBlock.length,
-              name: p.name,
-              type,
-              constant: false,
-              pointer: sp,
-              arg: i,
-              init: 0,
-            }
-          });
+          f.arguments.push(type == 'integer' ? CON_NATIVE_FLAGS.VARIABLE
+            : (type == 'label' ? CON_NATIVE_FLAGS.LABEL : CON_NATIVE_FLAGS.STRING));
 
-          vars.push(f.args[f.args.length - 1].variable);
+          vars.push({
+            global: false,
+            block: bBlock.length,
+            name: p.name,
+            type,
+            constant: false,
+            pointer: sp,
+            arg: i,
+            init: 0,
+          });
         }
       }
     }
@@ -1416,7 +1425,7 @@ function Traverse(
       if(r.type == 'TSTypeAnnotation') {
         switch(r.typeAnnotation.type) {
           case 'TSNumberKeyword':
-            f.return_type = CON_NATIVE_FLAGS.VARIABLE
+            f.return_type = 'variable'
             break;
 
           case 'TSTypeReference':
@@ -1424,7 +1433,7 @@ function Traverse(
             if(t.type == 'Identifier') {
               switch(t.name) {
                 case 'pointer':
-                  f.return_type = CON_NATIVE_FLAGS.LABEL;
+                  f.return_type = 'pointer'
                   break;
               }
             }
