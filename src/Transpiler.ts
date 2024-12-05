@@ -137,9 +137,9 @@ function ReturnFromFunction() {
     return;
   }
 
-  if(b.type == EBlock.ACTOR)
+  if(b.type == EBlock.ACTOR && b.name != 'constructor')
     code += `set rbp ${b.base} \nset rsp ${b.stack} \n`;
-  else if(b.type == EBlock.FUNCTION)
+  else if(b.type == EBlock.FUNCTION && b.name != 'constructor')
     code += `set rsp rbp \nstate pop \nset rbp ra \n`;
 
   let diff = b.type == EBlock.FUNCTION ? sp - b.stack - 2 - b.args : sp - b.stack;
@@ -508,7 +508,7 @@ function Traverse(
         }
 
         if(variable.arg !== undefined)
-          code += `set rb r${variable.arg}`;
+          code += `set rb r${variable.arg} \n`;
         else code += `set ri rsp \nsub ri ${sp - variable.pointer} \nset rb stack[ri] \n`;
       } else {
         if(!Traverse(a, mode))
@@ -1451,7 +1451,7 @@ function Traverse(
       } else {
         if(exp.left.type == 'MemberExpression') {
           code += `${operator} ra rb \n`;
-          
+
           if(!Traverse(exp.left, 'assignment'))
             return;
         }
