@@ -30,6 +30,15 @@ export enum EMoveFlags {
     dodgebullet	= 4096      //actor attempts to avoid all shots directed at him. The actor will not avoid GROWSPARK.    4096	
 }
 
+export enum EOperateFlags {
+    doors = 1,
+    activators = 2,
+    master_switches = 4,
+    respawns = 8,
+    sectors = 16,
+    all_activators_in_a_sector = 32
+}
+
 export interface CON_NATIVE_FUNCTION {
     name: string,
     code: string | ((args?: boolean) => string),
@@ -241,6 +250,20 @@ state popd
         arguments: [
             CON_NATIVE_FLAGS.CONSTANT
         ]
+    },
+    {
+        name: 'IsDead',
+        code: 'set rb 0 \nifdead set rb 1 \n',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'Stop',
+        code: 'set rsp rbp \nstate pop \nset rbp ra \nreturn \n',
+        returns: false,
+        return_type: null,
+        arguments: []
     },
 ]
 

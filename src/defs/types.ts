@@ -38,6 +38,15 @@ declare global {
         dodgebullet	= 4096      //actor attempts to avoid all shots directed at him. The actor will not avoid GROWSPARK.    4096	
     }
 
+    export enum EOperateFlags {
+        doors = 1,
+        activators = 2,
+        master_switches = 4,
+        respawns = 8,
+        sectors = 16,
+        all_activators_in_a_sector = 32
+    }
+
     //Interface for declaring moves
     export interface IMove {
         name: TLabel,
@@ -69,17 +78,24 @@ declare global {
     */
 
     export class CActor {
+        public picnum: CON_NATIVE<number>;
         public isEnemy: boolean;
         public extra: CON_NATIVE<number>;
         public htExtra: CON_NATIVE<number>;
         public damage: CON_NATIVE<number>;
         public htPicnum: CON_NATIVE<number>;
         public weaponHit: CON_NATIVE<number>;
-        public curAction: CON_NATIVE_POINTER;
-        public curMove: CON_NATIVE_POINTER;
-        public curAI: CON_NATIVE_POINTER;
-        public picnum: CON_NATIVE<number>;
+
         public playerDist: CON_NATIVE<number>;
+
+        public curAction: CON_NATIVE_POINTER;
+        public curActionFrame: CON_NATIVE<number>;
+
+        public curMove: CON_NATIVE_POINTER;
+        public vel: CON_NATIVE<number>;
+        public ang: CON_NATIVE<number>;
+
+        public curAI: CON_NATIVE_POINTER;
 
         public index: number;
 
@@ -98,26 +114,62 @@ declare global {
             ais?: IAi[]
         )
 
+        //Actor control
         PlayAction(action: pointer): CON_NATIVE<void>
         Move(move: pointer, flags: number): CON_NATIVE<void>
         StartAI(ai: pointer): CON_NATIVE<void>
-        CanSee(): CON_NATIVE<boolean>
-        CanShootTarget(): CON_NATIVE<boolean>
         CStat(stats?: number): CON_NATIVE<number>
         CStatOR(stats: number): CON_NATIVE<void> 
         SizeAt(w: number, h: number): CON_NATIVE<void> 
         SizeTo(w: number, h: number, inc_x?: number, inc_y?: number): CON_NATIVE<void> 
         Count(value?: number): CON_NATIVE<number> 
         Fall(): CON_NATIVE<void>
-        BulletNear(): CON_NATIVE<boolean>
-        HitByWeapon(): CON_NATIVE<boolean>
-        WeaponHit(): CON_NATIVE<number>
+        GetLastPal(): CON_NATIVE<void>
+        KillIt(): CON_NATIVE<void>
+        Stop(): CON_NATIVE<void>
+        ResetAction(): CON_NATIVE<void>
+        Spawn(picnum: number, initFn?: ((id: number) => {}), queued?: boolean): CON_NATIVE<number>
+        Shoot(picnum: number, initFn?: ((id: number) => {}), zve?: number): CON_NATIVE<number>
+        HitRadius(radius: number, furthestDmg: number, farDmg: number, closeDmg: number, closestDmg: number): CON_NATIVE<void>
+        Flash(): CON_NATIVE<void>
+        RespawnHitag(): CON_NATIVE<void>
+        Operate(flags: EOperateFlags, lotag?: number, player_id?: number, sector?: number, sprite?: number): CON_NATIVE<void>
+
+        //Conditionals
+        IsAwayFromWall(): CON_NATIVE<boolean>
+        IsInWater(): CON_NATIVE<boolean>
+        IsOnWater(): CON_NATIVE<boolean>
+        IsOutside(): CON_NATIVE<boolean>
+        IsInSpace(): CON_NATIVE<boolean>
+        IsInOuterSpace(): CON_NATIVE<boolean>
+        IsRandom(value: constant): CON_NATIVE<boolean>
+        IsDead(): CON_NATIVE<boolean>
         Squished(): CON_NATIVE<boolean>
         IsItMoving(): CON_NATIVE<boolean>
-        GetLastPal(): CON_NATIVE<void>
+        BulletNear(): CON_NATIVE<boolean>
+        HitByWeapon(): CON_NATIVE<boolean>
+        CanSee(): CON_NATIVE<boolean>
+        CanSeeTarget(): CON_NATIVE<boolean>
+        CanShootTarget(): CON_NATIVE<boolean>
+        PlayerHitSpace(): CON_NATIVE<boolean>
+        WeaponHit(): CON_NATIVE<number>
+
+        //Get values
+        AngleToTarget(): CON_NATIVE<number>
+
+        //Spawn misc
+        Debris(tile: constant, amount: constant): CON_NATIVE<void>
+        Guts(tile: constant, amount: constant): CON_NATIVE<void>
+        Mail(amount: constant): CON_NATIVE<void>
+        Money(amount: constant): CON_NATIVE<void>
+        Paper(amount: constant): CON_NATIVE<void>
+        Glass(amount: constant): CON_NATIVE<void>
+
+        //Player actions (nothing to do with animation)
+        AddKills(amount: constant): CON_NATIVE<void>
         PlayerKick(): CON_NATIVE<void>
-        KillIt(): CON_NATIVE<void>
-        Glass(num: constant): CON_NATIVE<void>
+        LockPlayer(time: number): CON_NATIVE<void>
+        ResetPlayer(flags: number): CON_NATIVE<void>
 
         public Main(): void
     }
