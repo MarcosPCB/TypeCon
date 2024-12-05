@@ -47,6 +47,13 @@ declare global {
         all_activators_in_a_sector = 32
     }
 
+    export enum CON_NATIVE_TYPE {
+        global = 1,
+        actor = 2,
+        player = 4,
+        variable = 8
+    }
+
     //Interface for declaring moves
     export interface IMove {
         name: TLabel,
@@ -97,12 +104,7 @@ declare global {
 
         public curAI: CON_NATIVE_POINTER;
 
-        public index: number;
-
-        private readonly actions: IAction[];
-        private readonly moves: IMove[];
-        private readonly ais: IAi[];
-        public EventEgs: IEvent;
+        protected index: number;
 
         constructor(
             picnum: number,
@@ -115,62 +117,64 @@ declare global {
         )
 
         //Actor control
-        PlayAction(action: pointer): CON_NATIVE<void>
-        Move(move: pointer, flags: number): CON_NATIVE<void>
-        StartAI(ai: pointer): CON_NATIVE<void>
-        CStat(stats?: number): CON_NATIVE<number>
-        CStatOR(stats: number): CON_NATIVE<void> 
-        SizeAt(w: number, h: number): CON_NATIVE<void> 
-        SizeTo(w: number, h: number, inc_x?: number, inc_y?: number): CON_NATIVE<void> 
-        Count(value?: number): CON_NATIVE<number> 
-        Fall(): CON_NATIVE<void>
-        GetLastPal(): CON_NATIVE<void>
-        KillIt(): CON_NATIVE<void>
-        Stop(): CON_NATIVE<void>
-        ResetAction(): CON_NATIVE<void>
-        Spawn(picnum: number, initFn?: ((id: number) => {}), queued?: boolean): CON_NATIVE<number>
-        Shoot(picnum: number, initFn?: ((id: number) => {}), zve?: number): CON_NATIVE<number>
-        HitRadius(radius: number, furthestDmg: number, farDmg: number, closeDmg: number, closestDmg: number): CON_NATIVE<void>
-        Flash(): CON_NATIVE<void>
-        RespawnHitag(): CON_NATIVE<void>
-        Operate(flags: EOperateFlags, lotag?: number, player_id?: number, sector?: number, sprite?: number): CON_NATIVE<void>
+        protected PlayAction(action: pointer): CON_NATIVE<void>
+        protected Move(move: pointer, flags: number): CON_NATIVE<void>
+        protected StartAI(ai: pointer): CON_NATIVE<void>
+        protected CStat(stats?: number): CON_NATIVE<number>
+        protected CStatOR(stats: number): CON_NATIVE<void> 
+        protected SizeAt(w: number, h: number): CON_NATIVE<void> 
+        protected SizeTo(w: number, h: number, inc_x?: number, inc_y?: number): CON_NATIVE<void> 
+        protected Count(value?: number): CON_NATIVE<number> 
+        protected Fall(): CON_NATIVE<void>
+        protected GetLastPal(): CON_NATIVE<void>
+        protected KillIt(): CON_NATIVE<void>
+        protected Stop(): CON_NATIVE<void>
+        protected ResetAction(): CON_NATIVE<void>
+        protected Spawn(picnum: number, initFn?: ((RETURN: number) => void), queued?: boolean): CON_NATIVE<number>
+        protected Shoot(picnum: number, initFn?: ((RETURN: number) => void), zve?: number): CON_NATIVE<number>
+        protected HitRadius(radius: number, furthestDmg: number, farDmg: number, closeDmg: number, closestDmg: number): CON_NATIVE<void>
+        protected Flash(): CON_NATIVE<void>
+        protected RespawnHitag(): CON_NATIVE<void>
+        protected Operate(flags: EOperateFlags, lotag?: number, player_id?: number, sector?: number, sprite?: number): CON_NATIVE<void>
 
         //Conditionals
-        IsAwayFromWall(): CON_NATIVE<boolean>
-        IsInWater(): CON_NATIVE<boolean>
-        IsOnWater(): CON_NATIVE<boolean>
-        IsOutside(): CON_NATIVE<boolean>
-        IsInSpace(): CON_NATIVE<boolean>
-        IsInOuterSpace(): CON_NATIVE<boolean>
-        IsRandom(value: constant): CON_NATIVE<boolean>
-        IsDead(): CON_NATIVE<boolean>
-        Squished(): CON_NATIVE<boolean>
-        IsItMoving(): CON_NATIVE<boolean>
-        BulletNear(): CON_NATIVE<boolean>
-        HitByWeapon(): CON_NATIVE<boolean>
-        CanSee(): CON_NATIVE<boolean>
-        CanSeeTarget(): CON_NATIVE<boolean>
-        CanShootTarget(): CON_NATIVE<boolean>
-        PlayerHitSpace(): CON_NATIVE<boolean>
-        WeaponHit(): CON_NATIVE<number>
+        protected IsAwayFromWall(): CON_NATIVE<boolean>
+        protected IsInWater(): CON_NATIVE<boolean>
+        protected IsOnWater(): CON_NATIVE<boolean>
+        protected IsOutside(): CON_NATIVE<boolean>
+        protected IsInSpace(): CON_NATIVE<boolean>
+        protected IsInOuterSpace(): CON_NATIVE<boolean>
+        protected IsRandom(value: constant): CON_NATIVE<boolean>
+        protected IsDead(): CON_NATIVE<boolean>
+        protected Squished(): CON_NATIVE<boolean>
+        protected IsItMoving(): CON_NATIVE<boolean>
+        protected BulletNear(): CON_NATIVE<boolean>
+        protected HitByWeapon(): CON_NATIVE<boolean>
+        protected CanSee(): CON_NATIVE<boolean>
+        protected CanSeeTarget(): CON_NATIVE<boolean>
+        protected CanShootTarget(): CON_NATIVE<boolean>
+        protected PlayerHitSpace(): CON_NATIVE<boolean>
+        protected WeaponHit(): CON_NATIVE<number>
 
         //Get values
-        AngleToTarget(): CON_NATIVE<number>
+        protected AngleToTarget(): CON_NATIVE<number>
 
         //Spawn misc
-        Debris(tile: constant, amount: constant): CON_NATIVE<void>
-        Guts(tile: constant, amount: constant): CON_NATIVE<void>
-        Mail(amount: constant): CON_NATIVE<void>
-        Money(amount: constant): CON_NATIVE<void>
-        Paper(amount: constant): CON_NATIVE<void>
-        Glass(amount: constant): CON_NATIVE<void>
+        protected Debris(tile: constant, amount: constant): CON_NATIVE<void>
+        protected Guts(tile: constant, amount: constant): CON_NATIVE<void>
+        protected Mail(amount: constant): CON_NATIVE<void>
+        protected Money(amount: constant): CON_NATIVE<void>
+        protected Paper(amount: constant): CON_NATIVE<void>
+        protected Glass(amount: constant): CON_NATIVE<void>
 
         //Player actions (nothing to do with animation)
-        AddKills(amount: constant): CON_NATIVE<void>
-        PlayerKick(): CON_NATIVE<void>
-        LockPlayer(time: number): CON_NATIVE<void>
-        ResetPlayer(flags: number): CON_NATIVE<void>
+        protected AddKills(amount: constant): CON_NATIVE<void>
+        protected PlayerKick(): CON_NATIVE<void>
+        protected LockPlayer(time: number): CON_NATIVE<void>
+        protected ResetPlayer(flags: number): CON_NATIVE<void>
 
-        public Main(): void
+        protected Main(): void
     }
+
+    export const sprites: CActor[];
 }

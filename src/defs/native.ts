@@ -5,14 +5,20 @@ export type CON_NATIVE<Type> = Type;
 
 export class CON_NATIVE_POINTER { }
 
-export type CON_NATIVE_TYPE = 'global' | 'player' | 'actor' | 'var_player' | 'var_actor';
+export enum CON_NATIVE_TYPE {
+    global = 1,
+    actor = 2,
+    player = 4,
+    variable = 8
+}
 
 export enum CON_NATIVE_FLAGS {
     CONSTANT = 1,
     VARIABLE = 2,
     STRING = 4,
     LABEL = 8,
-    OPTIONAL = 16
+    OPTIONAL = 16,
+    FUNCTION = 32,
 }
 
 export enum EMoveFlags {
@@ -41,7 +47,7 @@ export enum EOperateFlags {
 
 export interface CON_NATIVE_FUNCTION {
     name: string,
-    code: string | ((args?: boolean) => string),
+    code: string | ((args?: boolean, fn?: string) => string),
     returns: boolean,
     return_type: 'variable' | 'string' | 'pointer' | null,
     arguments: CON_NATIVE_FLAGS[],
@@ -265,13 +271,47 @@ state popd
         return_type: null,
         arguments: []
     },
+    {
+        name: 'ResetAction',
+        code: 'resetactioncount \n',
+        returns: false,
+        return_type: null,
+        arguments: []
+    },
+    {
+        name: 'Flash',
+        code: 'flash \n',
+        returns: false,
+        return_type: null,
+        arguments: []
+    },
+    {
+        name: 'RespawnHitag',
+        code: 'respawnhitag \n',
+        returns: false,
+        return_type: null,
+        arguments: []
+    },
+    {
+        name: 'Spawn',
+        code: (args?: boolean, fn?: string) => {
+            return `set rd RETURN \nifge r2 1 eqspawn r0 \nelse espawn r0 \n${fn}set RETURN rd \n`;
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.FUNCTION | CON_NATIVE_FLAGS.OPTIONAL,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
+        ]
+    },
 ]
 
 export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'actions',
         object: 'this',
-        var_type: 'actor',
+        var_type: CON_NATIVE_TYPE.actor,
         type: 'ts',
         readonly: false,
         code: '',
@@ -280,7 +320,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'moves',
         object: 'this',
-        var_type: 'actor',
+        var_type: CON_NATIVE_TYPE.actor,
         type: 'ts',
         readonly: false,
         code: '',
@@ -289,7 +329,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'ais',
         object: 'this',
-        var_type: 'actor',
+        var_type: CON_NATIVE_TYPE.actor,
         type: 'ts',
         readonly: false,
         code: '',
@@ -298,7 +338,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'curAction',
         object: 'this',
-        var_type: 'actor',
+        var_type: CON_NATIVE_TYPE.actor,
         type: 'pointer',
         readonly: false,
         code: 'htg_t 4',
@@ -307,7 +347,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'curMove',
         object: 'this',
-        var_type: 'actor',
+        var_type: CON_NATIVE_TYPE.actor,
         type: 'pointer',
         readonly: false,
         code: 'htg_t 1',
@@ -316,7 +356,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'curAI',
         object: 'this',
-        var_type: 'actor',
+        var_type: CON_NATIVE_TYPE.actor,
         type: 'pointer',
         readonly: false,
         code: 'htg_t 5',
@@ -325,7 +365,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'extra',
         object: 'this',
-        var_type: 'actor',
+        var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: false,
         code: 'extra',
@@ -334,7 +374,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'playerDist',
         object: 'this',
-        var_type: 'var_actor',
+        var_type: CON_NATIVE_TYPE.actor | CON_NATIVE_TYPE.variable,
         type: 'variable',
         readonly: true,
         code: 'playerDist',
@@ -343,7 +383,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'damage',
         object: 'this',
-        var_type: 'actor',
+        var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: true,
         code: 'htextra',
@@ -352,7 +392,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'htExtra',
         object: 'this',
-        var_type: 'actor',
+        var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: true,
         code: 'htExtra',
@@ -361,7 +401,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'weaponHit',
         object: 'this',
-        var_type: 'actor',
+        var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: true,
         code: 'htPicnum',
@@ -370,12 +410,39 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'htPicnum',
         object: 'this',
-        var_type: 'actor',
+        var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: true,
         code: 'htPicnum',
         init: -1
-    }
+    },
+    {
+        name: 'curActionFrame',
+        object: 'this',
+        var_type: CON_NATIVE_TYPE.actor,
+        type: 'variable',
+        readonly: true,
+        code: 'htg_t 3',
+        init: 0
+    },
+    {
+        name: 'vel',
+        object: 'this',
+        var_type: CON_NATIVE_TYPE.actor,
+        type: 'variable',
+        readonly: true,
+        code: 'xvel',
+        init: 0
+    },
+    {
+        name: 'ang',
+        object: 'this',
+        var_type: CON_NATIVE_TYPE.actor,
+        type: 'variable',
+        readonly: true,
+        code: 'ang',
+        init: 0
+    },
 ]
 
 export type pointer = void;

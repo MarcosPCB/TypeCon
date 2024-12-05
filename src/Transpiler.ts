@@ -3,7 +3,7 @@ import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IVar, TClass
 import { escape } from 'querystring';
 import { funcTranslator, IFuncTranslation, initCode, initStates } from './translation';
 import './defs/types';
-import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars, EMoveFlags, CON_NATIVE_FUNCTION } from './defs/native';
+import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars, EMoveFlags, CON_NATIVE_FUNCTION, CON_NATIVE_TYPE } from './defs/native';
 
 const errors: IError[] = [];
 var detailLines = false;
@@ -644,6 +644,8 @@ function Traverse(
         }
       }
 
+      let fn = ''
+
       if(args.length > 0) {
         let params: string = '';
 
@@ -655,10 +657,25 @@ function Traverse(
         for(let i = 0; i < args.length; i++) {
           const a = args[i];
           optional = false;
+          let codeB = ''
 
           if(f.arguments[i] & CON_NATIVE_FLAGS.OPTIONAL) {
             f.arguments[i] -= CON_NATIVE_FLAGS.OPTIONAL;
             optional = true;
+          }
+
+          if(f.arguments[i] & CON_NATIVE_FLAGS.FUNCTION) {
+            codeB = code;
+            code = '';
+          }
+
+          if(a.type == 'ArrowFunctionExpression') {
+            if(a.body.type == 'BlockStatement') {
+              for(let i = 0; i < a.body.body.length; i++) {
+                if(!Traverse(a.body.body[i], 'function_body'))
+                  return false;
+              }
+            }
           }
 
           if(a.type == 'NumericLiteral') {
@@ -813,6 +830,11 @@ function Traverse(
           if(optional)
             f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
 
+          if(f.arguments[i] & CON_NATIVE_FLAGS.FUNCTION) {
+            fn = code;
+            code = codeB;
+          }
+
           params += `r${i} `;
         }
 
@@ -823,7 +845,7 @@ function Traverse(
           }
         }
 
-        code += `${typeof f.code === 'function' ? f.code(true) : `${f.code} ${params} \n`}`;
+        code += `${typeof f.code === 'function' ? f.code(true, fn) : `${f.code} ${params} \n`}`;
         if(f.arguments.find(e => e & CON_NATIVE_FLAGS.VARIABLE))
           code += `state popr${f.arguments.length} \n`;
       } else code += `${typeof f.code === 'function' ? f.code() : `${f.code} \n`}`;
@@ -1077,6 +1099,7 @@ function Traverse(
       }
     }
 
+    /*
     //For now, work in retrieval mode
     if(o.type == 'MemberExpression') {
       if(!Traverse(o, 'retrieval'))
@@ -1089,11 +1112,12 @@ function Traverse(
         return true;
       }
     }
+    */
 
     if(p.type == 'Identifier') {
       if(o.type == 'ThisExpression') {
         if(block == EBlock.ACTOR) {
-          let v = nativeVars.find(e => (e.name == p.name && e.object == 'this' && (e.var_type == 'actor' || e.var_type == 'var_actor')));
+          let v = nativeVars.find(e => (e.name == p.name && (e.var_type & CON_NATIVE_TYPE.actor || e.var_type & CON_NATIVE_TYPE.variable )));
           if(!v) {
             errors.push({
               type: 'error',
@@ -1112,26 +1136,106 @@ function Traverse(
           if(mode == 'retrieval')
             ra = v.init;
           else {
-            switch(v.var_type) {
-              case 'actor':
+            if(v.var_type & CON_NATIVE_TYPE.actor) {
+              if(!(v.var_type & CON_NATIVE_TYPE.variable))
                 code += `geta[].${v.code} ra \n`
-                break;
-
-              case 'var_actor':
-                code += `set ra ${v.code} \n`;
-                break;
+              else  code += `set ra ${v.code} \n`;
             }
+          }
+        }
+      } else if(o.type == 'MemberExpression') {
+        let obj = '';
+        let index = '';
+        if(o.object.type == 'Identifier')
+          obj = o.object.name;
+
+        if(obj == 'sprites' || obj == 'player') {
+          if(!o.computed) {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: `Missing index for ${obj} array`
+            });
+            return false;
+          }
+
+          if(o.property.type == 'NumericLiteral')
+            index = `[${o.property.value}]`;
+
+          if(o.property.type == 'StringLiteral') {
+            const l = labels.find(e => e.label == (o.property as T.StringLiteral).value);
+
+            if(!l) {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Keyword, label or variable ${o.property.value} does not exist`
+              });
+              return false;
+            }
+
+            index = `[${o.property.value}]`;
+          }
+
+          if(o.property.type == 'Identifier') {
+            if(o.property.name == 'RETURN')
+              index += '[RETURN]';
+            else {
+              const variable = GetVar(o.property.name);
+
+              if(!variable) {
+                errors.push({
+                  type: 'error',
+                  node: node.type,
+                  location: node.loc as T.SourceLocation,
+                  message: `Keyword, label or variable ${o.property.name} does not exist`
+                });
+                return false;
+              }
+
+              const loc = sp - variable.pointer;
+              
+              if(loc == 0)
+                index = '[stack[rsp]]';
+              else {
+                code += `set ri rsp \nsub ri ${loc} \n`;
+                index = '[stack[ri]]';
+              }
+            }
+          }
+
+          let v = nativeVars.find(e => (e.name == p.name 
+            && (obj == 'sprites' && e.var_type & CON_NATIVE_TYPE.actor || e.var_type & CON_NATIVE_TYPE.variable)));
+          if(!v) {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: `Property ${p.name} does not exist in CActor or its own actor`
+            });
+            return false;
+          }
+
+          if(!(v.var_type & CON_NATIVE_TYPE.variable)) {
+            if(mode == 'assignment')
+              code += `set${obj == 'sprites' ? 'a' : 'p'}${index}.${v.code} ra \n`;
+            else code += `get${obj == 'sprites' ? 'a' : 'p'}${index}.${v.code} ra \n`
+          } else {
+            if(mode == 'assignment')
+              code += `set${obj == 'sprites' ? 'actorvar' : 'playervar'}${index}.${v.code} ra`
+            else code += `get${obj == 'sprites' ? 'actorvar' : 'playervar'}${index}.${v.code} ra`
           }
         }
       } else {
         if(mode == 'retrieval') {
-
           if(o.type == 'Identifier')
             ra = object[p.name]
 
-          if(o.type == 'MemberExpression')
-            ra = ra[p.name];
-        }
+          //if(o.type == 'MemberExpression')
+            //ra = ra[p.name];
+        } 
       }
     }
 
@@ -1276,17 +1380,7 @@ function Traverse(
         return false;
       }
 
-      const variable = GetVar((exp.left as T.Identifier).name);
-
-      if(!variable) {
-        errors.push({
-          type: 'error',
-          node: node.type,
-          location: node.loc as T.SourceLocation,
-          message: `Unknown variable or keyword ${(exp.left as T.Identifier).name}`
-        });
-        return false;
-      }
+      let variable: IVar | undefined;
 
       if(exp.right.type == 'NumericLiteral')
         code += `set rb ${exp.right.value} \n`;
@@ -1298,11 +1392,30 @@ function Traverse(
           code += `set rb ra \n`;
       }
 
-      if(variable.arg != undefined && mode != 'function_params')
-        code += `set ra r${variable.arg} \n`;
-      else code += `${(sp - variable.pointer) != 0
-      ? `set ri rsp \nsub ri ${sp - variable.pointer} \nset ra stack[ri] \n` 
-      : `set ra stack[rsp] \n`}`;
+      if(exp.left.type == 'Identifier') {
+        variable = GetVar((exp.left as T.Identifier).name);
+
+        if(!variable) {
+          errors.push({
+            type: 'error',
+            node: node.type,
+            location: node.loc as T.SourceLocation,
+            message: `Unknown variable or keyword ${(exp.left as T.Identifier).name}`
+          });
+          return false;
+        }
+
+        if(variable.arg != undefined && mode != 'function_params')
+          code += `set ra r${variable.arg} \n`;
+        else code += `${(sp - variable.pointer) != 0
+        ? `set ri rsp \nsub ri ${sp - variable.pointer} \nset ra stack[ri] \n` 
+        : `set ra stack[rsp] \n`}`;
+      }
+
+      if(exp.left.type == 'MemberExpression') {
+        if(!Traverse(exp.left, mode))
+          return;
+      }
 
       let operator = '';
 
@@ -1328,12 +1441,21 @@ function Traverse(
           break;
       }
 
-      code += `${operator} ra rb \n${(sp - variable.pointer) != 0
-        ? `set ri rsp \nsub ri ${sp - variable.pointer} \nsetarray stack[ri] ra \n`
-        : `setarray stack[rsp] ra \n`}`;
+      if(variable) {
+        code += `${operator} ra rb \n${(sp - variable.pointer) != 0
+          ? `set ri rsp \nsub ri ${sp - variable.pointer} \nsetarray stack[ri] ra \n`
+          : `setarray stack[rsp] ra \n`}`;
 
-      if(variable.arg != undefined)
-        code += `set r${variable.arg} ra \n`;
+        if(variable.arg != undefined)
+          code += `set r${variable.arg} ra \n`;
+      } else {
+        if(exp.left.type == 'MemberExpression') {
+          code += `${operator} ra rb \n`;
+          
+          if(!Traverse(exp.left, 'assignment'))
+            return;
+        }
+      }
     }
 
     if(exp.type == 'CallExpression') {

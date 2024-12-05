@@ -58,6 +58,10 @@ class newEnemy extends CActor {
         this.Glass(5);
 
         this.Test(go);
+
+        this.Spawn(1608, (RETURN) => {
+            sprites[RETURN].extra = 50;
+        })
     }
     
 }
