@@ -1,5 +1,5 @@
 import * as T from '@babel/types';
-import { EBlock, EState, IActor, IBlock, IError, ILabel, IVar, TClassType, TVar } from './types';
+import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IVar, TClassType, TVar } from './types';
 import { escape } from 'querystring';
 import { funcTranslator, IFuncTranslation, initCode, initStates } from './translation';
 import './defs/types';
@@ -22,6 +22,8 @@ var curActor: IActor = {
   enemy: false,
   extra: 0
 }
+
+var funcs: IFunction[] = [];
 
 var sp = -1;
 var bp = 0
@@ -69,10 +71,10 @@ function GetVarIndex(name: string) {
   return variable;
 }
 
-function GetVarType(node: T.VariableDeclarator) {
-  if(node.id.type == 'Identifier') {
-    if(node.id.typeAnnotation?.type == 'TSTypeAnnotation') {
-      const type = node.id.typeAnnotation.typeAnnotation;
+function GetVarType(node: T.Identifier) {
+  if(node.type == 'Identifier') {
+    if(node.typeAnnotation?.type == 'TSTypeAnnotation') {
+      const type = node.typeAnnotation.typeAnnotation;
       if(type.type == 'TSTypeReference') {
         const type2 = type.typeName;
         switch((type2 as T.Identifier).name) {
@@ -98,9 +100,9 @@ function GetVarType(node: T.VariableDeclarator) {
           return 'string'
       }
     }
-
-    return 'any';
   }
+
+  return 'any';
 }
 
 function StartBlock(name: string, type: TClassType): number {
@@ -138,6 +140,8 @@ function ReturnFromFunction() {
   if(state == EState.BODY) {
     if(b.type == EBlock.ACTOR)
       code += `set rbp ${b.base} \nset rsp ${b.stack}`;
+    else if(b.type == EBlock.FUNCTION)
+      code += `set rsp rbp \nstate pop \nset rbp ra \n`;
   }
 
   const diff = sp - b.stack;
@@ -183,7 +187,7 @@ function TranslateFunc(node: T.Expression | T.SpreadElement ) {
 
     if(!node.object.loc)
       return {
-        native: false,
+        native: 0,
         index: -2
       };
 
@@ -194,7 +198,7 @@ function TranslateFunc(node: T.Expression | T.SpreadElement ) {
     
     if(!node.property.loc)
       return {
-        native: false,
+        native: 0,
         index: -2
       };
 
@@ -202,14 +206,21 @@ function TranslateFunc(node: T.Expression | T.SpreadElement ) {
   }
 
   let conFunc: number = -1;
-  let native = true;
+  let native = 1;
   
   if(object == 'this') {
     if(block == EBlock.ACTOR) {
       conFunc = nativeFunctions.findIndex(e => e.name == func);
+
+      if(conFunc == -1) {
+        conFunc = funcs.findIndex(e => e.name == func && e.object == object);
+
+        if(conFunc != -1)
+          native = 2;
+      }
     }
   } else {
-    native = false;
+    native = 0;
     conFunc = funcTranslator.findIndex(
       e => e.type == type 
       && e.tsObjName == object 
@@ -672,7 +683,9 @@ function Traverse(
               continue;
             }
 
-            code += `set ra stack[${variable.pointer}] \nset r${i} ra \n`;
+            code += `set ri rsp \n${(sp - variable.pointer) != 0
+              ? `set ri rsp \nsub ri ${sp - variable.pointer} \nset ra stack[ri] \n` 
+              : `set ra stack[rsp]`} \nset r${i} ra \n`;
           }
 
           if(a.type == 'BinaryExpression' || a.type == 'MemberExpression') {
@@ -823,7 +836,9 @@ function Traverse(
               return false;
             }
 
-            code += `set r${i} stack[${variable.pointer}] \n`;
+            code += `${(sp - variable.pointer) != 0
+              ? `set ri rsp \nsub ri ${sp - variable.pointer} \nset r${i} stack[ri] \n` 
+              : `set r${i} stack[rsp] \n`}`;
           }
 
           params += `r${i} `;
@@ -873,7 +888,7 @@ function Traverse(
       if(side.type == 'Identifier') {
         const vName = side.name;
 
-        const variable = GetVar(vName);
+        let variable = GetVar(vName);
 
         if(!variable) {
           errors.push({
@@ -886,8 +901,14 @@ function Traverse(
         }
 
         //if(mode == 'retrieval')
-          vals[i] = variable.init;
-        if(mode != 'retrieval') code += `set ra stack[${variable.pointer}] \n`;
+        vals[i] = variable.init;
+        if(mode != 'retrieval') {
+          if(variable.arg && mode != 'function_params')
+            code += `set ra r${variable.arg}`;
+          else code += `${(sp - variable.pointer) != 0
+            ? `set ri rsp \nsub ri ${sp - variable.pointer} \nset ra stack[ri] \n` 
+            : `set ra stack[rsp] \n`}`;
+        }
       }
 
       if(side.type == 'MemberExpression' || side.type == 'BinaryExpression') {
@@ -1113,7 +1134,7 @@ function Traverse(
     if(node.declarations[0].type == 'VariableDeclarator') {
       if(node.declarations[0].id.type == 'Identifier') {
         const v = node.declarations[0].id;
-        const vType = GetVarType(node.declarations[0]);
+        const vType = GetVarType(node.declarations[0].id);
         if(!vType) {
           errors.push({
             type: 'error',
@@ -1124,17 +1145,18 @@ function Traverse(
           return false;
         }
 
+        sp++;
+
         const variable: IVar = {
           name: v.name,
           global: mode == 'root',
           constant: node.kind == 'const',
           type: vType,
           init: 0,
-          pointer: sp + 1,
+          pointer: sp,
           block: bBlock.length - 1
         }
 
-        sp++;
         vars.push(variable);
 
         if(node.declarations[0].init) {
@@ -1223,7 +1245,11 @@ function Traverse(
       if(!Traverse(exp.right, 'assignment'))
         return false;
 
-      code += `set rb ra \nset ra stack[${variable.pointer}] \n`;
+      if(variable.arg && mode != 'function_params')
+        code += `set ra r${variable.arg}`;
+      else code += `set rb ra \n${(sp - variable.pointer) != 0
+      ? `set ri rsp \nsub ri ${sp - variable.pointer} \nset ra stack[ri] \n` 
+      : `set ra stack[rsp] \n`}`;
 
       let operator = '';
 
@@ -1249,7 +1275,9 @@ function Traverse(
           break;
       }
 
-      code += `${operator} ra rb \nsetarray stack[${variable.pointer}] ra \n`;
+      code += `${operator} ra rb \n${(sp - variable.pointer) != 0
+        ? `set ri rsp \nsub ri ${sp - variable.pointer} \nsetarray stack[ri] ra \n`
+        : `setarray stack[rsp] ra \n`}`;
     }
 
     if(exp.type == 'CallExpression') {
@@ -1327,6 +1355,107 @@ function Traverse(
 
       return true;
     }
+
+    if(node.body.type != 'BlockStatement') {
+      errors.push({
+        type: 'error',
+        node: node.type,
+        location: node.loc as T.SourceLocation,
+        message: 'Missing function body'
+      });
+      return false;
+    }
+
+    const f: IFunction = {
+      name: (node.key as T.Identifier).name,
+      args: [],
+      returns: false,
+      return_type: CON_NATIVE_FLAGS.VARIABLE,
+      object: block == EBlock.ACTOR ? 'this' : 'global'
+    };
+
+    code += `defstate ${curActor.picnum}_${(node.key as T.Identifier).name} \n`;
+
+    code += `set ra rbp \nstate push \nset rbp rsp \n`
+
+    sp += 1 + node.params.length;
+    bp = sp;
+
+    if(node.params.length > 0) {
+      code += `state pushr${node.params.length} \n`
+      for(let i = 0; i < node.params.length; i++) {
+        const p = node.params[i];
+
+        if(p.type == 'Identifier') {
+          const type = GetVarType(p);
+          sp++;
+          f.args.push({
+            name: p.name,
+            type: type == 'integer' ? CON_NATIVE_FLAGS.VARIABLE
+              : (type != 'string' ? CON_NATIVE_FLAGS.LABEL : CON_NATIVE_FLAGS.STRING),
+            variable: {
+              global: false,
+              block: bBlock.length,
+              name: p.name,
+              type,
+              constant: false,
+              pointer: sp,
+              arg: i,
+              init: 0,
+            }
+          });
+
+          vars.push(f.args[f.args.length - 1].variable);
+        }
+      }
+    }
+
+    if(node.returnType) {
+      const r = node.returnType;
+
+      if(r.type == 'TSTypeAnnotation') {
+        switch(r.typeAnnotation.type) {
+          case 'TSNumberKeyword':
+            f.return_type = CON_NATIVE_FLAGS.VARIABLE
+            break;
+
+          case 'TSTypeReference':
+            const t = r.typeAnnotation.typeName;
+            if(t.type == 'Identifier') {
+              switch(t.name) {
+                case 'pointer':
+                  f.return_type = CON_NATIVE_FLAGS.LABEL;
+                  break;
+              }
+            }
+            break;
+        }
+      }
+
+      f.returns = true;
+    }
+
+    bBlock.push({
+      type: EBlock.STATE,
+      state: EState.BODY,
+      name: (node.key as T.Identifier).name,
+      stack: sp,
+      base: sp
+    });
+
+    funcs.push(f);
+
+    (bBlock.at(-1) as IBlock).state = EState.BODY;
+
+    for(let i = 0; i < node.body.body.length; i++) {
+      if(!Traverse(node.body.body[i], 'function_body'))
+        return false;
+    }
+
+    EndBlock();
+
+    return true;
+
   }
 
   if(node.type == 'ClassDeclaration') {

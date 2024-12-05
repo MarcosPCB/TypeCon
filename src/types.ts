@@ -1,5 +1,6 @@
 import * as T from '@babel/types';
 import './defs/types';
+import { CON_NATIVE_FLAGS } from './defs/native';
 
 export interface IError {
     type: 'error' | 'warning';
@@ -34,6 +35,20 @@ export interface IBlock {
     base: number;
 }
 
+interface IArg {
+    type: CON_NATIVE_FLAGS,
+    name: string,
+    variable: IVar
+}
+
+export interface IFunction {
+    name: string,
+    args: IArg[]
+    returns: boolean,
+    return_type: CON_NATIVE_FLAGS,
+    object: 'this' | 'global'
+}
+
 export interface IVar {
     global: boolean,
     block: number,
@@ -43,6 +58,7 @@ export interface IVar {
     init: any,
     pointer: number,
     stack_object?: false,
+    arg?: number
 }
 
 export type TVar = {

@@ -28,7 +28,12 @@ class newEnemy extends CActor {
         super(0, true, 100, [action], action, [move], [ai]);
     }
 
-    public Main(): void {
+    Test(arg: number): number {
+        arg += 2;
+        return arg;
+    }
+
+    Main(): void {
         console.log(this.extra + 5);
         const test: number = 0;
         let go = 2 + test * 3;
@@ -50,6 +55,8 @@ class newEnemy extends CActor {
         this.SizeTo(6, 6);
         this.SizeTo(6, 6, 2, 2);
         this.Glass(5);
+
+        this.Test(go);
 
         return;
     }

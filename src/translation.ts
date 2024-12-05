@@ -48,6 +48,9 @@ var rc 0 0
 //Data
 var rd 0 0
 
+//Index
+var ri 0 0
+
 //Base pointer and Stack pointer
 var rbp 0 0
 var rsp -1 0
