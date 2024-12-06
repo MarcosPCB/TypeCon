@@ -76,6 +76,7 @@ export interface IActor {
     actions?: IAction[],
     moves?: IMove[],
     ais?: IAi[]
+    export_name: string
 }
 
 export type TClassType = 'CActor' | 'IEvent';

@@ -130,8 +130,8 @@ declare global {
         protected KillIt(): CON_NATIVE<void>
         protected Stop(): CON_NATIVE<void>
         protected ResetAction(): CON_NATIVE<void>
-        protected Spawn(picnum: number, initFn?: ((RETURN: number) => void), queued?: boolean): CON_NATIVE<number>
-        protected Shoot(picnum: number, initFn?: ((RETURN: number) => void), zve?: number): CON_NATIVE<number>
+        protected Spawn(picnum: number | CActor, initFn?: ((RETURN: number) => void), queued?: boolean): CON_NATIVE<number>
+        protected Shoot(picnum: number | CActor, initFn?: ((RETURN: number) => void), zve?: number): CON_NATIVE<number>
         protected HitRadius(radius: number, furthestDmg: number, farDmg: number, closeDmg: number, closestDmg: number): CON_NATIVE<void>
         protected Flash(): CON_NATIVE<void>
         protected RespawnHitag(): CON_NATIVE<void>

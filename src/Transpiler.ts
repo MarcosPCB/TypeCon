@@ -20,7 +20,8 @@ var curActor: IActor = {
   name: '',
   picnum: -1,
   enemy: false,
-  extra: 0
+  extra: 0,
+  export_name: ''
 }
 
 var funcs: CON_NATIVE_FUNCTION[] = [];
@@ -105,9 +106,19 @@ function GetVarType(node: T.Identifier) {
   return 'any';
 }
 
-function StartBlock(name: string, type: TClassType): number {
+function StartBlock(name: string, type: TClassType, loc: T.SourceLocation): number {
   if(block != EBlock.NONE)
     return 0;
+
+  if(name.charAt(0) == name.charAt(0).toUpperCase()) {
+    errors.push({
+      type: 'error',
+      node: type,
+      location: loc ,
+      message: 'Classes must always start with a lower case character'
+    });
+    return -1;
+  }
 
   switch(type) {
     case 'CActor':
@@ -115,7 +126,8 @@ function StartBlock(name: string, type: TClassType): number {
         name,
         extra: 0,
         picnum: -1,
-        enemy: false
+        enemy: false,
+        export_name: `${name.charAt(0).toUpperCase()}${name.slice(1)}`
       };
       actors.push(actor);
       curActor = actor;
@@ -712,6 +724,17 @@ function Traverse(
               if(optional)
                 f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
               return false;
+            }
+
+            //Try looking for an actor before trying variables
+            if(f.arguments[i] & CON_NATIVE_FLAGS.ACTOR) {
+              const actor = actors.find(e => e.export_name == a.name);
+
+              if(actor) {
+                code += `set r${i} ${actor.picnum} \n`;
+                params += `r${i} `;
+                continue;
+              }
             }
 
             const variable = GetVar(a.name);
@@ -1664,7 +1687,7 @@ function Traverse(
       return false;
     }
 
-    const starter: number = StartBlock(node.id?.name, node.superClass?.loc?.identifierName as TClassType);
+    const starter: number = StartBlock(node.id?.name, node.superClass?.loc?.identifierName as TClassType, node.loc as T.SourceLocation);
 
     if(starter == -1) {
       errors.push({

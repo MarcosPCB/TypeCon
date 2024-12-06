@@ -25,7 +25,7 @@ class newEnemy extends CActor {
             flags: EMoveFlags.seekplayer
         }
 
-        super(0, true, 100, [action], action, [move], [ai]);
+        super(1680, true, 100, [action], action, [move], [ai]);
     }
 
     Test(arg: number): number {
@@ -59,9 +59,12 @@ class newEnemy extends CActor {
 
         this.Test(go);
 
-        this.Spawn(1608, (RETURN) => {
+        this.Spawn(NewEnemy, (RETURN) => {
             sprites[RETURN].extra = 50;
         })
     }
-    
+}
+
+declare global {
+    export const NewEnemy: newEnemy;
 }

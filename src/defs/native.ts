@@ -19,6 +19,7 @@ export enum CON_NATIVE_FLAGS {
     LABEL = 8,
     OPTIONAL = 16,
     FUNCTION = 32,
+    ACTOR = 64
 }
 
 export enum EMoveFlags {
@@ -300,7 +301,7 @@ state popd
         returns: true,
         return_type: 'variable',
         arguments: [
-            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.ACTOR,
             CON_NATIVE_FLAGS.FUNCTION | CON_NATIVE_FLAGS.OPTIONAL,
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
         ]
