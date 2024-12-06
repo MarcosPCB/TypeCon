@@ -33,6 +33,9 @@ var ra: any = 0;
 var rb: any = 0;
 var rc: any = null;
 
+var reserved_extra_space = 30;
+var minimum_array_size = 8; //For undefined sizes only
+
 var typeCheck = '';
 
 var stack: number[] = [];
@@ -52,6 +55,10 @@ function Line(loc: T.SourceLocation) {
   }
 
   return '';
+}
+
+function CalculateObjArraySize(size: number) {
+  return Math.ceil(size * (1.0 + (reserved_extra_space / 100.0)));
 }
 
 function GetVar(name: string) {
@@ -1353,7 +1360,7 @@ function Traverse(
           if(i == 0) {
             v.object_name = v.name;
             v.name = pName;
-            v.size = node.properties.length;
+            v.size = CalculateObjArraySize(node.properties.length);
             v2 = v;
           } else {
             sp++;

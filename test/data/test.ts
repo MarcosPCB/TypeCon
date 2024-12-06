@@ -70,6 +70,8 @@ class newEnemy extends CActor {
         }
 
         obj.g += 9;
+
+        let arr = [];
     }
 }
 

@@ -58,7 +58,11 @@ var rsp -1 0
 //Internal per-actor vars
 var playerDist 0 2
 
+define PAGE_SIZE 64
+
 array rstack 16 0
+
+array heap 64 0
 
 array stack `
 
