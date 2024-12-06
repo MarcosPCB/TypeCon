@@ -63,6 +63,15 @@ function GetVar(name: string) {
   return variable;
 }
 
+function GetObject(name: string) {
+  let variable = vars.find(e => e.object_name == name && !e.object && e.block == bBlock.length - 1)
+
+  if(!variable)
+    variable = vars.find(e => e.object_name == name && !e.object && e.global);
+
+  return variable;
+}
+
 function GetVarIndex(name: string) {
   let variable = vars.findIndex(e => e.name == name && e.block == bBlock.length - 1);
 
@@ -1120,6 +1129,21 @@ function Traverse(
           object = EMoveFlags;
           break;
       }
+
+      //Search for stack objects
+      if(!object) {
+        object = GetObject(o.name);
+
+        if(!object) {
+          errors.push({
+            type: 'error',
+            node: node.type,
+            location: node.loc as T.SourceLocation,
+            message: `Object ${o.name} does not exist or hasn't been declared yet`
+          });
+          return false;
+        }
+      }
     }
 
     /*
@@ -1258,7 +1282,34 @@ function Traverse(
 
           //if(o.type == 'MemberExpression')
             //ra = ra[p.name];
-        } 
+        } else {
+          const obj = object as IVar;
+
+          //Find property
+          const property = vars.find(e => e.name == p.name && e.object == obj);
+
+          if(!property) {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: `Property ${p.name} does not exist in object ${obj.object_name}`
+            });
+            return false;
+          }
+
+          const index = sp - property.pointer;
+
+          if(mode == 'assignment') {
+            if(!index)
+              code += `setarray stack[rsp] ra \n`
+            else code += `set ri rsp \nsub ri ${index} \nsetarray stack[ri] ra \n`;
+          } else {
+            if(!index)
+              code += `set ra stack[rsp] \n`
+            else code += `set ri rsp \nsub ri ${index} \nset ra stack[ri] \n`;
+          }
+        }
       }
     }
 
@@ -1275,7 +1326,7 @@ function Traverse(
       const p = node.properties[i];
 
       if(p.type == 'ObjectProperty') {
-        if(mode == 'retrieval' || mode == 'declaration') {
+        if(mode == 'retrieval') {
           const pName = (p.key as T.Identifier).name;
           const v = vars.at(-1) as IVar;
 
@@ -1293,6 +1344,50 @@ function Traverse(
 
               v.init[pName] = ra;
             }
+          }
+        } else if(mode == 'declaration') {
+          const v = vars.at(-1) as IVar;
+          const pName = (p.key as T.Identifier).name;
+          let v2: IVar;
+
+          if(i == 0) {
+            v.object_name = v.name;
+            v.name = pName;
+            v.size = node.properties.length;
+            v2 = v;
+          } else {
+            sp++;
+            v2 = {
+              name: pName,
+              block: v.block,
+              global: v.global,
+              constant: v.constant,
+              type: v.type,
+              init: 0,
+              pointer: sp,
+              object_name: v.object_name,
+              object: v
+            }
+
+            vars.push(v2);
+          }
+
+          code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+
+          if(p.value.type == 'StringLiteral' || p.value.type == 'NumericLiteral') {
+            v2.init = p.value.value;
+            code += `setarray stack[rsp] ${p.value.value} \n`;
+          }
+
+          if(p.value.type == 'BinaryExpression' || p.value.type == 'MemberExpression') {
+              if(!Traverse(p.value, mode)) {
+                vars.pop();
+                sp--;
+                return false;
+              }
+
+              v2.init = ra;
+              code += `setarray stack[rsp] ra \n`
           }
         }
       }
@@ -1349,7 +1444,7 @@ function Traverse(
             if(node.declarations[0].init.type != 'ObjectExpression')
               variable.init = ra;
 
-            if(mode != 'retrieval' && traverseMode != 'retrieval')
+            if(mode != 'retrieval' && traverseMode != 'retrieval' && node.declarations[0].init.type != 'ObjectExpression')
               code += `setarray stack[rsp] ra \n`;
           }
         }

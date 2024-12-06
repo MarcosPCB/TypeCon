@@ -19,7 +19,8 @@ export enum CON_NATIVE_FLAGS {
     LABEL = 8,
     OPTIONAL = 16,
     FUNCTION = 32,
-    ACTOR = 64
+    ACTOR = 64,
+    PROJECTILE = 128,
 }
 
 export enum EMoveFlags {
@@ -296,7 +297,7 @@ state popd
     {
         name: 'Spawn',
         code: (args?: boolean, fn?: string) => {
-            return `set rd RETURN \nifge r2 1 eqspawn r0 \nelse espawn r0 \n${fn}set RETURN rd \n`;
+            return `set rd RETURN \nifge r2 1 eqspawn r0 \nelse espawn r0 \n${fn}set rb RETURN \nset RETURN rd \n`;
         },
         returns: true,
         return_type: 'variable',
@@ -304,7 +305,35 @@ state popd
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.ACTOR,
             CON_NATIVE_FLAGS.FUNCTION | CON_NATIVE_FLAGS.OPTIONAL,
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
-        ]
+        ],
+        arguments_default: [0, '', 0]
+    },
+    {
+        name: 'Shoot',
+        code: (args?: boolean, fn?: string) => {
+            return `state push \nset rd RETURN \nife r2 0 eshoot r0 \nelse { \nife r4 1 { \neshoot r0 \ngeta[RETURN].zvel ra \nadd ra r3 \nseta[RETURN].zvel ra \n } else ezshoot r3 r0\n }\n${fn}set rb RETURN\nset RETURN rd \n`;
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.PROJECTILE,
+            CON_NATIVE_FLAGS.FUNCTION | CON_NATIVE_FLAGS.OPTIONAL,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
+        ],
+        arguments_default: [0, '', 0, 0, 0]
+    },
+    {
+        name: 'HitRadius',
+        code: `hitradius`,
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+        ],
     },
 ]
 

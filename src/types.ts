@@ -58,7 +58,10 @@ export interface IVar {
     type: 'integer' | 'string' | 'action' | 'move' | 'ai' | 'label' | 'any',
     init: any,
     pointer: number,
-    stack_object?: false,
+    object_name?: string, //If object_name is _array, then it's an array
+    object?: IVar, //If empty but object_name is defined, then it's the start of the object
+    static?: true,
+    size?: number, //For objects and arrays
     arg?: number
 }
 

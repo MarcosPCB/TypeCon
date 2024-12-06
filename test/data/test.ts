@@ -61,7 +61,15 @@ class newEnemy extends CActor {
 
         this.Spawn(NewEnemy, (RETURN) => {
             sprites[RETURN].extra = 50;
-        })
+        });
+
+        let obj = {
+            v: 1,
+            g: 2,
+            l: 3,
+        }
+
+        obj.g += 9;
     }
 }
 
