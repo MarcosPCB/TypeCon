@@ -415,7 +415,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
         object: 'this',
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
-        readonly: true,
+        readonly: false,
         code: 'htextra',
         init: -1
     },
@@ -424,7 +424,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
         object: 'this',
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
-        readonly: true,
+        readonly: false,
         code: 'htExtra',
         init: -1
     },
@@ -433,7 +433,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
         object: 'this',
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
-        readonly: true,
+        readonly: false,
         code: 'htPicnum',
         init: -1
     },
@@ -442,7 +442,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
         object: 'this',
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
-        readonly: true,
+        readonly: false,
         code: 'htPicnum',
         init: -1
     },
@@ -451,7 +451,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
         object: 'this',
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
-        readonly: true,
+        readonly: false,
         code: 'htg_t 3',
         init: 0
     },
@@ -460,7 +460,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
         object: 'this',
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
-        readonly: true,
+        readonly: false,
         code: 'xvel',
         init: 0
     },
@@ -469,8 +469,17 @@ export const nativeVars: CON_NATIVE_VAR[] = [
         object: 'this',
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
-        readonly: true,
+        readonly: false,
         code: 'ang',
+        init: 0
+    },
+    {
+        name: 'picnum',
+        object: 'this',
+        var_type: CON_NATIVE_TYPE.actor,
+        type: 'variable',
+        readonly: false,
+        code: 'picnum',
         init: 0
     },
 ]

@@ -71,7 +71,11 @@ class newEnemy extends CActor {
 
         obj.g += 9;
 
-        let arr = [];
+        let arr = [3];
+        arr[go] = 2;
+        arr[sprites[go].picnum] = 3;
+        go = arr[1];
+        go = arr[sprites[go].extra];
     }
 }
 

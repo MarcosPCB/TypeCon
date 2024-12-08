@@ -70,11 +70,11 @@ function GetVar(name: string) {
   return variable;
 }
 
-function GetObject(name: string) {
-  let variable = vars.find(e => e.object_name == name && !e.object && e.block == bBlock.length - 1)
+function GetObject(name: string, array = false) {
+  let variable = vars.find(e => (array ? (e.name == name && e.object_name == '_array') : e.object_name == name) && !e.object && e.block == bBlock.length - 1)
 
   if(!variable)
-    variable = vars.find(e => e.object_name == name && !e.object && e.global);
+    variable = vars.find(e => (array ? (e.name == name && e.object_name == '_array') : e.object_name == name) && !e.object && e.global);
 
   return variable;
 }
@@ -519,6 +519,7 @@ function Traverse(
     return true;
 
   if(node.type == 'ReturnStatement') {
+    code += Line(node.loc as T.SourceLocation);
     if(node.argument) {
       const a = node.argument;
 
@@ -557,7 +558,6 @@ function Traverse(
   }
 
   if(node.type == 'CallExpression') {      
-    code += Line(node.loc as T.SourceLocation);
     //Class initialization
     if(mode == 'constructor') {
       if(node.callee.type == 'Super') {
@@ -699,10 +699,12 @@ function Traverse(
 
           if(a.type == 'ArrowFunctionExpression') {
             if(a.body.type == 'BlockStatement') {
+              depth++;
               for(let i = 0; i < a.body.body.length; i++) {
                 if(!Traverse(a.body.body[i], 'function_body'))
                   return false;
               }
+              depth--;
             }
           }
 
@@ -1125,7 +1127,6 @@ function Traverse(
   }
 
   if(node.type == 'MemberExpression') {
-    code += Line(node.loc as T.SourceLocation);
     const o = node.object;
     const p = node.property;
     let object: any = null;
@@ -1139,14 +1140,14 @@ function Traverse(
 
       //Search for stack objects
       if(!object) {
-        object = GetObject(o.name);
+        object = GetObject(o.name, node.computed);
 
         if(!object) {
           errors.push({
             type: 'error',
             node: node.type,
             location: node.loc as T.SourceLocation,
-            message: `Object ${o.name} does not exist or hasn't been declared yet`
+            message: `Object or array ${o.name} does not exist or hasn't been declared yet`
           });
           return false;
         }
@@ -1291,21 +1292,40 @@ function Traverse(
             //ra = ra[p.name];
         } else {
           const obj = object as IVar;
+          let pointer = 0;
 
-          //Find property
-          const property = vars.find(e => e.name == p.name && e.object == obj);
+          if(node.computed) {
+            const variable = GetVar(p.name);
 
-          if(!property) {
-            errors.push({
-              type: 'error',
-              node: node.type,
-              location: node.loc as T.SourceLocation,
-              message: `Property ${p.name} does not exist in object ${obj.object_name}`
-            });
-            return false;
+            if(!variable) {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Variable ${p.name} does not exist or hasn't been declared yet`
+              });
+              return false;
+            }
+
+            pointer = variable.pointer;
+          } else {
+            //Find property
+            const property = vars.find(e => e.name == p.name && e.object == obj);
+
+            if(!property) {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Property ${p.name} does not exist in object ${obj.object_name}`
+              });
+              return false;
+            }
+
+            pointer = property.pointer;
           }
 
-          const index = sp - property.pointer;
+          const index = sp - pointer;
 
           if(mode == 'assignment') {
             if(!index)
@@ -1315,6 +1335,61 @@ function Traverse(
             if(!index)
               code += `set ra stack[rsp] \n`
             else code += `set ri rsp \nsub ri ${index} \nset ra stack[ri] \n`;
+          }
+        }
+      }
+    } else {
+      const obj = object as IVar;
+
+      if(node.computed) {
+        if(p.type == 'NumericLiteral') {
+          const i = p.value;
+
+          if(obj.size && i > obj.size) {
+            errors.push({
+              type: 'warning',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: `Array index is bigger than its size`
+            });
+            return false;
+          }
+
+          const objIndex = vars.findIndex(e => e == object);
+
+          const element = vars[objIndex + i];
+
+          if(!element) {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: `Array index surpassed current stack during compilation`
+            });
+            return false;
+          }
+
+          const index = sp - element.pointer;
+
+          if(mode == 'assignment') {
+            if(!index)
+              code += `setarray stack[rsp] ra \n`
+            else code += `set ri rsp \nsub ri ${index} \nsetarray stack[ri] ra \n`;
+          } else {
+            if(!index)
+              code += `set ra stack[rsp] \n`
+            else code += `set ri rsp \nsub ri ${index} \nset ra stack[ri] \n`;
+          }
+        } else if(p.type == 'MemberExpression') {
+          if(mode == 'assignment')
+            code += 'state push \n';
+          if(!Traverse(p, 'function_body'))
+            return false;
+
+          if(mode == 'assignment') {
+            code += `set ri ra \nstate pop \nsetarray stack[ri] ra \n`;
+          } else {
+            code += `set ri ra \nset ra stack[ri] \n`;
           }
         }
       }
@@ -1328,7 +1403,6 @@ function Traverse(
   }
 
   if(node.type == 'ObjectExpression') {
-    code += Line(node.loc as T.SourceLocation);
     for(let i = 0; i < node.properties.length; i++) {
       const p = node.properties[i];
 
@@ -1402,7 +1476,7 @@ function Traverse(
   }
 
   if(node.type == 'VariableDeclaration') {
-    code += Line(node.loc as T.SourceLocation);
+    code += Line(node.loc as T.SourceLocation)
     if(node.declarations[0].type == 'VariableDeclarator') {
       if(node.declarations[0].id.type == 'Identifier') {
         const v = node.declarations[0].id;
@@ -1441,6 +1515,35 @@ function Traverse(
             if(mode != 'constructor') {
               code += `add rsp 1 \nsetarray stack[rsp] ${variable.init} \n`;
             }
+          } if(node.declarations[0].init.type == 'ArrayExpression') {
+            const a = node.declarations[0].init;
+            
+            if(a.elements[0]) {
+              if(a.elements[0].type == 'NumericLiteral') {
+                variable.object_name = '_array';
+                variable.size = CalculateObjArraySize(a.elements[0].value);
+                variable.init = 0;
+
+                code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+
+                for(let i = 1; i < variable.size; i++) {
+                  sp++;
+                  vars.push({
+                    name: variable.name,
+                    global: variable.global,
+                    block: variable.block,
+                    constant: variable.constant,
+                    type: variable.type,
+                    pointer: sp,
+                    init: 0,
+                    object: variable,
+                    object_name: '_array',
+                  });
+
+                  code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+                }
+              }
+            }
           } else {        
             if(!Traverse(node.declarations[0].init, traverseMode)) {
               vars.pop();
@@ -1472,18 +1575,18 @@ function Traverse(
       return false;
     }
 
-    code += Line(node.test.loc as T.SourceLocation);
-
     if(!Traverse(node.test, 'conditional'))
       return false;
 
     code += `ife ra 1 { \n`;
 
     if(node.consequent.type == 'BlockStatement') {
+      depth++
       for(let i = 0; i < node.consequent.body.length; i++) {
         if(!Traverse(node.consequent.body[i], 'function_body'))
           return false;
       }
+      depth--
     }
 
     code += `} \n`;
@@ -1510,7 +1613,7 @@ function Traverse(
       if(exp.right.type == 'NumericLiteral')
         code += `set rb ${exp.right.value} \n`;
       else {
-        if(!Traverse(exp.right, 'assignment'))
+        if(!Traverse(exp.right, 'function_body'))
           return false;
 
         if(exp.right.type != 'CallExpression')
@@ -1613,6 +1716,7 @@ function Traverse(
         args: 0
       })
 
+      depth++
       for(let i = 0; i < node.body.body.length; i++) {
         if(!Traverse(node.body.body[i], 'constructor')) {
           bBlock.pop();
@@ -1620,6 +1724,7 @@ function Traverse(
           return false;
         }
       }
+      depth--
 
       ReturnFromFunction();
       bBlock.pop();
@@ -1651,10 +1756,12 @@ function Traverse(
       code += `useractor ${curActor.enemy ? 'enemy' : 'notenemy'} ${curActor.picnum} ${curActor.extra} ${curActor.first_action ? curActor.first_action.name : ''} \n`;
       code += `findplayer playerDist \n`;
 
+      depth++
       for(let i = 0; i < node.body.body.length; i++) {
         if(!Traverse(node.body.body[i], 'function_body'))
           return false;
       }
+      depth--
 
       if(node.body.body[node.body.body.length - 1].type == 'ReturnStatement')
         (bBlock.at(-1) as IBlock).state = EState.TERMINATED;
@@ -1754,10 +1861,12 @@ function Traverse(
 
     (bBlock.at(-1) as IBlock).state = EState.BODY;
 
+    depth++
     for(let i = 0; i < node.body.body.length; i++) {
       if(!Traverse(node.body.body[i], 'function_body'))
         return false;
     }
+    depth--
 
     if(node.body.body[node.body.body.length - 1].type == 'ReturnStatement')
       (bBlock.at(-1) as IBlock).state = EState.TERMINATED;
