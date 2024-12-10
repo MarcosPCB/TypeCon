@@ -1,5 +1,10 @@
 import '../../src/defs/types';
 
+type wow = {
+    name: string,
+    ball: number
+}
+
 class newEnemy extends CActor {
 
     constructor() {
@@ -76,6 +81,8 @@ class newEnemy extends CActor {
         arr[sprites[go].picnum] = 3;
         go = arr[1];
         go = arr[sprites[go].extra];
+
+        let you: wow[] = new Array(4);
     }
 }
 

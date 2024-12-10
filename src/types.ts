@@ -70,6 +70,12 @@ export type TVar = {
     value: string | number | boolean
 }
 
+export interface IType {
+    name: string,
+    aliasTo: 'object' | 'number' | 'string',
+    size: number
+}
+
 export interface IActor {
     name: string,
     enemy: boolean,

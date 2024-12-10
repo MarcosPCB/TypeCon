@@ -21,6 +21,8 @@ export enum CON_NATIVE_FLAGS {
     FUNCTION = 32,
     ACTOR = 64,
     PROJECTILE = 128,
+    OBJECT = 256,
+    ARRAY = 512,
 }
 
 export enum EMoveFlags {

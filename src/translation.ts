@@ -62,11 +62,121 @@ define PAGE_SIZE 64
 
 array rstack 16 0
 
-array heap 64 0
+//Heap blocks are sequential ALWAYS
+array heap 512 0
+array lookupHeap 8 0
+var heapsize 512 0 //8 * PAGE_SIZE
+var lookupheapsize 8 0
 
 array stack `
 
 export const initStates = `
+var _HEAPi 0 0
+var _HEAPj 0 0
+var _HEAPk 0 0
+var _HEAPl 0 0
+var _HEAP_request 0 0
+var _HEAP_pointer -1 0
+
+defstate _GetFreePages
+    set _HEAPi 0
+    set _HEAPj 0
+    set _HEAP_pointer -1
+    for _HEAPi range heapsize {
+        ife lookupHeap[_HEAPi] 0 {
+            add _HEAPj 1
+            ife _HEAPj _HEAP_request {
+                set _HEAP_pointer _HEAPi
+                sub _HEAP_pointer _HEAPj
+                mul _HEAP_pointer PAGE_SIZE
+                exit
+            }
+        } else ifn _HEAPj 0
+            set _HEAPj 0
+    }
+
+    ife _HEAP_pointer -1 {
+        set _HEAPi PAGE_SIZE
+        mul _HEAPi _HEAP_request
+        set _HEAP_pointer heapsize
+        add heapsize _HEAPi
+        add lookupheapsize _HEAP_request
+        resizearray heap heapsize
+        resizearray lookupHeap lookupheapsize
+    }
+ends
+
+defstate alloc
+    set _HEAP_request r0
+    div _HEAP_request PAGE_SIZE
+    ife _HEAP_request 0
+        set _HEAP_request 1
+    state GetFreePages
+
+    set _HEAPi _HEAP_pointer
+    div _HEAPi PAGE_SIZE
+    set _HEAPj _HEAPi
+    add _HEAP_request _HEAPi
+    for _HEAPi range _HEAP_request {
+        set _HEAPk _HEAPj
+        add _HEAPk _HEAP_request
+        shiftl _HEAPk 16
+        or _HEAPk _HEAPi
+        setarray lookupHeap[_HEAPi] _HEAPk
+    }
+
+    set rb _HEAP_pointer
+ends
+
+defstate realloc
+    set _HEAP_request r0
+    div _HEAP_request PAGE_SIZE
+    ife _HEAP_request 0
+        set _HEAP_request 1
+    state GetFreePages
+
+    set _HEAPi _HEAP_pointer
+    div _HEAPi PAGE_SIZE
+    set _HEAPj _HEAPi
+    add _HEAP_request _HEAPi
+    for _HEAPi range _HEAP_request {
+        set _HEAPk _HEAPj
+        add _HEAPk _HEAP_request
+        shiftl _HEAPk 16
+        or _HEAPk _HEAPi
+        setarray lookupHeap[_HEAPi] _HEAPk
+    }
+
+    set rb _HEAP_pointer
+
+    set _HEAP_pointer r1
+    set _HEAPj _HEAP_pointer
+    div _HEAPj PAGE_SIZE
+    set _HEAPi _HEAPj
+    set _HEAPk lookupHeap[_HEAPi]
+    set _HEAPi _HEAPk
+    and _HEAPi 0xFFFF
+    shiftr _HEAPk 16
+    mul _HEAPi PAGE_SIZE
+    mul _HEAPk PAGE_SIZE
+    sub _HEAPk _HEAPi
+    copy heap _HEAPi heap rb _HEAPk
+ends
+
+defstate free
+    set _HEAP_pointer r0
+    set _HEAPj _HEAP_pointer
+    div _HEAPj PAGE_SIZE
+    set _HEAPi _HEAPj
+    set _HEAPk lookupHeap[_HEAPi]
+    set _HEAPi _HEAPk
+    and _HEAPi 0xFFFF
+    shiftr _HEAPk 16
+    for _HEAPi range _HEAPk {
+        setarray lookupHeap[_HEAPi] 0
+    }
+ends
+
 defstate pushrall
     add rsp 1
     setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12

@@ -1,5 +1,5 @@
 import * as T from '@babel/types';
-import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IVar, TClassType, TVar } from './types';
+import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IType, IVar, TClassType, TVar } from './types';
 import { escape } from 'querystring';
 import { funcTranslator, IFuncTranslation, initCode, initStates } from './translation';
 import './defs/types';
@@ -25,6 +25,7 @@ var curActor: IActor = {
 }
 
 var funcs: CON_NATIVE_FUNCTION[] = [];
+var types: IType[] = [];
 
 var sp = -1;
 var bp = 0
@@ -106,6 +107,25 @@ function GetVarType(node: T.Identifier) {
 
           case 'TLabel':
             return 'label';
+        }
+      } else if(type.type == 'TSArrayType') {
+        const type2 = type.elementType;
+        if(type2.type == 'TSTypeReference') {
+          switch((type2.typeName as T.Identifier).name) {
+            case 'TLabel':
+              return 'array_labels';
+
+            default:
+              const t = types.find(e => e.name == (type2.typeName as T.Identifier).name);
+
+              if(!t)
+                return null;
+
+              return {
+                array: true,
+                type: t
+              }
+          }
         }
       }
 
@@ -517,6 +537,29 @@ function Traverse(
 ) {
   if(node.type == 'ImportDeclaration')
     return true;
+
+  if(node.type == 'TSTypeAliasDeclaration') {
+    code += Line(node.loc as T.SourceLocation);
+    let name = '';
+    let aliasTo: 'object' | 'number' | 'string' = 'number';
+    let size = 0;
+
+    if(node.id.type == 'Identifier')
+      name = node.id.name;
+
+    if(node.typeAnnotation.type == 'TSTypeLiteral') {
+      aliasTo = 'object';
+      size = node.typeAnnotation.members.length;
+    }
+
+    types.push({
+      name,
+      aliasTo,
+      size
+    });
+
+    return true;
+  }
 
   if(node.type == 'ReturnStatement') {
     code += Line(node.loc as T.SourceLocation);
@@ -1497,7 +1540,8 @@ function Traverse(
           name: v.name,
           global: mode == 'root',
           constant: node.kind == 'const',
-          type: vType,
+          //@ts-ignore
+          type: typeof vType === 'string' ? vType : vType.name,
           init: 0,
           pointer: sp,
           block: bBlock.length - 1
@@ -1544,6 +1588,49 @@ function Traverse(
                 }
               }
             }
+          } if (node.declarations[0].init.type == 'NewExpression') {
+            const n = node.declarations[0].init;
+
+            if(n.callee.type == 'Identifier') {
+              //Special case for array
+              if(n.callee.name == 'Array') {
+                const a = n.arguments;
+
+                if(a.length == 0) {
+                  code += `state pushr1 \nset r0 ${typeof vType === 'string' ? 2 : CalculateObjArraySize(vType.type.size)}\nstate alloc \nstate popr1 \nadd rsp 1 \nsetarray stack[rsp] rb \n`;
+                  variable.init = [];
+                  variable.object_name = '_array_heap';
+                } else {
+                  if(a[0].type == 'NumericLiteral') {
+                    code += `state pushr1 \nset r0 ${typeof vType === 'string' ? a[0].value : CalculateObjArraySize(vType.type.size * a[0].value)}\nstate alloc \nstate popr1 \nadd rsp 1 \nsetarray stack[rsp] rb \n`;
+                    variable.size = CalculateObjArraySize(a[0].value);
+                    variable.init = 0;
+                    variable.object_name = '_array';
+
+                    code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+
+                    for(let i = 1; i < variable.size; i++) {
+                      sp++;
+                      vars.push({
+                        name: variable.name,
+                        global: variable.global,
+                        block: variable.block,
+                        constant: variable.constant,
+                        type: variable.type,
+                        pointer: sp,
+                        init: 0,
+                        object: variable,
+                        object_name: '_array',
+                      });
+
+                      code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+                    }
+                  }
+                }
+              }
+
+            }
+            
           } else {        
             if(!Traverse(node.declarations[0].init, traverseMode)) {
               vars.pop();
@@ -1805,15 +1892,48 @@ function Traverse(
 
         if(p.type == 'Identifier') {
           const type = GetVarType(p);
+
+          if(!type) {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: `Undefined type ${p.type}`
+            });
+            return false;
+          }
+
           sp++;
-          f.arguments.push(type == 'integer' ? CON_NATIVE_FLAGS.VARIABLE
-            : (type == 'label' ? CON_NATIVE_FLAGS.LABEL : CON_NATIVE_FLAGS.STRING));
+          switch(type) {
+            case 'integer':
+              f.arguments.push(CON_NATIVE_FLAGS.VARIABLE);
+              break;
+
+            case 'string':
+              f.arguments.push(CON_NATIVE_FLAGS.STRING);
+              break;
+
+            case 'label':
+              f.arguments.push(CON_NATIVE_FLAGS.LABEL);
+              break;  
+
+            case 'array_labels':
+              f.arguments.push(CON_NATIVE_FLAGS.ARRAY | CON_NATIVE_FLAGS.LABEL);
+              break;
+
+            default:
+              if(typeof type !== 'string') {
+                f.arguments.push(CON_NATIVE_FLAGS.OBJECT | (type.array ? CON_NATIVE_FLAGS.ARRAY : 0));
+              }
+
+          }
 
           vars.push({
             global: false,
             block: bBlock.length,
             name: p.name,
-            type,
+            //@ts-ignore
+            type: typeof type === 'string' ? type : type.name,
             constant: false,
             pointer: sp,
             arg: i,
