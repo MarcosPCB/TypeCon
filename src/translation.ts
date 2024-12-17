@@ -51,6 +51,11 @@ var rd 0 0
 //Index
 var ri 0 0
 
+/* FUTURE IMPLEMENTATION ONLY
+//Segmentation register
+var rds 0 0 //determines which part of the heap can be accessed
+*/
+
 //Base pointer and Stack pointer
 var rbp 0 0
 var rsp -1 0
@@ -58,16 +63,33 @@ var rsp -1 0
 //Internal per-actor vars
 var playerDist 0 2
 
+/*
+    Every time an user request an X amount of memory (arrays or objects), its value must fit inside a PAGE,
+    if it's bigger than a PAGE, than allocate as many PAGES as necessary.
+    To get the maount of memory that can be used, calculate 2ˆ16 (65536) * PAGE_SIZE * 4,
+    in this case, the maximum amount of memory available to be allocated is 16 MBs, increase the PAGE_SIZE to get more memory.
+    In the future, I might implement segmentation, this way we can have more memory even with a smaller PAGE_SIZE.
+*/
+
+//Internal size of the heap pages - for every X entries, 1 page, this way we can fit 2 16-bit addresses inside a 32-bit variable
 define PAGE_SIZE 64
 
-array rstack 16 0
-
-//Heap blocks are sequential ALWAYS
+//this is the heap array, 512 entries because PAGE_SIZE * 8 is 512, 8 is the current number of pages available
 array heap 512 0
+
+//This is where we store if a page is free or not. If not, 2 16-bit addresses will be stored in it
 array lookupHeap 8 0
+
+//The current heap memory size
 var heapsize 512 0 //8 * PAGE_SIZE
+
+//The current number of pages available
 var lookupheapsize 8 0
 
+//For pushing the r0-12 registers
+array rstack 16 0
+
+//Stack memory
 array stack `
 
 export const initStates = `
