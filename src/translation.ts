@@ -177,6 +177,93 @@ defstate free
     }
 ends
 
+defstate _CheckAndFreePage
+    state push
+    state pushb
+    state pushd
+    set _HEAP_pointer r0
+    set _HEAPj _HEAP_pointer
+    div _HEAPj PAGE_SIZE
+    set _HEAPi _HEAPj
+    set _HEAPk lookupHeap[_HEAPi]
+    set _HEAPi _HEAPk
+    and _HEAPi 0xFFFF
+    shiftr _HEAPk 16
+
+    set _HEAPj 0
+    set _HEAPl rsp
+    add _HEAPl 1
+    for _HEAPj range _HEAPl {
+        ifle stack[_HEAPj] _HEAPi
+            set rb 1
+
+        ifge stack[_HEAPj] _HEAPk 
+            set rd 1
+        
+        //Free the pages
+        ifeither rd rb {
+            set ra _HEAPi
+            state push
+
+            set ra _HEAPj
+            state push
+
+            set ra _HEAPk
+            state push
+
+            set ra _HEAPl
+            state push
+
+            state free
+
+            state pop
+            set _HEAPl ra
+
+            state pop
+            set _HEAPk ra
+
+            state pop
+            set _HEAPj ra
+
+            state pop
+            set _HEAPi ra
+
+            exit
+        }
+    }
+
+    state popd
+    state popb
+    state pop
+ends
+
+defstate _CheckHeapUse
+    state push
+    set _HEAPi 0
+    set _HEAPj 0
+    for _HEAPi range heapsize {
+        ifn lookupHeap[_HEAPi] 0 {
+            set ra _HEAPi
+            state push
+            set ra _HEAPj
+            state push
+
+            set _HEAPk loopkup[_HEAPi]
+            and _HEAPk 0xFFFF
+            state pushr1
+            set r0 _HEAPk
+            state _CheckAndFreePage
+            state popr1
+            state pop
+            set _HEAPj ra
+            state pop
+            set _HEAPi ra
+        }
+    }
+
+    state pop
+ends
+
 defstate pushrall
     add rsp 1
     setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12

@@ -72,10 +72,10 @@ function GetVar(name: string) {
 }
 
 function GetObject(name: string, array = false) {
-  let variable = vars.find(e => (array ? (e.name == name && e.object_name == '_array') : e.object_name == name) && !e.object && e.block == bBlock.length - 1)
+  let variable = vars.find(e => (array ? (e.name == name && e.object_name == '_array') : e.object_name == name) && e.object && e.block == bBlock.length - 1);
 
   if(!variable)
-    variable = vars.find(e => (array ? (e.name == name && e.object_name == '_array') : e.object_name == name) && !e.object && e.global);
+    variable = vars.find(e => (array ? (e.name == name && e.object_name == '_array') : e.object_name == name) && e.object && e.global);
 
   return variable;
 }
@@ -177,6 +177,10 @@ function StartBlock(name: string, type: TClassType, loc: T.SourceLocation): numb
   return 1;
 }
 
+function GC_FreeHeap(block: IBlock) {
+  code += `state _CheckHeapUse \n`;
+}
+
 function ReturnFromFunction() {
   const b =  bBlock.at(-1);
 
@@ -184,6 +188,9 @@ function ReturnFromFunction() {
     console.log(`Tried to return from a block, but it's not even in one`);
     return;
   }
+
+  if(b.name != 'constructor')
+    GC_FreeHeap(b);
 
   if(b.type == EBlock.ACTOR && b.name != 'constructor')
     code += `set rbp ${b.base} \nset rsp ${b.stack} \n`;
@@ -1351,9 +1358,20 @@ function Traverse(
             }
 
             pointer = variable.pointer;
+
+            const index = sp - pointer;
+            if(mode == 'assignment') {
+              if(!index)
+                code += `set ri stack[rsp] \nadd ri ${obj.pointer} \nsetarray heap[ri] ra \n`;
+              else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${obj.pointer} \nsetarray heap[ri] ra \n`;
+            } else {
+              if(!index)
+                code += `set ri stack[rsp] \nadd ri ${obj.pointer} \nset ra heap[ri] \n`;
+              else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${obj.pointer} \nset ra heap[ri] \n`;
+            }
           } else {
             //Find property
-            const property = vars.find(e => e.name == p.name && e.object == obj);
+            const property = obj.object[p.name];
 
             if(!property) {
               errors.push({
@@ -1365,19 +1383,19 @@ function Traverse(
               return false;
             }
 
-            pointer = property.pointer;
+            pointer = property.index;
           }
 
-          const index = sp - pointer;
+          const index = sp - obj.pointer;
 
           if(mode == 'assignment') {
             if(!index)
-              code += `setarray stack[rsp] ra \n`
-            else code += `set ri rsp \nsub ri ${index} \nsetarray stack[ri] ra \n`;
+              code += `set ri stack[rsp] \nadd ri ${pointer} \nsetarray heap[ri] ra \n`;
+            else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${pointer} \nsetarray heap[ri] ra \n`;
           } else {
             if(!index)
-              code += `set ra stack[rsp] \n`
-            else code += `set ri rsp \nsub ri ${index} \nset ra stack[ri] \n`;
+              code += `set ri stack[rsp] \nadd ri ${pointer} \nset ra heap[ri] \n`;
+            else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${pointer} \nset ra heap[ri] \n`;
           }
         }
       }
@@ -1398,30 +1416,16 @@ function Traverse(
             return false;
           }
 
-          const objIndex = vars.findIndex(e => e == object);
-
-          const element = vars[objIndex + i];
-
-          if(!element) {
-            errors.push({
-              type: 'error',
-              node: node.type,
-              location: node.loc as T.SourceLocation,
-              message: `Array index surpassed current stack during compilation`
-            });
-            return false;
-          }
-
-          const index = sp - element.pointer;
+          const index = sp - obj.pointer;
 
           if(mode == 'assignment') {
             if(!index)
-              code += `setarray stack[rsp] ra \n`
-            else code += `set ri rsp \nsub ri ${index} \nsetarray stack[ri] ra \n`;
+              code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] ra \n`;
+            else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${i} \nsetarray heap[ri] ra \n`;
           } else {
             if(!index)
-              code += `set ra stack[rsp] \n`
-            else code += `set ri rsp \nsub ri ${index} \nset ra stack[ri] \n`;
+              code += `set ri stack[rsp] \nadd ri ${i} \nset ra heap[ri] \n`;
+            else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${i} \nset ra heap[ri] \n`;
           }
         } else if(p.type == 'MemberExpression') {
           if(mode == 'assignment')
@@ -1472,15 +1476,18 @@ function Traverse(
         } else if(mode == 'declaration') {
           const v = vars.at(-1) as IVar;
           const pName = (p.key as T.Identifier).name;
-          let v2: IVar;
+          //let v2: IVar;
 
           if(i == 0) {
             v.object_name = v.name;
             v.name = pName;
             v.size = CalculateObjArraySize(node.properties.length);
-            v2 = v;
+            v.object = new Object();
+            code += `state pushr1 \nset r0 ${v.size} \nstate alloc \nset stack[rsp] rb \nstate popr1 \n`;
+            v.object[pName] = { value: 0, index: 0 };
+            //v2 = v;
           } else {
-            sp++;
+            /*sp++;
             v2 = {
               name: pName,
               block: v.block,
@@ -1493,14 +1500,16 @@ function Traverse(
               object: v
             }
 
-            vars.push(v2);
+            vars.push(v2);*/
+            v.object[pName] = { value: 0, index: i};
           }
 
-          code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+          //code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
 
           if(p.value.type == 'StringLiteral' || p.value.type == 'NumericLiteral') {
-            v2.init = p.value.value;
-            code += `setarray stack[rsp] ${p.value.value} \n`;
+            //v2.init = p.value.value;
+            code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] ${p.value.value} \n`;
+            v.object[pName].value = p.value.value;
           }
 
           if(p.value.type == 'BinaryExpression' || p.value.type == 'MemberExpression') {
@@ -1510,8 +1519,10 @@ function Traverse(
                 return false;
               }
 
-              v2.init = ra;
-              code += `setarray stack[rsp] ra \n`
+              //v2.init = ra;
+              v.object[pName].value = ra;
+              //code += `setarray stack[rsp] ra \n`
+              code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] ra \n`;
           }
         }
       }
@@ -1566,25 +1577,17 @@ function Traverse(
               if(a.elements[0].type == 'NumericLiteral') {
                 variable.object_name = '_array';
                 variable.size = CalculateObjArraySize(a.elements[0].value);
+                variable.object = new Array(a.elements[0].value);
+                variable.object[0] = 0;
                 variable.init = 0;
 
-                code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+                code += `state pushr1 \nset r0 ${variable.size} \nstate alloc \nadd rsp1 \nset stack[rsp] rb \nstate popr1 \n`;
 
                 for(let i = 1; i < variable.size; i++) {
-                  sp++;
-                  vars.push({
-                    name: variable.name,
-                    global: variable.global,
-                    block: variable.block,
-                    constant: variable.constant,
-                    type: variable.type,
-                    pointer: sp,
-                    init: 0,
-                    object: variable,
-                    object_name: '_array',
-                  });
+                  variable.object[i] = 0;
+                  code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] 0 \n`;
 
-                  code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+                  //code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
                 }
               }
             }

@@ -59,7 +59,7 @@ export interface IVar {
     init: any,
     pointer: number,
     object_name?: string, //If object_name is _array, then it's an array
-    object?: IVar, //If empty but object_name is defined, then it's the start of the object
+    object?: any, //If empty but object_name is defined, then it's the start of the object
     static?: true,
     size?: number, //For objects and arrays
     arg?: number
