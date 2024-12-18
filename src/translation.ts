@@ -66,25 +66,26 @@ var playerDist 0 2
 /*
     Every time an user request an X amount of memory (arrays or objects), its value must fit inside a PAGE,
     if it's bigger than a PAGE, than allocate as many PAGES as necessary.
-    To get the maount of memory that can be used, calculate 2ˆ16 (65536) * PAGE_SIZE * 4,
-    in this case, the maximum amount of memory available to be allocated is 16 MBs, increase the PAGE_SIZE to get more memory.
-    In the future, I might implement segmentation, this way we can have more memory even with a smaller PAGE_SIZE.
+    The system is limited to allocating 4 GBs of memory.
 */
 
-//Internal size of the heap pages - for every X entries, 1 page, this way we can fit 2 16-bit addresses inside a 32-bit variable
-define PAGE_SIZE 64
+//Internal size of the heap pages - for every X entries, 1 page, this way we can optimize the free and allocation systems
+define PAGE_SIZE 8
 
-//this is the heap array, 512 entries because PAGE_SIZE * 8 is 512, 8 is the current number of pages available
+//this is the heap array, 512 entries because PAGE_SIZE * 64 is 512, 8 is the current number of pages available
 array heap 512 0
 
-//This is where we store if a page is free or not. If not, 2 16-bit addresses will be stored in it
-array lookupHeap 8 0
+//This is where we store if a page is free or not.
+array alloctable 64 0
+
+//Holds the starting addresses of the a allocated pages.
+array lookupHeap 64 0
 
 //The current heap memory size
 var heapsize 512 0 //8 * PAGE_SIZE
 
 //The current number of pages available
-var lookupheapsize 8 0
+var heaptables 64 0
 
 //For pushing the r0-12 registers
 array rstack 16 0
@@ -124,7 +125,7 @@ defstate _GetFreePages
         add heapsize _HEAPi
         add lookupheapsize _HEAP_request
         resizearray heap heapsize
-        resizearray lookupHeap lookupheapsize
+        resizearray lookupHeap heaptables
     }
 ends
 
@@ -182,7 +183,7 @@ defstate realloc
     mul _HEAPi PAGE_SIZE
     mul _HEAPk PAGE_SIZE
     sub _HEAPk _HEAPi
-    copy heap _HEAPi heap rb _HEAPk
+    copy heap[_HEAPi] heap[rb] _HEAPk
 ends
 
 defstate free
@@ -289,13 +290,13 @@ ends
 defstate pushrall
     add rsp 1
     setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
-    copy rstack 0 stack rsp 13
+    copy rstack[0] stack[rsp] 13
     add rsp 12
 ends
 
 defstate poprall
     sub rsp 13
-    copy stack rsp rstack 0 13
+    copy stack[rsp] rstack[0] 13
     getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
 ends
 
@@ -312,52 +313,52 @@ ends
 defstate pushr2
     add rsp 1
     setarrayseq rstack r0 r1
-    copy rstack 0 stack rsp 2
+    copy rstack[0] stack[rsp] 2
     add rsp 1
 ends
 
 defstate popr2
     sub rsp 2
-    copy stack rsp rstack 0 2
+    copy stack[rsp] rstack[0] 2
     getarrayseq rstack r0 r1
 ends
 
 defstate pushr3
     add rsp 1
     setarrayseq rstack r0 r1 r2
-    copy rstack 0 stack rsp 3
+    copy rstack[0] stack[rsp] 3
     add rsp 2
 ends
 
 defstate popr3
     sub rsp 3
-    copy stack rsp rstack 0 3
+    copy stack[rsp] rstack[0] 3
     getarrayseq rstack r0 r1 r2
 ends
 
 defstate pushr4
     add rsp 1
     setarrayseq rstack r0 r1 r2 r3
-    copy rstack 0 stack rsp 4
+    copy rstack[0] stack[rsp] 4
     add rsp 3
 ends
 
 defstate popr4
     sub rsp 4
-    copy stack rsp rstack 0 4
+    copy stack[rsp] rstack[0] 4
     getarrayseq rstack r0 r1 r2 r3
 ends
 
 defstate pushr5
     add rsp 1
     setarrayseq rstack r0 r1 r2 r3 r4
-    copy rstack 0 stack rsp 5
+    copy rstack[0] stack[rsp] 5
     add rsp 4
 ends
 
 defstate popr5
     sub rsp 5
-    copy stack rsp rstack 0 5
+    copy stack[rsp] rstack[0] 5
     getarrayseq rstack r0 r1 r2 r3 r4
 ends
 
