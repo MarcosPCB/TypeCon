@@ -1654,6 +1654,61 @@ function Traverse(
     return true;
   }
 
+  if(node.type == 'SwitchStatement') {
+    if(mode == 'constructor') {
+      errors.push({
+        type: 'error',
+        node: node.type,
+        location: node.loc as T.SourceLocation,
+        message: `Switch statements are not allowed in the constructor`
+      });
+      return false;
+    }
+
+    if(!Traverse(node.discriminant, 'conditional'))
+      return false;
+
+    if(node.discriminant.type == 'CallExpression')
+      code += `set ra rb \n`;
+
+    code += `switch ra \n`;
+
+    for(let i = 0; i < node.cases.length; i++) {
+      const o = node.cases[i];
+
+      if(o.type == 'SwitchCase') {
+        if(!o.test) {
+          errors.push({
+            type: 'error',
+            node: node.type,
+            location: node.loc as T.SourceLocation,
+            message: `Switch statement missing case`
+          });
+          return false;
+        }
+
+        if(!Traverse(o.test, 'retrieval'))
+          return false;
+
+        code += `case ${ra} \n`;
+
+        for(let j = 0; j < o.consequent.length; j++) {
+          if(o.consequent[j].type == 'BreakStatement') {
+            code += `break \n`;
+            break;
+          }
+
+          if(!Traverse(o.consequent[j], 'function_body'))
+            return false;
+        }
+        
+      }
+    }
+
+    code += `endswitch \n`;
+    return true;
+  }
+
   if(node.type == 'IfStatement') {
     if(mode == 'constructor') {
       errors.push({
@@ -1667,6 +1722,9 @@ function Traverse(
 
     if(!Traverse(node.test, 'conditional'))
       return false;
+
+    if(node.test.type == 'CallExpression')
+      code += `set ra rb \n`;
 
     code += `ife ra 1 { \n`;
 

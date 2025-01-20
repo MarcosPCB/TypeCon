@@ -8,81 +8,106 @@ type wow = {
 class newEnemy extends CActor {
 
     constructor() {
-        const action: IAction = {
+        const AIdle: IAction = {
             name: 'idle',
             start: 0,
-            length: 3 + 4,
-            viewType: 1,
+            length: 1,
+            viewType: 5,
             incValue: 1,
-            delay: 4
+            delay: 0
         }
 
-        const move: IMove = {
+        const AWalk: IAction = {
+            name: 'walk',
+            start: 5,
+            length: 4,
+            viewType: 5,
+            incValue: 1,
+            delay: 16
+        }
+
+        const MWalk: IMove = {
             name: 'walkvel',
             horizontal_vel: 64,
             vertical_vel: 0
         }
 
-        const ai: IAi = {
+        const MStop: IMove = {
+            name: 'stop',
+            horizontal_vel: 0,
+            vertical_vel: 0
+        }
+
+        const AIIdle: IAi = {
             name: 'idle_ai',
             action: 'idle',
+            move: 'stop',
+            flags: EMoveFlags.faceplayerslow
+        }
+
+        const AIWalk: IAi = {
+            name: 'walk_ai',
+            action: 'walk',
             move: 'walkvel',
             flags: EMoveFlags.seekplayer
         }
 
-        super(1680, true, 100, [action], action, [move], [ai]);
+        super(1680, true, 100, [AIdle, AWalk], AIdle, [MStop, MWalk], [AIIdle, AIWalk]);
     }
 
-    Test(arg: number): number {
-        arg += 2 + 2;
-        return arg;
+    Idle() {
+        if(this.CanSee()) {
+            if(this.CanShootTarget()) {
+                if(this.playerDist < 4096) {
+                    if(this.Count() >= 8) {
+                        this.Shoot(1600);
+                        this.Count(0);
+                    }
+                } else {
+                    this.StartAI(Label('walk_ai'));
+                    return;
+                }
+            } else {
+                this.StartAI(Label('walk_ai'));
+                return;
+            }
+        }
+        
+        return;
+    }
+
+    Walk() {
+        if(this.CanSee() && this.CanSeeTarget()) {
+            if(this.playerDist < 4096) {
+                this.StartAI(Label('idle_ai'));
+                return;
+            }
+        }
     }
 
     Main(): void {
-        console.log(this.extra + 5);
-        const test: number = 0;
-        let go = 2 + test * 3;
-        go -= test + 1;
-        console.log(go);
-
-        if(go == 2) {
-            go = 6;
+        if(this.curAI == 0) {
+            this.StartAI(Label('idle_ai'));
+            this.SizeAt(46, 48);
         }
 
-        if(this.playerDist > 2048 && this.curAction == Label('idle')) {
-            this.PlayAction(Label('idle'));
-            this.Move(Label('walkvel'), EMoveFlags.faceplayerslow);
-            this.CStat(2);
-            console.log(this.CStat());
-            return;
+        switch(this.curAI) {
+            case Label('idle_ai'):
+                this.Idle();
+                break;
+
+            case Label('walk_ai'):
+                this.Walk();
+                break;
         }
 
-        this.CStatOR(go);
-        this.SizeTo(6, 6);
-        this.SizeTo(6, 6, 2, 2);
-        this.Glass(5);
+        if(this.HitByWeapon()) {
+            this.Spawn(1800);
 
-        this.Test(go);
-
-        this.Spawn(NewEnemy, (RETURN) => {
-            sprites[RETURN].extra = 50;
-        });
-
-        let obj = {
-            v: 1,
-            g: 2,
-            l: 3,
+            if(this.IsDead()) {
+                this.KillIt();
+            }
         }
-
-        obj.g += 9;
-
-        let arr = [3];
-        arr[go] = 2;
-        arr[sprites[go].picnum] = 3;
-        go = arr[1];
-        go = arr[sprites[go].extra];
-
-        let you: wow[] = new Array(4);
     }
 }
 

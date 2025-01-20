@@ -105,6 +105,13 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
         arguments: []
     },
     {
+        name: 'CanSeeTarget',
+        code: `set rb 0 \nifcanseetarget set rb 1 \n`,
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
         name: 'CanShootTarget',
         code: `set rb 0 \nifcanshoottarget set rb 1 \n`,
         returns: true,
