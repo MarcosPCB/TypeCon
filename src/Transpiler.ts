@@ -200,8 +200,8 @@ function ReturnFromFunction() {
   let diff = b.type == EBlock.FUNCTION ? sp - b.stack - 2 - b.args : sp - b.stack;
   vars.splice(vars.length - 1 - diff, diff);
 
-  sp = b.type == EBlock.FUNCTION ? b.stack - 2 - b.args : b.stack;
-  bp = b.type == EBlock.FUNCTION ? b.stack - 1 - b.args : b.base;
+  sp = b.type == EBlock.FUNCTION ? b.stack - 1 - b.args : b.stack;
+  bp = b.type == EBlock.FUNCTION ? b.base - b.args : b.base;
 }
 
 function EndBlock() {
@@ -1940,11 +1940,11 @@ function Traverse(
       return_type: 'variable',
       arguments: [],
       code: () => {
-        return `state ${curActor.picnum}_${(node.key as T.Identifier).name} \n`;
+        return `state ${(node.key as T.Identifier).name}_${curActor.picnum} \n`;
       }
     };
 
-    code += `\ndefstate ${curActor.picnum}_${(node.key as T.Identifier).name} \n`;
+    code += `\ndefstate ${(node.key as T.Identifier).name}_${curActor.picnum} \n`;
 
     code += `set ra rbp \nstate push \nset rbp rsp \n`
 

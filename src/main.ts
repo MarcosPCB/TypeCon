@@ -8,6 +8,8 @@ let fileName = '';
 let lineDetail = false;
 let parse_only = false;
 let stack_size = 1024;
+let output_folder = './compiled';
+let output_file = '';
 
 if(!fs.existsSync('./obj'))
     fs.mkdirSync('./obj');
@@ -34,6 +36,12 @@ for(let i = 0; i < process.argv.length; i++) {
     if(a == '-ss')
         stack_size = Number(process.argv[i + 1]);
 
+    if(a == '-of')
+        output_folder = process.argv[i + 1];
+
+    if(a == '-o')
+        output_file = process.argv[i + 1];
+
 }
 
 if(stack_size < 1024)
@@ -56,7 +64,7 @@ if(!parse_only) {
     console.log(`Transpiling...`);
     const code = Transpiler(parsed, lineDetail, stack_size, file.toString());
     if(code) {
-        fs.writeFileSync(`compiled/${path.basename(fileName)}.con`, code);
+        fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, code);
     }
 }
 

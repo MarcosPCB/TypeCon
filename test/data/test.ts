@@ -52,7 +52,7 @@ class newEnemy extends CActor {
             flags: EMoveFlags.seekplayer
         }
 
-        super(1680, true, 100, [AIdle, AWalk], AIdle, [MStop, MWalk], [AIIdle, AIWalk]);
+        super(1685, true, 100, [AIdle, AWalk], AIdle, [MStop, MWalk], [AIIdle, AIWalk]);
     }
 
     Idle() {
