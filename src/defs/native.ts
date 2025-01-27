@@ -344,6 +344,16 @@ state popd
             CON_NATIVE_FLAGS.VARIABLE,
         ],
     },
+    {
+        name: 'Guts',
+        code: `guts`,
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.CONSTANT | CON_NATIVE_FLAGS.LABEL,
+            CON_NATIVE_FLAGS.CONSTANT
+        ],
+    },
 ]
 
 export const nativeVars: CON_NATIVE_VAR[] = [

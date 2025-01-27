@@ -1037,8 +1037,10 @@ function Traverse(
         if(!Traverse(side, mode))
           return false;
 
+        code += `set ra rb \n`
+
         if(i == 0)
-          code += `set ra rb \nstate popb \n`;
+          code += `state popb \n`;
       }
 
       if(side.type == 'Identifier') {
@@ -1743,6 +1745,26 @@ function Traverse(
     }
 
     code += `} \n`;
+
+    if(node.alternate) {
+      code += `else { \n`;
+
+      if(node.alternate.type == 'BlockStatement') {
+        depth++
+        for(let i = 0; i < node.alternate.body.length; i++) {
+          if(!Traverse(node.alternate.body[i], 'function_body'))
+            return false;
+        }
+        depth--
+      } else if(node.alternate.type == 'ExpressionStatement') {
+        depth++;
+        if(!Traverse(node.alternate.expression, 'function_body'))
+          return false;
+        depth--;
+      }
+
+      code += `} \n`;
+    }
 
     return true;
   }

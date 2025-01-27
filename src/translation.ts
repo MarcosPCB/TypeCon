@@ -378,7 +378,7 @@ defstate _CheckHeapUse
     state push
     set _HEAPi 0
     set _HEAPj 0
-    for _HEAPi range heapsize {
+    for _HEAPi range heaptables {
         ifn lookupHeap[_HEAPi] 0 {
             set ra _HEAPi
             state push

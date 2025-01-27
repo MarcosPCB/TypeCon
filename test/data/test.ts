@@ -20,7 +20,7 @@ class newEnemy extends CActor {
         const AWalk: IAction = {
             name: 'walk',
             start: 5,
-            length: 4,
+            length: 3,
             viewType: 5,
             incValue: 1,
             delay: 16
@@ -59,8 +59,8 @@ class newEnemy extends CActor {
         if(this.CanSee()) {
             if(this.CanShootTarget()) {
                 if(this.playerDist < 4096) {
-                    if(this.Count() >= 8) {
-                        this.Shoot(1600);
+                    if(this.Count() >= 16) {
+                        this.Shoot(1625);
                         this.Count(0);
                     }
                 } else {
@@ -89,8 +89,8 @@ class newEnemy extends CActor {
         this.Fall();
         this.CStat(257);
         if(this.curAI == 0) {
-            this.StartAI(Label('idle_ai'));
-            this.SizeAt(46, 48);
+            this.StartAI(Label('walk_ai'));
+            this.SizeAt(32, 34);
         }
 
         switch(this.curAI) {
@@ -104,7 +104,7 @@ class newEnemy extends CActor {
         }
 
         if(this.HitByWeapon()) {
-            this.Spawn(1800);
+            this.Spawn(1620);
 
             if(this.IsDead())
                 this.KillIt();
