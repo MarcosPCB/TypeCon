@@ -87,6 +87,7 @@ class newEnemy extends CActor {
 
     Main(): void {
         this.Fall();
+        this.CStat(257);
         if(this.curAI == 0) {
             this.StartAI(Label('idle_ai'));
             this.SizeAt(46, 48);

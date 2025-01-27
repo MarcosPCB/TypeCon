@@ -1906,7 +1906,7 @@ function Traverse(
         args: 0,
       });
 
-      code += `useractor ${curActor.enemy ? 'enemy' : 'notenemy'} ${curActor.picnum} ${curActor.extra} ${curActor.first_action ? curActor.first_action.name : ''} \n`;
+      code += `useractor ${curActor.enemy ? '1' : '0'} ${curActor.picnum} ${curActor.extra} ${curActor.first_action ? curActor.first_action.name : ''} \n`;
       code += `findplayer playerDist \n`;
 
       depth++

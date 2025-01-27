@@ -9,6 +9,12 @@ let lineDetail = false;
 let parse_only = false;
 let stack_size = 1024;
 
+if(!fs.existsSync('./obj'))
+    fs.mkdirSync('./obj');
+
+if(!fs.existsSync('./compiled'))
+    fs.mkdirSync('./compiled');
+
 for(let i = 0; i < process.argv.length; i++) {
     const a = process.argv[i];
 

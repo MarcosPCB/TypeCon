@@ -315,7 +315,7 @@ state popd
             CON_NATIVE_FLAGS.FUNCTION | CON_NATIVE_FLAGS.OPTIONAL,
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
         ],
-        arguments_default: [0, '', 0]
+        arguments_default: [0, 0, 0]
     },
     {
         name: 'Shoot',
@@ -329,7 +329,7 @@ state popd
             CON_NATIVE_FLAGS.FUNCTION | CON_NATIVE_FLAGS.OPTIONAL,
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
         ],
-        arguments_default: [0, '', 0, 0, 0]
+        arguments_default: [0, 0, 0, 0, 0]
     },
     {
         name: 'HitRadius',

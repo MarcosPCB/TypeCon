@@ -101,6 +101,121 @@ var _HEAPl 0 0
 var _HEAP_request 0 0
 var _HEAP_pointer -1 0
 
+defstate pushrall
+    add rsp 1
+    setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
+    copy rstack[0] stack[rsp] 13
+    add rsp 12
+ends
+
+defstate poprall
+    sub rsp 13
+    copy stack[rsp] rstack[0] 13
+    getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
+ends
+
+defstate pushr1
+    add rsp 1
+    setarray stack[rsp] r0
+ends
+
+defstate popr1
+    set r0 stack[rsp]
+    sub rsp 1
+ends
+
+defstate pushr2
+    add rsp 1
+    setarrayseq rstack r0 r1
+    copy rstack[0] stack[rsp] 2
+    add rsp 1
+ends
+
+defstate popr2
+    sub rsp 2
+    copy stack[rsp] rstack[0] 2
+    getarrayseq rstack r0 r1
+ends
+
+defstate pushr3
+    add rsp 1
+    setarrayseq rstack r0 r1 r2
+    copy rstack[0] stack[rsp] 3
+    add rsp 2
+ends
+
+defstate popr3
+    sub rsp 3
+    copy stack[rsp] rstack[0] 3
+    getarrayseq rstack r0 r1 r2
+ends
+
+defstate pushr4
+    add rsp 1
+    setarrayseq rstack r0 r1 r2 r3
+    copy rstack[0] stack[rsp] 4
+    add rsp 3
+ends
+
+defstate popr4
+    sub rsp 4
+    copy stack[rsp] rstack[0] 4
+    getarrayseq rstack r0 r1 r2 r3
+ends
+
+defstate pushr5
+    add rsp 1
+    setarrayseq rstack r0 r1 r2 r3 r4
+    copy rstack[0] stack[rsp] 5
+    add rsp 4
+ends
+
+defstate popr5
+    sub rsp 5
+    copy stack[rsp] rstack[0] 5
+    getarrayseq rstack r0 r1 r2 r3 r4
+ends
+
+defstate push
+    add rsp 1
+    setarray stack[rsp] ra
+ends
+
+defstate pop
+    set ra stack[rsp]
+    sub rsp 1
+ends
+
+defstate pushb
+    add rsp 1
+    setarray stack[rsp] rb
+ends
+
+defstate popb
+    set rb stack[rsp]
+    sub rsp 1
+ends
+
+defstate pushc
+    add rsp 1
+    setarray stack[rsp] rc
+ends
+
+defstate popc
+    set rc stack[rsp]
+    sub rsp 1
+ends
+
+defstate pushd
+    add rsp 1
+    setarray stack[rsp] rd
+ends
+
+defstate popd
+    set rd stack[rsp]
+    sub rsp 1
+ends
+
 defstate _GetFreePages
     set _HEAPi 0
     set _HEAPj 0
@@ -123,7 +238,6 @@ defstate _GetFreePages
         mul _HEAPi _HEAP_request
         set _HEAP_pointer heapsize
         add heapsize _HEAPi
-        add lookupheapsize _HEAP_request
         resizearray heap heapsize
         resizearray lookupHeap heaptables
     }
@@ -134,7 +248,7 @@ defstate alloc
     div _HEAP_request PAGE_SIZE
     ife _HEAP_request 0
         set _HEAP_request 1
-    state GetFreePages
+    state _GetFreePages
 
     set _HEAPi _HEAP_pointer
     div _HEAPi PAGE_SIZE
@@ -156,7 +270,7 @@ defstate realloc
     div _HEAP_request PAGE_SIZE
     ife _HEAP_request 0
         set _HEAP_request 1
-    state GetFreePages
+    state _GetFreePages
 
     set _HEAPi _HEAP_pointer
     div _HEAPi PAGE_SIZE
@@ -271,7 +385,7 @@ defstate _CheckHeapUse
             set ra _HEAPj
             state push
 
-            set _HEAPk loopkup[_HEAPi]
+            set _HEAPk lookupHeap[_HEAPi]
             and _HEAPk 0xFFFF
             state pushr1
             set r0 _HEAPk
@@ -285,121 +399,6 @@ defstate _CheckHeapUse
     }
 
     state pop
-ends
-
-defstate pushrall
-    add rsp 1
-    setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
-    copy rstack[0] stack[rsp] 13
-    add rsp 12
-ends
-
-defstate poprall
-    sub rsp 13
-    copy stack[rsp] rstack[0] 13
-    getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
-ends
-
-defstate pushr1
-    add rsp 1
-    setarray stack[rsp] r0
-ends
-
-defstate popr1
-    set r0 stack[rsp]
-    sub rsp 1
-ends
-
-defstate pushr2
-    add rsp 1
-    setarrayseq rstack r0 r1
-    copy rstack[0] stack[rsp] 2
-    add rsp 1
-ends
-
-defstate popr2
-    sub rsp 2
-    copy stack[rsp] rstack[0] 2
-    getarrayseq rstack r0 r1
-ends
-
-defstate pushr3
-    add rsp 1
-    setarrayseq rstack r0 r1 r2
-    copy rstack[0] stack[rsp] 3
-    add rsp 2
-ends
-
-defstate popr3
-    sub rsp 3
-    copy stack[rsp] rstack[0] 3
-    getarrayseq rstack r0 r1 r2
-ends
-
-defstate pushr4
-    add rsp 1
-    setarrayseq rstack r0 r1 r2 r3
-    copy rstack[0] stack[rsp] 4
-    add rsp 3
-ends
-
-defstate popr4
-    sub rsp 4
-    copy stack[rsp] rstack[0] 4
-    getarrayseq rstack r0 r1 r2 r3
-ends
-
-defstate pushr5
-    add rsp 1
-    setarrayseq rstack r0 r1 r2 r3 r4
-    copy rstack[0] stack[rsp] 5
-    add rsp 4
-ends
-
-defstate popr5
-    sub rsp 5
-    copy stack[rsp] rstack[0] 5
-    getarrayseq rstack r0 r1 r2 r3 r4
-ends
-
-defstate push
-    add rsp 1
-    setarray stack[rsp] ra
-ends
-
-defstate pop
-    set ra stack[rsp]
-    sub rsp 1
-ends
-
-defstate pushb
-    add rsp 1
-    setarray stack[rsp] rb
-ends
-
-defstate popb
-    set rb stack[rsp]
-    sub rsp 1
-ends
-
-defstate pushc
-    add rsp 1
-    setarray stack[rsp] rc
-ends
-
-defstate popc
-    set rc stack[rsp]
-    sub rsp 1
-ends
-
-defstate pushd
-    add rsp 1
-    setarray stack[rsp] rd
-ends
-
-defstate popd
-    set rd stack[rsp]
-    sub rsp 1
 ends
 
 `
