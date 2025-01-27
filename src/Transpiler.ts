@@ -1735,6 +1735,11 @@ function Traverse(
           return false;
       }
       depth--
+    } else if(node.consequent.type == 'ExpressionStatement') {
+      depth++;
+      if(!Traverse(node.consequent.expression, 'function_body'))
+        return false;
+      depth--;
     }
 
     code += `} \n`;

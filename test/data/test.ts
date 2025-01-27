@@ -86,6 +86,7 @@ class newEnemy extends CActor {
     }
 
     Main(): void {
+        this.Fall();
         if(this.curAI == 0) {
             this.StartAI(Label('idle_ai'));
             this.SizeAt(46, 48);
@@ -104,9 +105,8 @@ class newEnemy extends CActor {
         if(this.HitByWeapon()) {
             this.Spawn(1800);
 
-            if(this.IsDead()) {
+            if(this.IsDead())
                 this.KillIt();
-            }
         }
     }
 }

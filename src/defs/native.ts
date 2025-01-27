@@ -194,8 +194,8 @@ state popd
         name: 'Count',
         code: ((arg?: boolean) => {
             if(arg)
-                return `seta[].htg_t 0 r0 \n`;
-            return `geta[].htg_t 0 rb \n`;
+                return `seta[].htg_t 0 r0 `;
+            return `geta[].htg_t 0 rb `;
         }),
         returns: true,
         return_type: 'variable',
@@ -205,56 +205,56 @@ state popd
     },
     {
         name: 'Fall',
-        code: 'fall \n',
+        code: 'fall ',
         returns: false,
         return_type: null,
         arguments: []
     },
     {
         name: 'BulletNear',
-        code: 'set rb 0 \nifbulletnear set rb 1 \n',
+        code: 'set rb 0 \nifbulletnear set rb 1 ',
         returns: true,
         return_type: 'variable',
         arguments: []
     },
     {
         name: 'HitByWeapon',
-        code: 'set rb 0 \nifhitweapon set rb 1 \n',
+        code: 'set rb 0 \nifhitweapon set rb 1 ',
         returns: true,
         return_type: 'variable',
         arguments: []
     },
     {
         name: 'Squished',
-        code: 'set rb 0 \nifsquished set rb 1 \n',
+        code: 'set rb 0 \nifsquished set rb 1 ',
         returns: true,
         return_type: 'variable',
         arguments: []
     },
     {
         name: 'IsItMoving',
-        code: 'set rb 1 \nifnotmoving set rb 0 \n',
+        code: 'set rb 1 \nifnotmoving set rb 0 ',
         returns: true,
         return_type: 'variable',
         arguments: []
     },
     {
         name: 'GetLastPal',
-        code: 'getlastpal \n',
+        code: 'getlastpal ',
         returns: false,
         return_type: null,
         arguments: []
     },
     {
         name: 'PlayerKick',
-        code: 'pkick \n',
+        code: 'pkick ',
         returns: false,
         return_type: null,
         arguments: []
     },
     {
         name: 'KillIt',
-        code: 'killit \n',
+        code: 'killit ',
         returns: false,
         return_type: null,
         arguments: []
@@ -270,35 +270,35 @@ state popd
     },
     {
         name: 'IsDead',
-        code: 'set rb 0 \nifdead set rb 1 \n',
+        code: 'set rb 0 \nifdead set rb 1 ',
         returns: true,
         return_type: 'variable',
         arguments: []
     },
     {
         name: 'Stop',
-        code: 'set rsp rbp \nstate pop \nset rbp ra \nreturn \n',
+        code: 'set rsp rbp \nstate pop \nset rbp ra \nreturn ',
         returns: false,
         return_type: null,
         arguments: []
     },
     {
         name: 'ResetAction',
-        code: 'resetactioncount \n',
+        code: 'resetactioncount ',
         returns: false,
         return_type: null,
         arguments: []
     },
     {
         name: 'Flash',
-        code: 'flash \n',
+        code: 'flash ',
         returns: false,
         return_type: null,
         arguments: []
     },
     {
         name: 'RespawnHitag',
-        code: 'respawnhitag \n',
+        code: 'respawnhitag ',
         returns: false,
         return_type: null,
         arguments: []
@@ -306,7 +306,7 @@ state popd
     {
         name: 'Spawn',
         code: (args?: boolean, fn?: string) => {
-            return `set rd RETURN \nifge r2 1 eqspawn r0 \nelse espawn r0 \n${fn}set rb RETURN \nset RETURN rd \n`;
+            return `set rd RETURN \nifge r2 1 eqspawn r0 \nelse espawn r0 \n${fn}set rb RETURN \nset RETURN rd `;
         },
         returns: true,
         return_type: 'variable',
@@ -320,7 +320,7 @@ state popd
     {
         name: 'Shoot',
         code: (args?: boolean, fn?: string) => {
-            return `state push \nset rd RETURN \nife r2 0 eshoot r0 \nelse { \nife r4 1 { \neshoot r0 \ngeta[RETURN].zvel ra \nadd ra r3 \nseta[RETURN].zvel ra \n } else ezshoot r3 r0\n }\n${fn}set rb RETURN\nset RETURN rd \n`;
+            return `state push \nset rd RETURN \nife r2 0 eshoot r0 \nelse { \nife r4 1 { \neshoot r0 \ngeta[RETURN].zvel ra \nadd ra r3 \nseta[RETURN].zvel ra \n } else ezshoot r3 r0\n }\n${fn}set rb RETURN\nset RETURN rd `;
         },
         returns: true,
         return_type: 'variable',
