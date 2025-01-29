@@ -52,6 +52,14 @@ var rd 0 0
 //Index
 var ri 0 0
 
+//Flags register
+/*
+    1 - heap address return
+    2 - stack array return
+    4 - stack object return
+*/
+var rf 0 0
+
 /* FUTURE IMPLEMENTATION ONLY
 //Segmentation register
 var rds 0 0 //determines which part of the heap can be accessed

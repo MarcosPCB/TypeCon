@@ -99,7 +99,7 @@ class newEnemy extends CActor {
 
         switch(this.curAI) {
             case Label('idle_ai'):
-                this.Idle();
+                const mim = this.Idle();
                 break;
 
             case Label('walk_ai'):

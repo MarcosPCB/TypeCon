@@ -33,6 +33,9 @@ var bp = 0
 var ra: any = 0;
 var rb: any = 0;
 var rc: any = null;
+var rf: any = 0;
+
+var return_object: any = null;
 
 var reserved_extra_space = 30;
 var minimum_array_size = 8; //For undefined sizes only
@@ -597,37 +600,68 @@ function Traverse(
           return false;
         }
 
+        const f = funcs.at(-1) as CON_NATIVE_FUNCTION;
+
+        if(f.return_num == 1 && !Array.isArray(f.return_type)) {
+          const rt = f.return_type;
+          f.return_type = [rt];
+          f.returnable = [f.returnable];
+          f.return_size = [];
+        }
+
+        f.return_num++;
+
+        if(!Array.isArray(f.return_type)) {
+          f.return_type = [];
+          f.returnable = [];
+          f.return_size = [];
+        }
+
         if(variable.object_name !== undefined) {
           if(variable.object_name == '_array') {
             if(variable.heap) {
               if(variable.arg !== undefined)
                 code += `set rb r${variable.arg} \n`;
               else
-                code += `set ri rsp \nsub ri ${sp - variable.pointer}\nset rb stack[ri] \n`;
+                code += `set ri rsp \nsub ri ${sp - variable.pointer} \nset rb stack[ri] \n`;
+
+              code += `set rf 1 \n`;
+              
+              f.return_type.push('heap');
+              f.returnable.push(variable.object);
+              f.return_size.push(variable.size);
             } else {
               //Copy the contents of the array to the previous stack
               //Set rb to the first element of the stack
-              code += `set ri rsp \nsub ri ${sp - variable.pointer}\nset rb stack[ri] \nset rc rbp \nsetarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
+              code += `set ri rsp \nsub ri ${sp - variable.pointer}\nset rb ${variable.size} \nset rc rbp \nsetarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
               
               for(let i = 1; i < variable.size; i++)
                 code += `setarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
 
               //Set the correct stack for the previous block
               code += `set rbp rc \n`;
-              bp += variable.size;
+              code += `set rf 2 \n`;
+
+              f.return_type.push('array');
+              f.returnable.push(variable.object);
+              f.return_size.push(variable.size);
             }
           } else {
             if(!variable.heap) {
               //Copy the contents of the object to the previous stack
               //Set rb to the first element of the stack
-              code += `set ri rsp \nsub ri ${sp - variable.pointer}\nset rb stack[ri] \nset rc rbp \nsetarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
+              code += `set ri rsp \nsub ri ${sp - variable.pointer}\nset rb ${variable.size}  \nset rc rbp \nsetarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
               
               for(let i = 1; i < variable.size; i++)
                 code += `setarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
 
               //Set the correct stack for the previous block
               code += `set rbp rc \n`;
-              bp += variable.size;
+              code += `set rf 4 \n`;
+
+              f.return_type.push('object');
+              f.returnable.push(variable.object);
+              f.return_size.push(variable.size);
             }
           }
         } else {
@@ -988,8 +1022,8 @@ function Traverse(
       } else code += `${typeof f.code === 'function' ? f.code() : `${f.code} \n`}`;
 
       typeCheck = '';
-      if(f.returns && f.return_type)
-        typeCheck = f.return_type;
+      //if(f.returns && f.return_type)
+        //typeCheck = f.return_type;
     } else {
       const f = funcTranslator[func.index];
       if(node.arguments.length < f.params.length) {
@@ -1726,6 +1760,72 @@ function Traverse(
               return false;
             }
 
+            if(node.declarations[0].init.type == 'CallExpression') {
+              code += `set ra rb \n`;
+
+              //In case of a stack array/object return, the array has already been copied to the stack
+              //rb will hold the size of the buffer
+
+              const f = funcs.find(e => e.name == ((node.declarations[0].init as T.CallExpression).callee as T.Identifier).name);
+
+              if(!f) {
+                errors.push({
+                  type: 'error',
+                  node: node.type,
+                  location: node.loc as T.SourceLocation,
+                  message: `Unknown function ${((node.declarations[0].init as T.CallExpression).callee as T.Identifier).name}`
+                });
+                return false;
+              }
+
+              if(f.return_num == 1) {
+                switch(f.return_type[0]) {
+                  case 'heap':
+                    variable.heap = true;
+                    break;
+
+                  case 'array':
+                    variable.object_name = '_array';
+                    code += `sub rsp 1 \n`
+                    sp = f.return_size[0] - 1;
+                    break;
+
+                  case 'object':
+                    variable.object_name = variable.name;
+                    code += `sub rsp 1 \n`
+                    sp = f.return_size[0] - 1;
+                    break;
+                }
+
+                variable.object = f.returnable[0];
+                variable.size = f.return_size[0];
+              } else {
+                let possible_sp = 0;
+                for(let i = 0; i < f.return_num; i++) {
+                  switch(f.return_type[i]) {
+                    case 'heap':
+                      variable.heap = true;
+                      break;
+  
+                    case 'array':
+                      variable.object_name = '_array';
+                      code += `sub rsp 1 \n`
+                      possible_sp = f.return_size[i] - 1;
+                      break;
+  
+                    case 'object':
+                      variable.object_name = variable.name;
+                      code += `sub rsp 1 \n`
+                      possible_sp = f.return_size[i] - 1;
+                      break;
+                  }
+                }
+                code += `ifand rf 2 { \n`;
+                code += ` \n`;
+                code += `} \n`;
+              }
+            }
+
             if(node.declarations[0].init.type != 'ObjectExpression')
               variable.init = ra;
 
@@ -2042,7 +2142,7 @@ function Traverse(
     const f: CON_NATIVE_FUNCTION = {
       name: (node.key as T.Identifier).name,
       returns: false,
-      return_type: 'variable',
+      return_type: null,
       arguments: [],
       code: () => {
         return `state ${(node.key as T.Identifier).name}_${curActor.picnum} \n`;
