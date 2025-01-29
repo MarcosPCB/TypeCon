@@ -354,6 +354,28 @@ state popd
             CON_NATIVE_FLAGS.CONSTANT
         ],
     },
+    {
+        name: 'Delete',
+        code: (args?: boolean) => {
+            return `state free \n`;
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ]
+    },
+    {
+        name: 'Free',
+        code: (args?: boolean) => {
+            return `state free \n`;
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ]
+    }
 ]
 
 export const nativeVars: CON_NATIVE_VAR[] = [

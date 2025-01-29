@@ -84,6 +84,9 @@ declare global {
     }
     */
 
+    export function Delete(buffer: any): void;
+    export function Free(buffer: any): void;
+
     export class CActor {
         public picnum: CON_NATIVE<number>;
         public isEnemy: boolean;

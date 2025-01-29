@@ -63,10 +63,10 @@ function CalculateObjArraySize(size: number) {
 }
 
 function GetVar(name: string) {
-  let variable = vars.find(e => e.name == name && e.block == bBlock.length - 1);
+  let variable = vars.find(e => (e.name == name || e.object_name == name) && e.block == bBlock.length - 1);
 
   if(!variable)
-    variable = vars.find(e => e.name == name && e.global);
+    variable = vars.find(e => (e.name == name || e.object_name == name) && e.global);
 
   return variable;
 }
@@ -189,8 +189,8 @@ function ReturnFromFunction() {
     return;
   }
 
-  if(b.name != 'constructor')
-    GC_FreeHeap(b);
+  //if(b.name != 'constructor')
+    //GC_FreeHeap(b);
 
   if(b.type == EBlock.ACTOR && b.name != 'constructor')
     code += `set rbp ${b.base} \nset rsp ${b.stack} \n`;
@@ -258,27 +258,38 @@ function TranslateFunc(node: T.Expression | T.SpreadElement ) {
       };
 
     func = node.property.loc.identifierName as string;
+  } else {
+    object = 'this';
+    type = 'object';
+
+    if(!node.loc)
+      return {
+        native: 0,
+        index: -2
+      };
+
+    func = node.loc.identifierName as string;
   }
 
   let conFunc: number = -1;
   let native = 1;
   
   if(object == 'this') {
-    if(block == EBlock.ACTOR) {
-      conFunc = nativeFunctions.findIndex(e => e.name == func);
+    //if(block == EBlock.ACTOR) {
+    conFunc = nativeFunctions.findIndex(e => e.name == func);
 
-      if(conFunc == -1) {
-        conFunc = funcs.findIndex(e => e.name == func);
+    if(conFunc == -1) {
+      conFunc = funcs.findIndex(e => e.name == func);
 
-        if(conFunc != -1)
-          native = 2;
-      }
+      if(conFunc != -1)
+        native = 2;
     }
+    //}
   } else {
     native = 0;
     conFunc = funcTranslator.findIndex(
       e => e.type == type 
-      && e.tsObjName == object 
+      && e.tsObjName == object
       && ((e.names && Array.from(e.tsName).includes(func)) || (!e.names && e.tsName == func))
     );
   }
@@ -812,7 +823,7 @@ function Traverse(
                   type: 'error',
                   node: node.type,
                   location: node.loc as T.SourceLocation,
-                  message: `Unknown keyword or variable at function ${f.name}`
+                  message: `Unknown keyword or variable ${a.name} at function ${f.name}`
                 });
                 if(optional)
                   f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
@@ -1392,12 +1403,12 @@ function Traverse(
 
           if(mode == 'assignment') {
             if(!index)
-              code += `set ri stack[rsp] \nadd ri ${pointer} \nsetarray heap[ri] ra \n`;
-            else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${pointer} \nsetarray heap[ri] ra \n`;
+              code += `set ri rsp \nadd ri ${pointer} \nsetarray stack[ri] ra \n`;
+            else code += `set ri rsp \nsub ri ${index} \nadd ri ${pointer} \nsetarray stack[ri] ra \n`;
           } else {
             if(!index)
-              code += `set ri stack[rsp] \nadd ri ${pointer} \nset ra heap[ri] \n`;
-            else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${pointer} \nset ra heap[ri] \n`;
+              code += `set ri rsp \nadd ri ${pointer} \nset ra stack[ri] \n`;
+            else code += `set ri rsp\nsub ri ${index} \nadd ri ${pointer} \nset ra stack[ri] \n`;
           }
         }
       }
@@ -1420,14 +1431,26 @@ function Traverse(
 
           const index = sp - obj.pointer;
 
-          if(mode == 'assignment') {
-            if(!index)
-              code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] ra \n`;
-            else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${i} \nsetarray heap[ri] ra \n`;
+          if(obj.heap) {
+            if(mode == 'assignment') {
+              if(!index)
+                code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] ra \n`;
+              else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${i} \nsetarray heap[ri] ra \n`;
+            } else {
+              if(!index)
+                code += `set ri stack[rsp] \nadd ri ${i} \nset ra heap[ri] \n`;
+              else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${i} \nset ra heap[ri] \n`;
+            }
           } else {
-            if(!index)
-              code += `set ri stack[rsp] \nadd ri ${i} \nset ra heap[ri] \n`;
-            else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${i} \nset ra heap[ri] \n`;
+            if(mode == 'assignment') {
+              //if(!index)
+                //code += `set ri rsp \nadd ri ${i} \nsetarray heap[ri] ra \n`;
+              /*else*/ code += `set ri rsp \nsub ri ${index} \nadd ri ${i}\nsetarray stack[ri] ra \n`;
+            } else {
+              //if(!index)
+                //code += `set ri stack[rsp] \nadd ri ${i} \nset ra heap[ri] \n`;
+              /*else*/ code += `set ri rsp \nsub ri ${index} \nadd ri ${i} \nset ra stack[ri] \n`;
+            }
           }
         } else if(p.type == 'MemberExpression') {
           if(mode == 'assignment')
@@ -1485,8 +1508,9 @@ function Traverse(
             v.name = pName;
             v.size = CalculateObjArraySize(node.properties.length);
             v.object = new Object();
-            code += `state pushr1 \nset r0 ${v.size} \nstate alloc \nset stack[rsp] rb \nstate popr1 \n`;
+            //code += `state pushr1 \nset r0 ${v.size} \nstate alloc \nset stack[rsp] rb \nstate popr1 \n`;
             v.object[pName] = { value: 0, index: 0 };
+            sp += v.size - 1;
             //v2 = v;
           } else {
             /*sp++;
@@ -1506,11 +1530,11 @@ function Traverse(
             v.object[pName] = { value: 0, index: i};
           }
 
-          //code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+          code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
 
           if(p.value.type == 'StringLiteral' || p.value.type == 'NumericLiteral') {
             //v2.init = p.value.value;
-            code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] ${p.value.value} \n`;
+            code += `setarray stack[rsp] ${p.value.value} \n`;//`set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] ${p.value.value} \n`;
             v.object[pName].value = p.value.value;
           }
 
@@ -1523,8 +1547,8 @@ function Traverse(
 
               //v2.init = ra;
               v.object[pName].value = ra;
-              //code += `setarray stack[rsp] ra \n`
-              code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] ra \n`;
+              code += `setarray stack[rsp] ra \n`
+              //code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] ra \n`;
           }
         }
       }
@@ -1557,7 +1581,8 @@ function Traverse(
           type: typeof vType === 'string' ? vType : vType.name,
           init: 0,
           pointer: sp,
-          block: bBlock.length - 1
+          block: bBlock.length - 1,
+          heap: false
         }
 
         vars.push(variable);
@@ -1572,34 +1597,56 @@ function Traverse(
             if(mode != 'constructor') {
               code += `add rsp 1 \nsetarray stack[rsp] ${variable.init} \n`;
             }
-          } if(node.declarations[0].init.type == 'ArrayExpression') {
+          } else if(node.declarations[0].init.type == 'ArrayExpression') {
             const a = node.declarations[0].init;
-            
-            if(a.elements[0]) {
-              if(a.elements[0].type == 'NumericLiteral') {
+
+            if(!a.elements.length) {
                 variable.object_name = '_array';
-                variable.size = CalculateObjArraySize(a.elements[0].value);
-                variable.object = new Array(a.elements[0].value);
+                variable.size = CalculateObjArraySize(typeof vType === 'string' ? 2 : vType.type.size);
+                variable.object = new Array(variable.size);
                 variable.object[0] = 0;
                 variable.init = 0;
+                variable.heap = true;
 
                 code += `state pushr1 \nset r0 ${variable.size} \nstate alloc \nadd rsp1 \nset stack[rsp] rb \nstate popr1 \n`;
+            } else {
+              //if(a.elements[0].type == 'NumericLiteral') {
+              variable.object_name = '_array';
+              variable.size = CalculateObjArraySize(a.elements.length);
+              variable.object = new Array(variable.size);
+              variable.object[0] = a.elements[0].type == 'NumericLiteral' ? a.elements[0].value : 0;
+              variable.init = 0;
+              variable.heap = false;
 
-                for(let i = 1; i < variable.size; i++) {
-                  variable.object[i] = 0;
-                  code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] 0 \n`;
+              sp += variable.size - 1;
 
-                  //code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+              //code += `state pushr1 \nset r0 ${variable.size} \nstate alloc \nadd rsp1 \nset stack[rsp] rb \nstate popr1 \n`;
+
+              let value = 0;
+              if(a.elements[0].type == 'NumericLiteral')
+                value = a.elements[0].value;
+
+              code += `add rsp 1 \nsetarray stack[rsp] ${value} \n`;
+
+              for(let i = 1; i < a.elements.length; i++) {
+                value = 0;
+                if(a.elements[i].type == 'NumericLiteral') {
+                  //@ts-ignore
+                  value = a.elements[i].value;
                 }
+                //code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] 0 \n`;
+
+                code += `add rsp 1 \nsetarray stack[rsp] ${value} \n`;
               }
             }
-          } if (node.declarations[0].init.type == 'NewExpression') {
+          } else if (node.declarations[0].init.type == 'NewExpression') {
             const n = node.declarations[0].init;
 
             if(n.callee.type == 'Identifier') {
               //Special case for array
               if(n.callee.name == 'Array') {
                 const a = n.arguments;
+                variable.heap = true;
 
                 if(a.length == 0) {
                   code += `state pushr1 \nset r0 ${typeof vType === 'string' ? 2 : CalculateObjArraySize(vType.type.size)}\nstate alloc \nstate popr1 \nadd rsp 1 \nsetarray stack[rsp] rb \n`;
@@ -1612,10 +1659,10 @@ function Traverse(
                     variable.init = 0;
                     variable.object_name = '_array';
 
-                    code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+                    code += `setarray heap[stack[rsp]] 0 \n`;
 
                     for(let i = 1; i < variable.size; i++) {
-                      sp++;
+                      /*sp++;
                       vars.push({
                         name: variable.name,
                         global: variable.global,
@@ -1626,9 +1673,10 @@ function Traverse(
                         init: 0,
                         object: variable,
                         object_name: '_array',
-                      });
+                        heap: true
+                      });*/
 
-                      code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
+                      code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] 0 \n`;
                     }
                   }
                 }
@@ -2026,6 +2074,7 @@ function Traverse(
             pointer: sp,
             arg: i,
             init: 0,
+            heap: false
           });
         }
       }

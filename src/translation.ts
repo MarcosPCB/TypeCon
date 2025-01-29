@@ -7,6 +7,7 @@ export interface IFuncTranslation {
     tsName: string | string[];
     conName: string;
     params: TParamType[];
+    state?: boolean;
 }
 
 export const funcTranslator: IFuncTranslation[] = [
@@ -72,7 +73,7 @@ var playerDist 0 2
 //Internal size of the heap pages - for every X entries, 1 page, this way we can optimize the free and allocation systems
 define PAGE_SIZE 8
 
-//this is the heap array, 512 entries because PAGE_SIZE * 64 is 512, 8 is the current number of pages available
+//this is the heap array, 512 entries because PAGE_SIZE * 64 is 512, 64 is the default number of pages available
 array heap 512 0
 
 //This is where we store if a page is free or not.
@@ -371,33 +372,6 @@ defstate _CheckAndFreePage
 
     state popd
     state popb
-    state pop
-ends
-
-defstate _CheckHeapUse
-    state push
-    set _HEAPi 0
-    set _HEAPj 0
-    for _HEAPi range heaptables {
-        ifn lookupHeap[_HEAPi] 0 {
-            set ra _HEAPi
-            state push
-            set ra _HEAPj
-            state push
-
-            set _HEAPk lookupHeap[_HEAPi]
-            and _HEAPk 0xFFFF
-            state pushr1
-            set r0 _HEAPk
-            state _CheckAndFreePage
-            state popr1
-            state pop
-            set _HEAPj ra
-            state pop
-            set _HEAPi ra
-        }
-    }
-
     state pop
 ends
 

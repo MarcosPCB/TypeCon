@@ -109,6 +109,10 @@ class newEnemy extends CActor {
             if(this.IsDead())
                 this.KillIt();
         }
+
+        const mem = [1, 2, 3];
+
+        mem[1] = 4;
     }
 }
 

@@ -62,7 +62,8 @@ export interface IVar {
     object?: any, //If empty but object_name is defined, then it's the start of the object
     static?: true,
     size?: number, //For objects and arrays
-    arg?: number
+    arg?: number,
+    heap: boolean,
 }
 
 export type TVar = {
