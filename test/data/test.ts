@@ -72,8 +72,12 @@ class newEnemy extends CActor {
                 return;
             }
         }
+
+        const mem = [1, 2, 3];
+
+        mem[1] = 4;
         
-        return;
+        return mem;
     }
 
     Walk() {
@@ -109,10 +113,6 @@ class newEnemy extends CActor {
             if(this.IsDead())
                 this.KillIt();
         }
-
-        const mem = [1, 2, 3];
-
-        mem[1] = 4;
     }
 }
 

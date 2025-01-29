@@ -597,9 +597,44 @@ function Traverse(
           return false;
         }
 
-        if(variable.arg !== undefined)
-          code += `set rb r${variable.arg} \n`;
-        else code += `set ri rsp \nsub ri ${sp - variable.pointer} \nset rb stack[ri] \n`;
+        if(variable.object_name !== undefined) {
+          if(variable.object_name == '_array') {
+            if(variable.heap) {
+              if(variable.arg !== undefined)
+                code += `set rb r${variable.arg} \n`;
+              else
+                code += `set ri rsp \nsub ri ${sp - variable.pointer}\nset rb stack[ri] \n`;
+            } else {
+              //Copy the contents of the array to the previous stack
+              //Set rb to the first element of the stack
+              code += `set ri rsp \nsub ri ${sp - variable.pointer}\nset rb stack[ri] \nset rc rbp \nsetarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
+              
+              for(let i = 1; i < variable.size; i++)
+                code += `setarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
+
+              //Set the correct stack for the previous block
+              code += `set rbp rc \n`;
+              bp += variable.size;
+            }
+          } else {
+            if(!variable.heap) {
+              //Copy the contents of the object to the previous stack
+              //Set rb to the first element of the stack
+              code += `set ri rsp \nsub ri ${sp - variable.pointer}\nset rb stack[ri] \nset rc rbp \nsetarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
+              
+              for(let i = 1; i < variable.size; i++)
+                code += `setarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
+
+              //Set the correct stack for the previous block
+              code += `set rbp rc \n`;
+              bp += variable.size;
+            }
+          }
+        } else {
+          if(variable.arg !== undefined)
+            code += `set rb r${variable.arg} \n`;
+          else code += `set ri rsp \nsub ri ${sp - variable.pointer} \nset rb stack[ri] \n`;
+        }
       } else {
         if(!Traverse(a, mode))
           return false;
@@ -1527,7 +1562,7 @@ function Traverse(
             }
 
             vars.push(v2);*/
-            v.object[pName] = { value: 0, index: i};
+            v.object[pName] = { value: 0, index: i };
           }
 
           code += `add rsp 1 \nsetarray stack[rsp] 0 \n`;
