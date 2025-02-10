@@ -57,6 +57,7 @@ var ri 0 0
     1 - heap address return
     2 - stack array return
     4 - stack object return
+    8 - NULL return
 */
 var rf 0 0
 
@@ -76,6 +77,7 @@ var playerDist 0 2
     Every time an user request an X amount of memory (arrays or objects), its value must fit inside a PAGE,
     if it's bigger than a PAGE, than allocate as many PAGES as necessary.
     The system is limited to allocating 4 GBs of memory.
+    OBS: the first page must remain free (so NULL address can work properly)
 */
 
 //Internal size of the heap pages - for every X entries, 1 page, this way we can optimize the free and allocation systems
@@ -85,16 +87,16 @@ define PAGE_SIZE 8
 array heap 512 0
 
 //This is where we store if a page is free or not.
-array alloctable 64 0
+array allocTable 64 0
 
 //Holds the starting addresses of the a allocated pages.
 array lookupHeap 64 0
 
-//The current heap memory size
-var heapsize 512 0 //8 * PAGE_SIZE
-
 //The current number of pages available
 var heaptables 64 0
+
+//The current heap memory size
+var heapsize 512 0 //heaptables * PAGE_SIZE
 
 //For pushing the r0-12 registers
 array rstack 16 0
@@ -226,11 +228,11 @@ defstate popd
 ends
 
 defstate _GetFreePages
-    set _HEAPi 0
+    set _HEAPi 1
     set _HEAPj 0
     set _HEAP_pointer -1
-    for _HEAPi range heapsize {
-        ife lookupHeap[_HEAPi] 0 {
+    for _HEAPi range heaptables {
+        ife allocTable[_HEAPi] 0 {
             add _HEAPj 1
             ife _HEAPj _HEAP_request {
                 set _HEAP_pointer _HEAPi
@@ -249,6 +251,7 @@ defstate _GetFreePages
         add heapsize _HEAPi
         resizearray heap heapsize
         resizearray lookupHeap heaptables
+        resizearray allocTables heaptables
     }
 ends
 
@@ -264,14 +267,34 @@ defstate alloc
     set _HEAPj _HEAPi
     add _HEAP_request _HEAPi
     for _HEAPi range _HEAP_request {
-        set _HEAPk _HEAPj
-        add _HEAPk _HEAP_request
-        shiftl _HEAPk 16
-        or _HEAPk _HEAPi
-        setarray lookupHeap[_HEAPi] _HEAPk
+        //set _HEAPk _HEAPj
+        //add _HEAPk _HEAP_request
+        //shiftl _HEAPk 16
+        //or _HEAPk _HEAPi
+        //mul _HEAPk PAGE_SIZE
+        setarray lookupHeap[_HEAPi] _HEAPj
+
+        setarray allocTable[_HEAPi] 1
     }
 
     set rb _HEAP_pointer
+ends
+
+defstate free
+    set _HEAP_pointer r0
+    set _HEAPj _HEAP_pointer
+    div _HEAPj PAGE_SIZE
+    set _HEAPi _HEAPj
+    //set _HEAPk lo[_HEAPi]
+    //set _HEAPi _HEAPk
+    //and _HEAPi 0xFFFF
+    //shiftr _HEAPk 16
+    for _HEAPi range heaptables {
+        ife lookupHeap[_HEAPi] _HEAPj {
+            setarray lookupHeap[_HEAPi] 0
+            setarray allocTable[_HEAPi] 0
+        }
+    }
 ends
 
 defstate realloc
@@ -287,40 +310,34 @@ defstate realloc
     add _HEAP_request _HEAPi
     for _HEAPi range _HEAP_request {
         set _HEAPk _HEAPj
-        add _HEAPk _HEAP_request
-        shiftl _HEAPk 16
-        or _HEAPk _HEAPi
+        //add _HEAPk _HEAP_request
+        //shiftl _HEAPk 16
+        //or _HEAPk _HEAPi
+        mul _HEAPk PAGE_SIZE
         setarray lookupHeap[_HEAPi] _HEAPk
+
+        setarray allocTable[_HEAPi] 1
     }
 
     set rb _HEAP_pointer
 
     set _HEAP_pointer r1
-    set _HEAPj _HEAP_pointer
-    div _HEAPj PAGE_SIZE
-    set _HEAPi _HEAPj
-    set _HEAPk lookupHeap[_HEAPi]
-    set _HEAPi _HEAPk
-    and _HEAPi 0xFFFF
-    shiftr _HEAPk 16
-    mul _HEAPi PAGE_SIZE
-    mul _HEAPk PAGE_SIZE
-    sub _HEAPk _HEAPi
-    copy heap[_HEAPi] heap[rb] _HEAPk
-ends
+    set _HEAPi _HEAP_pointer
+    //div _HEAPj PAGE_SIZE
+    //set _HEAPi _HEAPj
+    set _HEAPj _HEAP_request
+    mul _HEAPj PAGE_SIZE
+    sub _HEAPj _HEAPi
+    //set _HEAPk lookupHeap[_HEAPi]
+    //set _HEAPi _HEAPk
+    //and _HEAPi 0xFFFF
+    //shiftr _HEAPk 16
+    //mul _HEAPi PAGE_SIZE
+    //mul _HEAPk PAGE_SIZE
+    //sub _HEAPk _HEAPi
+    copy heap[_HEAPi] heap[rb] _HEAPj
 
-defstate free
-    set _HEAP_pointer r0
-    set _HEAPj _HEAP_pointer
-    div _HEAPj PAGE_SIZE
-    set _HEAPi _HEAPj
-    set _HEAPk lookupHeap[_HEAPi]
-    set _HEAPi _HEAPk
-    and _HEAPi 0xFFFF
-    shiftr _HEAPk 16
-    for _HEAPi range _HEAPk {
-        setarray lookupHeap[_HEAPi] 0
-    }
+    state free
 ends
 
 defstate _CheckAndFreePage

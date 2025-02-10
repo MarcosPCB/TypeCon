@@ -53,10 +53,9 @@ export interface CON_NATIVE_FUNCTION {
     name: string,
     code: string | ((args?: boolean, fn?: string) => string),
     returns: boolean,
-    return_type: 'variable' | 'string' | 'pointer' | 'array' | 'object' | 'heap' | null | ('variable' | 'string' | 'pointer' | 'array' | 'object' | 'heap' | null)[],
-    returnable?: any | any[],
-    return_size?: number[],
-    return_num?: number,
+    return_type: 'variable' | 'string' | 'pointer' | 'array' | 'object' | 'heap' | null,
+    returnable?: any,
+    return_size?: number,
     arguments: CON_NATIVE_FLAGS[],
     arguments_default?: any[]
 }
@@ -353,7 +352,7 @@ state popd
         returns: false,
         return_type: null,
         arguments: [
-            CON_NATIVE_FLAGS.CONSTANT | CON_NATIVE_FLAGS.LABEL,
+            CON_NATIVE_FLAGS.CONSTANT,
             CON_NATIVE_FLAGS.CONSTANT
         ],
     },

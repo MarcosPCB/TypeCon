@@ -35,7 +35,7 @@ var rb: any = 0;
 var rc: any = null;
 var rf: any = 0;
 
-var return_object: any = null;
+var structs: any = []; //Array of objects, holds the different types of objects defined throughout the code
 
 var reserved_extra_space = 30;
 var minimum_array_size = 8; //For undefined sizes only
@@ -602,24 +602,20 @@ function Traverse(
 
         const f = funcs.at(-1) as CON_NATIVE_FUNCTION;
 
-        if(f.return_num == 1 && !Array.isArray(f.return_type)) {
-          const rt = f.return_type;
-          f.return_type = [rt];
-          f.returnable = [f.returnable];
-          f.return_size = [];
-        }
-
-        f.return_num++;
-
-        if(!Array.isArray(f.return_type)) {
-          f.return_type = [];
-          f.returnable = [];
-          f.return_size = [];
-        }
-
         if(variable.object_name !== undefined) {
           if(variable.object_name == '_array') {
             if(variable.heap) {
+
+              if(f.return_type != 'heap' && f.return_type != null) {
+                errors.push({
+                  type: 'error',
+                  node: node.type,
+                  location: node.loc as T.SourceLocation,
+                  message: `Multiple return types are not allowed. Only null, undefined and regular type. Current return is ${f.return_type}`
+                });
+                return false;
+              }
+
               if(variable.arg !== undefined)
                 code += `set rb r${variable.arg} \n`;
               else
@@ -627,10 +623,20 @@ function Traverse(
 
               code += `set rf 1 \n`;
               
-              f.return_type.push('heap');
-              f.returnable.push(variable.object);
-              f.return_size.push(variable.size);
+              f.return_type = 'heap';
+              f.returnable = variable.object;
+              f.return_size = variable.size;
             } else {
+              if(f.return_type != 'array' && f.return_type != null) {
+                errors.push({
+                  type: 'error',
+                  node: node.type,
+                  location: node.loc as T.SourceLocation,
+                  message: `Multiple return types are not allowed. Only null, undefined and regular type. Current return is ${f.return_type}`
+                });
+                return false;
+              }
+
               //Copy the contents of the array to the previous stack
               //Set rb to the first element of the stack
               code += `set ri rsp \nsub ri ${sp - variable.pointer}\nset rb ${variable.size} \nset rc rbp \nsetarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
@@ -642,12 +648,21 @@ function Traverse(
               code += `set rbp rc \n`;
               code += `set rf 2 \n`;
 
-              f.return_type.push('array');
-              f.returnable.push(variable.object);
-              f.return_size.push(variable.size);
+              f.return_type = 'array';
+              f.returnable = variable.object;
+              f.return_size = variable.size;
             }
           } else {
             if(!variable.heap) {
+              if(f.return_type != 'object' && f.return_type != null) {
+                errors.push({
+                  type: 'error',
+                  node: node.type,
+                  location: node.loc as T.SourceLocation,
+                  message: `Multiple return types are not allowed. Only null, undefined and regular type. Current return is ${f.return_type}`
+                });
+                return false;
+              }
               //Copy the contents of the object to the previous stack
               //Set rb to the first element of the stack
               code += `set ri rsp \nsub ri ${sp - variable.pointer}\nset rb ${variable.size}  \nset rc rbp \nsetarray stack[rc] stack[ri] \nadd ri 1 \nadd rc 1 \n`;
@@ -659,9 +674,29 @@ function Traverse(
               code += `set rbp rc \n`;
               code += `set rf 4 \n`;
 
-              f.return_type.push('object');
-              f.returnable.push(variable.object);
-              f.return_size.push(variable.size);
+              f.return_type = 'object';
+              f.returnable = variable.object;
+              f.return_size = variable.size;
+            } else {
+              if(f.return_type != 'heap' && f.return_type != null) {
+                errors.push({
+                  type: 'error',
+                  node: node.type,
+                  location: node.loc as T.SourceLocation,
+                  message: `Multiple return types are not allowed. Only null, undefined and regular type. Current return is ${f.return_type}`
+                });
+                return false;
+              }
+              if(variable.arg !== undefined)
+                code += `set rb r${variable.arg} \n`;
+              else
+                code += `set ri rsp \nsub ri ${sp - variable.pointer} \nset rb stack[ri] \n`;
+
+              code += `set rf 1 \n`;
+              
+              f.return_type = 'heap';
+              f.returnable = variable.object;
+              f.return_size = variable.size;
             }
           }
         } else {
@@ -677,7 +712,7 @@ function Traverse(
           code += `set rb ra \n`;
       }
 
-    }
+    } else code += `set rb 0 \nset rf 8 \n`;
 
     ReturnFromFunction();
 
@@ -852,7 +887,7 @@ function Traverse(
             }
 
             if(f.arguments[i] == CON_NATIVE_FLAGS.CONSTANT) {
-              params += `${Math.trunc(a.value)}`;
+              params += `${Math.trunc(a.value)} `;
               if(optional)
                 f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
               continue;
@@ -1261,7 +1296,7 @@ function Traverse(
   if(node.type == 'MemberExpression') {
     const o = node.object;
     const p = node.property;
-    let object: any = null;
+    let object: IVar | typeof EMoveFlags | null = null;
 
     if(o.type == 'Identifier') {
       switch(o.name) {
@@ -1579,7 +1614,9 @@ function Traverse(
             v.object = new Object();
             //code += `state pushr1 \nset r0 ${v.size} \nstate alloc \nset stack[rsp] rb \nstate popr1 \n`;
             v.object[pName] = { value: 0, index: 0 };
-            sp += v.size - 1;
+            structs.push(v.object);
+            sp += v.size + 1;
+            code += `add rsp 1 \nset ri rsp \nadd ri 1 \nsetarray stack[rsp] ri`;
             //v2 = v;
           } else {
             /*sp++;
@@ -1681,13 +1718,13 @@ function Traverse(
             } else {
               //if(a.elements[0].type == 'NumericLiteral') {
               variable.object_name = '_array';
-              variable.size = CalculateObjArraySize(a.elements.length);
+              variable.size = CalculateObjArraySize(a.elements.length) + 1;
               variable.object = new Array(variable.size);
               variable.object[0] = a.elements[0].type == 'NumericLiteral' ? a.elements[0].value : 0;
               variable.init = 0;
               variable.heap = false;
 
-              sp += variable.size - 1;
+              sp += variable.size;
 
               //code += `state pushr1 \nset r0 ${variable.size} \nstate alloc \nadd rsp1 \nset stack[rsp] rb \nstate popr1 \n`;
 
@@ -1695,7 +1732,7 @@ function Traverse(
               if(a.elements[0].type == 'NumericLiteral')
                 value = a.elements[0].value;
 
-              code += `add rsp 1 \nsetarray stack[rsp] ${value} \n`;
+              code += `set ri rsp \nadd rsp 1 \nsetarray stack[ri] rsp \nsetarray stack[rsp] ${value} \n`;
 
               for(let i = 1; i < a.elements.length; i++) {
                 value = 0;
@@ -1760,13 +1797,24 @@ function Traverse(
               return false;
             }
 
+            let returnedBuffer = false;
+
             if(node.declarations[0].init.type == 'CallExpression') {
               code += `set ra rb \n`;
 
               //In case of a stack array/object return, the array has already been copied to the stack
               //rb will hold the size of the buffer
 
-              const f = funcs.find(e => e.name == ((node.declarations[0].init as T.CallExpression).callee as T.Identifier).name);
+              const init = node.declarations[0].init as T.CallExpression;
+              let fName = '';
+
+              if(init.callee.type == 'Identifier')
+                fName = init.callee.name;
+
+              if(init.callee.type == 'MemberExpression')
+                fName = (init.callee.property as T.Identifier).name;
+
+              const f = funcs.find(e => e.name == fName);
 
               if(!f) {
                 errors.push({
@@ -1778,58 +1826,34 @@ function Traverse(
                 return false;
               }
 
-              if(f.return_num == 1) {
-                switch(f.return_type[0]) {
-                  case 'heap':
-                    variable.heap = true;
-                    break;
+              switch(f.return_type) {
+                case 'heap':
+                  variable.heap = true;
+                  break;
 
-                  case 'array':
-                    variable.object_name = '_array';
-                    code += `sub rsp 1 \n`
-                    sp = f.return_size[0] - 1;
-                    break;
+                case 'array':
+                  variable.object_name = '_array';
+                  sp = f.return_size;
+                  code += `ifand rf 2 { \nset ri rsp \nsub ri rb \nset rd ri \nadd rd 1 \nsetarray stack[ri] rd \n} \n`;
+                  returnedBuffer = true;
+                  break;
 
-                  case 'object':
-                    variable.object_name = variable.name;
-                    code += `sub rsp 1 \n`
-                    sp = f.return_size[0] - 1;
-                    break;
-                }
-
-                variable.object = f.returnable[0];
-                variable.size = f.return_size[0];
-              } else {
-                let possible_sp = 0;
-                for(let i = 0; i < f.return_num; i++) {
-                  switch(f.return_type[i]) {
-                    case 'heap':
-                      variable.heap = true;
-                      break;
-  
-                    case 'array':
-                      variable.object_name = '_array';
-                      code += `sub rsp 1 \n`
-                      possible_sp = f.return_size[i] - 1;
-                      break;
-  
-                    case 'object':
-                      variable.object_name = variable.name;
-                      code += `sub rsp 1 \n`
-                      possible_sp = f.return_size[i] - 1;
-                      break;
-                  }
-                }
-                code += `ifand rf 2 { \n`;
-                code += ` \n`;
-                code += `} \n`;
+                case 'object':
+                  variable.object_name = variable.name;
+                  sp = f.return_size;
+                  code += `ifand rf 4 { \nset ri rsp \nsub ri rb \nset rd ri \nadd rd 1 \nsetarray stack[ri] rd \n} \n`;
+                  returnedBuffer = true;
+                  break;
               }
+
+              variable.object = f.returnable;
+              variable.size = f.return_size + 1;
             }
 
             if(node.declarations[0].init.type != 'ObjectExpression')
               variable.init = ra;
 
-            if(mode != 'retrieval' && traverseMode != 'retrieval' && node.declarations[0].init.type != 'ObjectExpression')
+            if(mode != 'retrieval' && traverseMode != 'retrieval' && node.declarations[0].init.type != 'ObjectExpression' && !returnedBuffer)
               code += `setarray stack[rsp] ra \n`;
           }
         }
@@ -1840,6 +1864,7 @@ function Traverse(
   }
 
   if(node.type == 'SwitchStatement') {
+    code += Line(node.loc as T.SourceLocation)
     if(mode == 'constructor') {
       errors.push({
         type: 'error',
@@ -1895,6 +1920,7 @@ function Traverse(
   }
 
   if(node.type == 'IfStatement') {
+    code += Line(node.loc as T.SourceLocation)
     if(mode == 'constructor') {
       errors.push({
         type: 'error',
@@ -1905,7 +1931,55 @@ function Traverse(
       return false;
     }
 
-    if(!Traverse(node.test, 'conditional'))
+    if(node.test.type == 'UnaryExpression') {
+      if(node.test.argument.type == 'Identifier') {
+        const variable = GetVar(node.test.argument.name);
+
+        if(!variable) {
+          errors.push({
+            type: 'error',
+            node: node.type,
+            location: node.loc as T.SourceLocation,
+            message: `Unknown or not yet declared variable ${node.test.argument.name}`
+          });
+          return false;
+        }
+
+        code += `set ri rsp \nsub rsp ${sp - variable.pointer} \nset rb stack[ri] \n`;
+      } else {
+        if(!Traverse(node.test.argument, 'conditional'))
+          return false;
+
+        if(node.test.argument.type != 'CallExpression')
+          code += `set rb ra \n`;
+      }
+
+      code += `set ra 0 \n`;
+
+      switch(node.test.operator) {
+        case '!':
+          code += `ifl rb 1 \n set ra 1 \n`;
+          break;
+      }
+
+    }
+
+    if(node.test.type == 'Identifier') {
+      const variable = GetVar(node.test.name);
+
+        if(!variable) {
+          errors.push({
+            type: 'error',
+            node: node.type,
+            location: node.loc as T.SourceLocation,
+            message: `Unknown or not yet declared variable ${node.test.name}`
+          });
+          return false;
+        }
+
+        code += `set ri rsp \nsub rsp ${sp - variable.pointer} \nset rb stack[ri] \n`;
+        code += `set ra 0 \nifg rb 0 \n set ra 1 \n`;
+    } else if(!Traverse(node.test, 'conditional'))
       return false;
 
     if(node.test.type == 'CallExpression')

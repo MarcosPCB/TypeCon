@@ -72,12 +72,8 @@ class newEnemy extends CActor {
                 return;
             }
         }
-
-        const mem = [1, 2, 3];
-
-        mem[1] = 4;
         
-        return mem;
+        return;
     }
 
     Walk() {
@@ -99,7 +95,7 @@ class newEnemy extends CActor {
 
         switch(this.curAI) {
             case Label('idle_ai'):
-                const mim = this.Idle();
+                this.Idle();
                 break;
 
             case Label('walk_ai'):
@@ -109,6 +105,8 @@ class newEnemy extends CActor {
 
         if(this.HitByWeapon()) {
             this.Spawn(1620);
+
+            this.Guts(2286, 2);
 
             if(this.IsDead())
                 this.KillIt();

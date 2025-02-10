@@ -59,11 +59,13 @@ export interface IVar {
     init: any,
     pointer: number,
     object_name?: string, //If object_name is _array, then it's an array
-    object?: any, //If empty but object_name is defined, then it's the start of the object
+    object?: any, //If empty but object_name is defined, then it's the start of the object,
+                  //otherwise it's an array of objects, holding all the possibilities
     static?: true,
     size?: number, //For objects and arrays
     arg?: number,
     heap: boolean,
+    returned?: boolean //So the transpiler knows that the variable is a return value - works best with objects and arrays
 }
 
 export type TVar = {
