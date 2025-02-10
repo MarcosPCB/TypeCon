@@ -954,6 +954,17 @@ function Traverse(
           }
 
           if(a.type == 'BinaryExpression' || a.type == 'MemberExpression') {
+            if(a.type == 'MemberExpression' && (a.object.type == 'Identifier' && a.object.name == 'Names')) {
+
+              if(f.arguments[i] == CON_NATIVE_FLAGS.VARIABLE)
+                code += `set r${i} ${Names[(a.property as T.Identifier).name]} \n`;
+              else params += `${Names[(a.property as T.Identifier).name]} `;
+
+              if(optional)
+                f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
+
+              continue;
+            }
 
             if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
               errors.push({
@@ -968,8 +979,7 @@ function Traverse(
             }
 
             if(f.arguments[i] == CON_NATIVE_FLAGS.CONSTANT
-              && !(a.type == 'MemberExpression' && (a.object as T.Identifier).name == 'EMoveFlags'))
-
+              && !(a.type == 'MemberExpression' && (a.object as T.Identifier).name == 'EMoveFlags')) {
               if(a.type == 'MemberExpression' && (a.object.type == 'Identifier' && a.object.name == 'Names')) {
                 params += `${Names[(a.property as T.Identifier).name]} `;
 
@@ -985,6 +995,7 @@ function Traverse(
                 location: node.loc as T.SourceLocation,
                 message: `Detected an expression or a variable instead of a constant value at ${f.name}. Result of resolved expression or initilization value will be used`
               });
+            }
 
             if(!Traverse(a, f.arguments[i] == CON_NATIVE_FLAGS.VARIABLE ? 'function_params' : 'retrieval',
               f.arguments[i] == CON_NATIVE_FLAGS.VARIABLE ? i : undefined)) {

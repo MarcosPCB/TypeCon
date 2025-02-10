@@ -313,7 +313,7 @@ state popd
         returns: true,
         return_type: 'variable',
         arguments: [
-            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.ACTOR,
+            CON_NATIVE_FLAGS.VARIABLE,
             CON_NATIVE_FLAGS.FUNCTION | CON_NATIVE_FLAGS.OPTIONAL,
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
         ],
@@ -327,7 +327,7 @@ state popd
         returns: true,
         return_type: 'variable',
         arguments: [
-            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.PROJECTILE,
+            CON_NATIVE_FLAGS.VARIABLE,
             CON_NATIVE_FLAGS.FUNCTION | CON_NATIVE_FLAGS.OPTIONAL,
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
         ],

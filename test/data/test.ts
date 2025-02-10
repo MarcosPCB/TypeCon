@@ -60,7 +60,7 @@ class newEnemy extends CActor {
             if(this.CanShootTarget()) {
                 if(this.playerDist < 4096) {
                     if(this.Count() >= 16) {
-                        this.Shoot(1625);
+                        this.Shoot(Names.FIRELASER);
                         this.Count(0);
                     }
                 } else {
@@ -104,7 +104,7 @@ class newEnemy extends CActor {
         }
 
         if(this.HitByWeapon()) {
-            this.Spawn(1620);
+            this.Spawn(Names.BLOOD);
 
             this.Guts(Names.JIBS6, 2);
 

@@ -3,6 +3,8 @@ import { CON_NATIVE, CON_NATIVE_POINTER } from "./native";
 declare global {
     export enum Names {
         APLAYER = 1405,
+        BLOOD = 1620,
+        FIRELASER = 1625,
         JIBS6 = 2286
     }
 
