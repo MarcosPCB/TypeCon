@@ -114,6 +114,16 @@ class newEnemy extends CActor {
     }
 }
 
+class displyRest extends CEvent {
+    constructor() {
+        super('DisplayRest');
+    }
+
+    public Append(): void {
+        this.RotateSprite(160, 100, 0, 65536, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+}
+
 declare global {
     export const NewEnemy: newEnemy;
 }

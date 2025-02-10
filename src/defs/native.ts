@@ -377,6 +377,26 @@ state popd
         arguments: [
             CON_NATIVE_FLAGS.VARIABLE
         ]
+    },
+    {
+        name: 'RotateSprite',
+        code: `rotatesprite `,
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+        ]
     }
 ]
 
@@ -532,5 +552,4 @@ export type pointer = void;
 export function Label<pointer>(name: string): pointer {
     return name as pointer;
 }
-
 

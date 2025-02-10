@@ -8,6 +8,34 @@ declare global {
         JIBS6 = 2286
     }
 
+    export type vec2 = {
+        x: number,
+        y: number
+    }
+
+    export type vec3 = {
+        x: number,
+        y: number,
+        z: number,
+    }
+
+    export type pos2 = {
+        xy: vec2,
+        scale: number,
+        ang: number
+    }
+
+    export type pos3 = {
+        xyz: vec3,
+        ang: number
+    }
+
+    export type style = {
+        shade: number,
+        pal: number,
+        orientation: number
+    }
+
     export type TLabel = string; //Use this to define constants and pointers
 
     export interface pointer {}
@@ -76,21 +104,6 @@ declare global {
         move: TLabel,
         flags: EMoveFlags
     }
-
-    interface IEvent {
-        value?: number | number[],
-        Append(): number | number[] | void,
-        Prepend(): number | number[] | void,
-    }
-    /*
-    export class CEventEgs implements IEvent {
-        public value: number;
-
-        constructor(value: number) {
-            this.value = value;
-        }
-    }
-    */
 
     export function Delete(buffer: any): void;
     export function Free(buffer: any): void;
@@ -188,4 +201,22 @@ declare global {
     }
 
     export const sprites: CActor[];
+
+    export type TEventType = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd' | 'Game' | 'Egs';
+
+    export class CEvent {
+        protected argument?: number | number[];
+        public event: TEventType;
+
+        constructor(
+            event: TEventType
+        )
+
+        protected RotateSprite(x: number, y: number, ang: number, scale: number, picnum: number, shade: number, pal: number, orientation: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
+        protected DrawSprite(pos: vec2, ang: number, scale: number, picnum: number, style: style, x0y0: vec2, x1y1: vec2): CON_NATIVE<void>;
+        protected ScreenSound(sound: number): CON_NATIVE<void>;
+
+        public Append(): void;
+        public Prepend(): number | number[];
+    }
 }

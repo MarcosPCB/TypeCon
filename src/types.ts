@@ -91,7 +91,7 @@ export interface IActor {
     export_name: string
 }
 
-export type TClassType = 'CActor' | 'IEvent';
+export type TClassType = 'CActor' | 'CEvent';
 
 export interface ILabel {
     label: string,
@@ -104,3 +104,11 @@ export enum Names {
     FIRELASER = 1625,
     JIBS6 = 2286
 }
+
+export const EventList = [
+    'DisplayRest',
+    'DisplayStart',
+    'DisplayEnd',
+    'Game',
+    'Egs'
+];

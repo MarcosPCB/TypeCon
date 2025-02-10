@@ -1,5 +1,5 @@
 import * as T from '@babel/types';
-import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IType, IVar, TClassType, TVar, Names } from './types';
+import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IType, IVar, TClassType, TVar, Names, EventList } from './types';
 import { escape } from 'querystring';
 import { funcTranslator, IFuncTranslation, initCode, initStates } from './translation';
 import './defs/types';
@@ -23,6 +23,7 @@ var curActor: IActor = {
   extra: 0,
   export_name: ''
 }
+var curEvent: string = '';
 
 var funcs: CON_NATIVE_FUNCTION[] = [];
 var types: IType[] = [];
@@ -171,6 +172,10 @@ function StartBlock(name: string, type: TClassType, loc: T.SourceLocation): numb
       actors.push(actor);
       curActor = actor;
       block = EBlock.ACTOR;
+      break;
+
+    case 'CEvent':
+      block = EBlock.EVENT;
       break;
 
     default:
@@ -1942,7 +1947,7 @@ function Traverse(
   }
 
   if(node.type == 'IfStatement') {
-    code += Line(node.loc as T.SourceLocation)
+    code += Line(node.loc as T.SourceLocation);
     if(mode == 'constructor') {
       errors.push({
         type: 'error',
@@ -2160,10 +2165,61 @@ function Traverse(
         return false;
       }
 
+      if(block == EBlock.EVENT) {
+        const body = node.body.body[0];
+
+        if(body.type == 'ExpressionStatement') {
+          if(body.expression.type != 'CallExpression' || (body.expression as T.CallExpression).callee.type != 'Super') {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: 'Event constructor must ONLY contain the super call'
+            });
+            return false;
+          }
+
+          const arg = body.expression.arguments[0];
+
+          if(arg.type != 'StringLiteral') {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: 'Event constructor super call only supports strings as their argument'
+            });
+            return false;
+          }
+
+          let found = false;
+          for(let i = 0; i < EventList.length; i++) {
+            if(EventList[i] == arg.value) {
+              found = true;
+              break;
+            }
+          }
+
+          if(!found) {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: 'Event does not exist or is not supported yet'
+            });
+            return false;
+          }
+
+          curEvent = arg.value;
+          state = EState.BODY;
+
+          return true;
+        }
+      }
+
       state = EState.INIT;
       bBlock.push({
         name: 'constructor',
-        type: EBlock.ACTOR,
+        type: block,
         state: EState.BODY,
         stack: sp,
         base: bp,
