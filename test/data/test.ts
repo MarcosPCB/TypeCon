@@ -106,7 +106,7 @@ class newEnemy extends CActor {
         if(this.HitByWeapon()) {
             this.Spawn(1620);
 
-            this.Guts(2286, 2);
+            this.Guts(Names.JIBS6, 2);
 
             if(this.IsDead())
                 this.KillIt();

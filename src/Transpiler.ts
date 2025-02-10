@@ -1,5 +1,5 @@
 import * as T from '@babel/types';
-import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IType, IVar, TClassType, TVar } from './types';
+import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IType, IVar, TClassType, TVar, Names } from './types';
 import { escape } from 'querystring';
 import { funcTranslator, IFuncTranslation, initCode, initStates } from './translation';
 import './defs/types';
@@ -954,6 +954,7 @@ function Traverse(
           }
 
           if(a.type == 'BinaryExpression' || a.type == 'MemberExpression') {
+
             if(f.arguments[i] == CON_NATIVE_FLAGS.LABEL) {
               errors.push({
                 type: 'error',
@@ -968,6 +969,16 @@ function Traverse(
 
             if(f.arguments[i] == CON_NATIVE_FLAGS.CONSTANT
               && !(a.type == 'MemberExpression' && (a.object as T.Identifier).name == 'EMoveFlags'))
+
+              if(a.type == 'MemberExpression' && (a.object.type == 'Identifier' && a.object.name == 'Names')) {
+                params += `${Names[(a.property as T.Identifier).name]} `;
+
+                if(optional)
+                  f.arguments[i] |= CON_NATIVE_FLAGS.OPTIONAL;
+
+                continue;
+              }
+
               errors.push({
                 type: 'warning',
                 node: node.type,

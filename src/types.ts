@@ -97,3 +97,8 @@ export interface ILabel {
     label: string,
     pointer: any
 }
+
+export enum Names {
+    APLAYER = 1405,
+    JIBS6 = 2286
+}

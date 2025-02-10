@@ -1,5 +1,11 @@
 import { CON_NATIVE, CON_NATIVE_POINTER } from "./native";
+
 declare global {
+    export enum Names {
+        APLAYER = 1405,
+        JIBS6 = 2286
+    }
+
     export type TLabel = string; //Use this to define constants and pointers
 
     export interface pointer {}
