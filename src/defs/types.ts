@@ -197,26 +197,36 @@ declare global {
         protected LockPlayer(time: number): CON_NATIVE<void>
         protected ResetPlayer(flags: number): CON_NATIVE<void>
 
-        protected Main(): void
+        protected Main(): void;
+
+        protected Events: TEventList<TEventPAE>;
     }
 
     export const sprites: CActor[];
 
-    export type TEventType = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd' | 'Game' | 'Egs';
+    export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound';
+    export type TEventDE = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd';
+    export type TEvents = TEventPAE | TEventDE;
+
+    export type TEventList<List extends keyof (TEventPAE & TEventDE)> = {
+        [key in List]: {
+            Append: EventFunction<CEvent & CActor>,
+            Prepend: EventFunction<CEvent & CActor>
+        }
+    }
+
+    export type EventFunction<T> = (this: T) => void | number;
 
     export class CEvent {
         protected argument?: number | number[];
-        public event: TEventType;
 
-        constructor(
-            event: TEventType
-        )
+        constructor(event: TEvents)
 
-        protected RotateSprite(x: number, y: number, ang: number, scale: number, picnum: number, shade: number, pal: number, orientation: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
-        protected DrawSprite(pos: vec2, ang: number, scale: number, picnum: number, style: style, x0y0: vec2, x1y1: vec2): CON_NATIVE<void>;
-        protected ScreenSound(sound: number): CON_NATIVE<void>;
+        public RotateSprite(x: number, y: number, ang: number, scale: number, picnum: number, shade: number, pal: number, orientation: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
+        public DrawSprite(pos: vec2, ang: number, scale: number, picnum: number, style: style, x0y0: vec2, x1y1: vec2): CON_NATIVE<void>;
+        public ScreenSound(sound: number): CON_NATIVE<void>;
 
-        public Append(): void;
-        public Prepend(): number | number[];
+        protected Append(): void | number;
+        protected Prepend(): void | number;
     }
 }

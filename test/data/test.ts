@@ -53,6 +53,10 @@ class newEnemy extends CActor {
         }
 
         super(1685, true, 100, [AIdle, AWalk], AIdle, [MStop, MWalk], [AIIdle, AIWalk]);
+
+        this.Events.EGS.Append = function() {
+            console.log(1);
+        }
     }
 
     Idle() {
@@ -114,7 +118,7 @@ class newEnemy extends CActor {
     }
 }
 
-class displyRest extends CEvent {
+class displayRest extends CEvent {
     constructor() {
         super('DisplayRest');
     }

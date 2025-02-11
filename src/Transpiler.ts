@@ -23,7 +23,7 @@ var curActor: IActor = {
   extra: 0,
   export_name: ''
 }
-var curEvent: string = '';
+var curEvent: string | null = null;
 
 var funcs: CON_NATIVE_FUNCTION[] = [];
 var types: IType[] = [];
@@ -200,7 +200,7 @@ function ReturnFromFunction() {
   //if(b.name != 'constructor')
     //GC_FreeHeap(b);
 
-  if(b.type == EBlock.ACTOR && b.name != 'constructor')
+  if((b.type == EBlock.ACTOR || b.type == EBlock.EVENT) && b.name != 'constructor')
     code += `set rbp ${b.base} \nset rsp ${b.stack} \n`;
   else if(b.type == EBlock.FUNCTION && b.name != 'constructor')
     code += `set rsp rbp \nstate pop \nset rbp ra \n`;
@@ -2154,6 +2154,7 @@ function Traverse(
   }
 
   if(node.type == 'ClassMethod') {
+    code += '\n' + Line(node.key.loc as T.SourceLocation);
     if(node.key.loc?.identifierName == 'constructor') {
       if(node.body.type != 'BlockStatement') {
         errors.push({
@@ -2215,6 +2216,8 @@ function Traverse(
           return true;
         }
       }
+
+      curEvent = null;
 
       state = EState.INIT;
       bBlock.push({
@@ -2281,6 +2284,45 @@ function Traverse(
       return true;
     }
 
+    if(curEvent != null) {
+      if((node.key as T.Identifier).name == 'Append' || (node.key as T.Identifier).name == 'Prepend') {
+        if(node.body.type != 'BlockStatement') {
+          errors.push({
+            type: 'error',
+            node: node.type,
+            location: node.loc as T.SourceLocation,
+            message: 'Missing Event Append or Prepend function body'
+          });
+          return false;
+        }
+  
+        bBlock.push({
+          type: EBlock.EVENT,
+          state: EState.BODY,
+          name: (node.key as T.Identifier).name,
+          stack: sp,
+          base: bp,
+          args: 0,
+        });
+  
+        code += `${(node.key as T.Identifier).name.toLowerCase()}event EVENT_${curEvent.toUpperCase()} \n`;
+  
+        depth++
+        for(let i = 0; i < node.body.body.length; i++) {
+          if(!Traverse(node.body.body[i], 'function_body'))
+            return false;
+        }
+        depth--
+  
+        if(node.body.body[node.body.body.length - 1].type == 'ReturnStatement')
+          (bBlock.at(-1) as IBlock).state = EState.TERMINATED;
+  
+        EndBlock();
+  
+        return true;
+      }
+    }
+
     if(node.body.type != 'BlockStatement') {
       errors.push({
         type: 'error',
@@ -2297,11 +2339,11 @@ function Traverse(
       return_type: null,
       arguments: [],
       code: () => {
-        return `state ${(node.key as T.Identifier).name}_${curActor.picnum} \n`;
+        return `state ${(node.key as T.Identifier).name}_${!curEvent ? curActor.picnum : curEvent} \n`;
       }
     };
 
-    code += `\ndefstate ${(node.key as T.Identifier).name}_${curActor.picnum} \n`;
+    code += `\ndefstate ${(node.key as T.Identifier).name}_${!curEvent ? curActor.picnum : curEvent} \n`;
 
     code += `set ra rbp \nstate push \nset rbp rsp \n`
 
