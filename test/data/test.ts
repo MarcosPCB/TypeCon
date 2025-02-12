@@ -109,6 +109,8 @@ class newEnemy extends CActor {
                 break;
         }
 
+        debugger;
+
         if(this.HitByWeapon()) {
             this.Spawn(Names.BLOOD);
 

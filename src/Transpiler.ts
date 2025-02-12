@@ -849,7 +849,7 @@ function Traverse(
         let params: string = '';
 
         if(f.arguments.find(e => e & CON_NATIVE_FLAGS.VARIABLE))
-          code += `state pushr${f.arguments.length} \n`;
+          code += `state pushr${f.arguments.length == 12 ? 'all' : f.arguments.length} \n`;
 
         let optional = false;
 
@@ -1081,7 +1081,7 @@ function Traverse(
 
         code += `${typeof f.code === 'function' ? f.code(true, fn) : `${f.code} ${params} \n`}`;
         if(f.arguments.find(e => e & CON_NATIVE_FLAGS.VARIABLE))
-          code += `state popr${f.arguments.length} \n`;
+          code += `state popr${f.arguments.length == 12 ? 'all' : f.arguments.length} \n`;
       } else code += `${typeof f.code === 'function' ? f.code() : `${f.code} \n`}`;
 
       typeCheck = '';
@@ -1104,7 +1104,7 @@ function Traverse(
       if(args.length > 0) {
         let params: string = '';
 
-        code += `state pushr${args.length} \n`;
+        code += `state pushr${args.length == 12 ? 'all' : args.length} \n`;
 
         for(let i = 0; i < args.length; i++) {
           const a = args[i];
@@ -1143,7 +1143,7 @@ function Traverse(
         }
 
         code += `${f.conName} ${params} \n`;
-        code += `state popr${args.length} \n`;
+        code += `state popr${args.length == 12 ? 'all' : args.length} \n`;
       } else code += `${f.conName} \n`;
 
       typeCheck = '';
@@ -2178,6 +2178,11 @@ function Traverse(
     return true;
   }
 
+  if(node.type == 'DebuggerStatement') {
+    code += Line(node.loc as T.SourceLocation);
+    code += `debug 1\n`;
+  }
+
   if(node.type == 'ClassProperty') {
     code += '\n' + Line(node.key.loc as T.SourceLocation);
 
@@ -2524,7 +2529,7 @@ function Traverse(
     bp = sp;
 
     if(node.params.length > 0) {
-      code += `state pushr${node.params.length} \n`
+      code += `state pushr${node.params.length == 12 ? 'all' : node.params.length} \n`
       for(let i = 0; i < node.params.length; i++) {
         const p = node.params[i];
 

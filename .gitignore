@@ -2,3 +2,4 @@ node_modules
 compiled/*.con
 obj/*.AST
 test/eduke
+test/eduke32

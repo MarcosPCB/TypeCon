@@ -251,7 +251,7 @@ defstate _GetFreePages
         add heapsize _HEAPi
         resizearray heap heapsize
         resizearray lookupHeap heaptables
-        resizearray allocTables heaptables
+        resizearray allocTable heaptables
     }
 ends
 
