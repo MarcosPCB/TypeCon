@@ -53,8 +53,10 @@ class newEnemy extends CActor {
         }
 
         super(1685, true, 100, [AIdle, AWalk], AIdle, [MStop, MWalk], [AIIdle, AIWalk]);
+    }
 
-        this.Events.EGS.Append = function() {
+    Events: OnEvent = {
+        EGS() {
             console.log(1);
         }
     }

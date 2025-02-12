@@ -105,10 +105,12 @@ export enum Names {
     JIBS6 = 2286
 }
 
-export const EventList = [
+export const EventList: TEvents[] = [
     'DisplayRest',
     'DisplayStart',
     'DisplayEnd',
     'Game',
-    'Egs'
+    'EGS',
+    'Spawn',
+    'AnimateSprites'
 ];

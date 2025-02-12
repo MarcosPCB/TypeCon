@@ -199,7 +199,7 @@ declare global {
 
         protected Main(): void;
 
-        protected Events: TEventList<TEventPAE>;
+        protected Events: OnEvent;
     }
 
     export const sprites: CActor[];
@@ -208,14 +208,11 @@ declare global {
     export type TEventDE = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd';
     export type TEvents = TEventPAE | TEventDE;
 
-    export type TEventList<List extends keyof (TEventPAE & TEventDE)> = {
-        [key in List]: {
-            Append: EventFunction<CEvent & CActor>,
-            Prepend: EventFunction<CEvent & CActor>
-        }
-    }
-
-    export type EventFunction<T> = (this: T) => void | number;
+    export type OnEvent = Partial<{
+        [E in TEventPAE]: (
+          this: CEvent & CActor
+        ) => void | number;
+    }>;
 
     export class CEvent {
         protected argument?: number | number[];

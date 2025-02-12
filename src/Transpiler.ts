@@ -24,6 +24,7 @@ var curActor: IActor = {
   export_name: ''
 }
 var curEvent: string | null = null;
+var memberNodes: T.Node[] = [];
 
 var funcs: CON_NATIVE_FUNCTION[] = [];
 var types: IType[] = [];
@@ -1393,6 +1394,30 @@ function Traverse(
           }
         }
       } else if(o.type == 'MemberExpression') {
+
+        if(o.object.type == 'MemberExpression') {
+          let n = o.object.object;
+          let objs: { computed: boolean, property: T.Node }[] = []
+          objs.push({computed: o.computed, property: o.property});
+
+          while(true) {
+            if(n.type == 'MemberExpression') {
+              objs.push({computed: n.computed, property: n.property});
+              n = n.object;
+              continue;
+            }
+
+            if(n.type == 'ThisExpression') {
+
+              break;
+            }
+          }
+
+          
+
+          return true;
+        }
+
         let obj = '';
         let index = '';
         if(o.object.type == 'Identifier')
@@ -2057,7 +2082,7 @@ function Traverse(
     code += Line(node.loc as T.SourceLocation);
     const exp = node.expression;
     if(exp.type == 'AssignmentExpression') {
-      if(mode == 'constructor') {
+      if(mode == 'constructor' && exp.right.type != 'MemberExpression') {
         errors.push({
           type: 'error',
           node: node.type,
@@ -2151,6 +2176,152 @@ function Traverse(
     }
 
     return true;
+  }
+
+  if(node.type == 'ClassProperty') {
+    code += '\n' + Line(node.key.loc as T.SourceLocation);
+
+    if(block == EBlock.ACTOR) {
+      if(node.key.type == 'Identifier') {
+        if(node.key.name == 'Events') {
+          if(!node.typeAnnotation || node.typeAnnotation.type != 'TSTypeAnnotation') {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: 'Wrong type for Events property in CActor class'
+            });
+            return false;
+          }
+
+          const type = node.typeAnnotation;
+          if(type.typeAnnotation.type != 'TSTypeReference' || type.typeAnnotation.typeName.type != 'Identifier') {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: 'Wrong type for Events property in CActor class'
+            });
+            return false;
+          }
+
+          if(type.typeAnnotation.typeName.name != 'OnEvent') {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: `Type ${type.typeAnnotation.typeName.name} is not valid for Events property. You must use OnEvent type`
+            });
+            return false;
+          }
+
+          if(!node.value) {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: `Missing value for Events property`
+            });
+            return false;
+          }
+
+          if(node.value.type != 'ObjectExpression') {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: `Type ${node.value.type} is not valid for assingment of the Events property`
+            });
+            return false;
+          }
+
+          const p = node.value.properties;
+
+          for(let i = 0; i < p.length; i++) {
+            if(p[i].type != 'ObjectMethod') {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Only methods can be defined inside Events property`
+              });
+              return false;
+            }
+
+            const property = p[i] as T.ObjectMethod;
+
+            if(property.key.type != 'Identifier') {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Only valid event names can be defined as methods inside Events property`
+              });
+              return false;
+            }
+
+            if(EventList.findIndex(e => e as TEventPAE && e == (property.key as T.Identifier).name) == -1) {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Unknown event name or not a Per-Actor event.`
+              });
+              return false;
+            }
+
+            if(property.body.type != 'BlockStatement') {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Invalid body for event method`
+              });
+              return false;
+            }
+
+            if(curActor.name == '') {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Events property is only valid inside an actor class`
+              });
+              return false;
+            }
+
+            bBlock.push({
+              type: EBlock.EVENT,
+              name: property.key.name,
+              stack: sp,
+              base: bp,
+              state: EState.BODY,
+              args: 0
+            });
+
+            curEvent = property.key.name;
+
+            code += ` \nappendevent EVENT_${property.key.name.toUpperCase()} \n`;
+
+            //Since it's an event inside an actor class, we must make the event run inside a conditional
+            code += `ifactor ${curActor.picnum} { \n`;
+
+            const body = property.body.body;
+
+            for(let j = 0; j < body.length; j++) {
+              if(!Traverse(body[i], 'function_body'))
+                return false;
+            }
+
+            code += `} \n`;
+
+            EndBlock();
+
+            curEvent = null;
+          }
+        }
+      }
+    }
   }
 
   if(node.type == 'ClassMethod') {
@@ -2510,6 +2681,9 @@ function Traverse(
           return false;
       }
     }
+
+    curActor.name = '';
+    curEvent = null;
 
     return true;
   }
