@@ -7,7 +7,7 @@ import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars, EMoveFlags, CON_NATIVE_F
 
 const errors: IError[] = [];
 var detailLines = false;
-var code = initCode;
+var code = '';
 
 var original = '';
 
@@ -2260,6 +2260,8 @@ function Traverse(
               return false;
             }
 
+            code += Line(property.key.loc as T.SourceLocation);
+
             if(EventList.findIndex(e => e as TEventPAE && e == (property.key as T.Identifier).name) == -1) {
               errors.push({
                 type: 'error',
@@ -2691,7 +2693,7 @@ function Traverse(
   return true;
 }
 
-export default function Transpiler(ast: T.File, lineDetail: boolean, stack_size?: number, file?: string) {
+export default function Transpiler(ast: T.File, lineDetail: boolean, stack_size?: number, file?: string, options?: number) {
   if(ast.program.body.length < 1)
     return null; 
 
@@ -2701,9 +2703,12 @@ export default function Transpiler(ast: T.File, lineDetail: boolean, stack_size?
 
   let depth = 0;
 
-  if(!stack_size)
-    code += '1024 0 \n \n' + initStates;
-  else code += stack_size + ' 0 \n \n' + initStates;
+  if(!(options & 1) && !(options & 2) && !(options & 4)) {
+    code += initCode;
+    if(!stack_size)
+      code += '1024 0 \n \n' + initStates;
+    else code += stack_size + ' 0 \n \n' + initStates;
+  }
 
   for(let i = 0; i < ast.program.body.length; i++) {
     const node = ast.program.body[i];

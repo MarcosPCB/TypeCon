@@ -6,7 +6,7 @@
   "author": "ItsMarcolino123",
   "license": "MIT",
   "scripts": {
-    "dev": "IS_DEV=true ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts -c \"test/data/test.ts\" -ld",
+    "dev": "IS_DEV=true ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts -c \"test/data/test.ts\" -ld -h",
     "dev-win": "ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts -c \"test/data/test.ts\" -ld",
     "parse": "IS_DEV=true ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts -c \"test/data/test.ts\" -p",
     "debug": "IS_DEV=true ts-node-dev --inspect-brk --transpile-only --ignore-watch node_modules src/main.ts -c \"test/data/test.ts\" -ld",
