@@ -1,9 +1,9 @@
 import * as T from '@babel/types';
-import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IType, IVar, TClassType, TVar, Names, EventList } from './types';
+import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IType, IVar, TClassType, TVar, Names, EventList } from '../types';
 import { escape } from 'querystring';
-import { funcTranslator, IFuncTranslation, initCode, initStates } from './translation';
-import './defs/types';
-import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars, EMoveFlags, CON_NATIVE_FUNCTION, CON_NATIVE_TYPE } from './defs/native';
+import { funcTranslator, IFuncTranslation, initCode, initStates } from '../aux/translation';
+import '../../../defs/TCSet100/types';
+import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars, EMoveFlags, CON_NATIVE_FUNCTION, CON_NATIVE_TYPE } from '../../../defs/TCSet100/native';
 
 const errors: IError[] = [];
 var detailLines = false;

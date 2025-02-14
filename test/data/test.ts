@@ -1,4 +1,4 @@
-import '../../src/defs/types';
+import '../../src/defs/TCSet100/types';
 
 type wow = {
     name: string,

@@ -1,10 +1,11 @@
 import fs from 'fs';
 import Parser = require('@babel/parser');
 import path = require('path');
-import Transpiler from './Transpiler';
+import Transpiler from './modules/transpiler/services/Transpiler';
 import * as T from '@babel/types';
-import { initCode, initStates } from './translation';
-import GDBDebugger from './GDBDebugger';
+import { initCode, initStates } from './modules/transpiler/aux/translation';
+import GDBDebugger from './modules/debugger/services/GDBDebugger';
+import { CONDebugger } from './modules/debugger/debugger';
 
 let fileName = '';
 let lineDetail = false;
@@ -17,6 +18,9 @@ let link = false;
 let default_inclusion = false;
 let eduke_init = false;
 let init_file = 'init.con';
+let debug_mode = false;
+let path_or_PID = '';
+let PID = false;
 
 /*
     1 - don't put header in the CONs
@@ -35,6 +39,17 @@ if(!fs.existsSync('./compiled'))
 
 for(let i = 0; i < process.argv.length; i++) {
     const a = process.argv[i];
+
+    //If enabled, it ignores all the other stuff
+    if(a == '-debug') {
+        debug_mode = true;
+        const arg = process.argv[i + 1];
+        if(arg.startsWith('PID=')) {
+            PID = true;
+            path_or_PID = arg.slice(4, arg.length);
+        } else path_or_PID = arg;
+        break;
+    }
 
     if(a == '-c') {
         fileName = process.argv[i + 1];
@@ -101,63 +116,67 @@ for(let i = 0; i < process.argv.length; i++) {
     }
 }
 
-if(stack_size < 1024)
-    console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
+if(debug_mode) {
+    CONDebugger(path_or_PID, PID);
+} else {
+    if(stack_size < 1024)
+        console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
-console.log(`Parsing ${fileName}`);
+    console.log(`Parsing ${fileName}`);
 
-const file = fs.readFileSync(fileName);
+    const file = fs.readFileSync(fileName);
 
-const parsed: T.File = Parser.parse(file.toString(), {
-    sourceType: 'module',
-    plugins: [ 'typescript' ],
-    tokens: false,
-    });
+    const parsed: T.File = Parser.parse(file.toString(), {
+        sourceType: 'module',
+        plugins: [ 'typescript' ],
+        tokens: false,
+        });
 
-fs.writeFileSync(`obj/${path.basename(fileName)}.AST`, JSON.stringify(parsed, null, "\t"));
+    fs.writeFileSync(`obj/${path.basename(fileName)}.AST`, JSON.stringify(parsed, null, "\t"));
 
-if(!parse_only) {
-    debugger;
-    console.log(`Transpiling...`);
-    let code = Transpiler(parsed, lineDetail, stack_size, file.toString(), compile_options);
+    if(!parse_only) {
+        debugger;
+        console.log(`Transpiling...`);
+        let code = Transpiler(parsed, lineDetail, stack_size, file.toString(), compile_options);
 
-    if(default_inclusion && !(compile_options & 1) && !(compile_options & 2) && !(compile_options & 4) && !link)
-        code = `include GAME.CON \n` + code;
+        if(default_inclusion && !(compile_options & 1) && !(compile_options & 2) && !(compile_options & 4) && !link)
+            code = `include GAME.CON \n` + code;
 
-    console.log(`Saving to ${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`);
-    if(code) {
-        fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, code);
-    }
-
-    if(code && ((compile_options & 4) || link)) {
-        if(compile_options & 4)
-            console.log(`Creating header and init files...`);
-
-        if(link)
-            console.log('Linking files into the init file...');
-
-        let header = initCode
-
-        if(!stack_size) header += '1024 0 \n \n' + initStates;
-        else header += stack_size + ' 0 \n \n' + initStates;
-        fs.writeFileSync(`${output_folder}/header.con`, header);
-
-        if(compile_options & 4)
-            fs.writeFileSync(`${output_folder}/${init_file}`,
-            `${default_inclusion ? 'include GAME.CON \n' : ''}include header.con \ninclude ${!output_file.length ? path.basename(fileName) : output_file}.con`);
-        else if(link) {
-            let init = `${default_inclusion ? 'include GAME.CON \n' : ''}include header.con \n`;
-            init += linkList.map(e => {
-                return `include ${e}`;
-            }).join(' \n');
-
-            fs.writeFileSync(`${output_folder}/${init_file}`, init);
-            console.log('Link completed!');
+        console.log(`Saving to ${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`);
+        if(code) {
+            fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, code);
         }
+
+        if(code && ((compile_options & 4) || link)) {
+            if(compile_options & 4)
+                console.log(`Creating header and init files...`);
+
+            if(link)
+                console.log('Linking files into the init file...');
+
+            let header = initCode
+
+            if(!stack_size) header += '1024 0 \n \n' + initStates;
+            else header += stack_size + ' 0 \n \n' + initStates;
+            fs.writeFileSync(`${output_folder}/header.con`, header);
+
+            if(compile_options & 4)
+                fs.writeFileSync(`${output_folder}/${init_file}`,
+                `${default_inclusion ? 'include GAME.CON \n' : ''}include header.con \ninclude ${!output_file.length ? path.basename(fileName) : output_file}.con`);
+            else if(link) {
+                let init = `${default_inclusion ? 'include GAME.CON \n' : ''}include header.con \n`;
+                init += linkList.map(e => {
+                    return `include ${e}`;
+                }).join(' \n');
+
+                fs.writeFileSync(`${output_folder}/${init_file}`, init);
+                console.log('Link completed!');
+            }
+        }
+
+        console.log(`Transpiling finished!`);
+
     }
 
-    console.log(`Transpiling finished!`);
-
+    process.exit(0);
 }
-
-process.exit(0);

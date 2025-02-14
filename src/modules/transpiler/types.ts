@@ -1,6 +1,6 @@
 import * as T from '@babel/types';
-import './defs/types';
-import { CON_NATIVE_FLAGS } from './defs/native';
+import '../../defs/TCSet100/types';
+import { CON_NATIVE_FLAGS } from '../../defs/TCSet100/native';
 
 export interface IError {
     type: 'error' | 'warning';

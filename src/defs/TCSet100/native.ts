@@ -1,4 +1,4 @@
-import { IActor } from "../types";
+import { IActor } from "../../modules/transpiler/types";
 
 //Type for native functions
 export type CON_NATIVE<Type> = Type;
