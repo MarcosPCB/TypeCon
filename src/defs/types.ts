@@ -36,6 +36,11 @@ declare global {
         orientation: number
     }
 
+    export interface tag {
+        lotag: CON_NATIVE<number>;
+        hitag: CON_NATIVE<number>;
+    }
+
     export type TLabel = string; //Use this to define constants and pointers
 
     export interface pointer {}
@@ -125,6 +130,9 @@ declare global {
         public curMove: CON_NATIVE_POINTER;
         public vel: CON_NATIVE<number>;
         public ang: CON_NATIVE<number>;
+        public x: CON_NATIVE<number>;
+        public y: CON_NATIVE<number>;
+        public z: CON_NATIVE<number>;
 
         public curAI: CON_NATIVE_POINTER;
 
@@ -219,11 +227,73 @@ declare global {
 
         constructor(event: TEvents)
 
-        public RotateSprite(x: number, y: number, ang: number, scale: number, picnum: number, shade: number, pal: number, orientation: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
-        public DrawSprite(pos: vec2, ang: number, scale: number, picnum: number, style: style, x0y0: vec2, x1y1: vec2): CON_NATIVE<void>;
+        public RotateSprite(x: number, y: number, scale: number, ang: number, picnum: number, shade: number, pal: number, orientation: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
+        public DrawSprite(pos: pos2, picnum: number, style: style, x0y0: vec2, x1y1: vec2): CON_NATIVE<void>;
         public ScreenSound(sound: number): CON_NATIVE<void>;
 
         protected Append(): void | number;
         protected Prepend(): void | number;
     }
+
+    export interface CSectorBase {
+        z: CON_NATIVE<number>;
+        picnum: CON_NATIVE<number>;
+        slope: CON_NATIVE<number>;
+        shade: CON_NATIVE<number>;
+        pal: CON_NATIVE<number>;
+        xPan: CON_NATIVE<number>;
+        yPan: CON_NATIVE<number>;
+        zGoal: CON_NATIVE<number>;
+        bunch: CON_NATIVE<number>;
+        stat: CON_NATIVE<number>;
+    }
+
+    export class CWall {
+        public pos: CON_NATIVE<vec2>;
+        public point2: CON_NATIVE<number>;
+
+        public blend: CON_NATIVE<number>;
+
+        public nextWall: CON_NATIVE<number>;
+        public nextSector: CON_NATIVE<number>;
+
+        public cstat: CON_NATIVE<number>;
+
+        public picnum: CON_NATIVE<number>;
+        public overpicnum: CON_NATIVE<number>;
+
+        public shade: CON_NATIVE<number>;
+        public pal: CON_NATIVE<number>;
+
+        public texRepeat: CON_NATIVE<vec2>;
+        public texPan: CON_NATIVE<vec2>;
+
+        public tags: CON_NATIVE<tag>;
+
+        public extra: CON_NATIVE<number>;
+        public ang: CON_NATIVE<number>;
+
+        public wallPoint2: CWall;
+        public next: { wall: CWall, sector: CSector };
+    }
+
+    export class CSector {
+        public wallPtr: CON_NATIVE<number>;
+        public wallNum: CON_NATIVE<number>;
+       
+        public ceiling: CON_NATIVE<CSectorBase>;
+        public floor: CON_NATIVE<CSectorBase>;
+
+        public visibility: CON_NATIVE<number>;
+        public fogPal: CON_NATIVE<number>;
+        
+        public tags: CON_NATIVE<tag>;
+
+        public extra: CON_NATIVE<number>;
+
+        public firstWall: CWall;
+        public walls: CWall[];
+    }
+
+    export const sectors: CSector[];
 }

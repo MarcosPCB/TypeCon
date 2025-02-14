@@ -1139,6 +1139,9 @@ function Traverse(
               : `set r${i} stack[rsp] \n`}`;
           }
 
+          if(a.type == 'NumericLiteral')
+            code += `set r${i} ${Math.trunc(a.value)} \n`;
+
           params += `r${i} `;
         }
 
@@ -2180,7 +2183,7 @@ function Traverse(
 
   if(node.type == 'DebuggerStatement') {
     code += Line(node.loc as T.SourceLocation);
-    code += `debug 1\n`;
+    code += `debug ${node.loc.start.line}\n`;
   }
 
   if(node.type == 'ClassProperty') {

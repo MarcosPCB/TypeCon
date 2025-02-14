@@ -109,7 +109,7 @@ class newEnemy extends CActor {
                 break;
         }
 
-        debugger;
+        console.log(2);
 
         if(this.HitByWeapon()) {
             this.Spawn(Names.BLOOD);
@@ -129,6 +129,8 @@ class displayRest extends CEvent {
 
     public Append(): void {
         this.RotateSprite(160, 100, 0, 65536, 0, 0, 0, 0, 0, 0, 0, 0);
+        console.log(sectors[0].ceiling.z);
+        console.log(sectors[0].walls[0].pos.x);
     }
 }
 

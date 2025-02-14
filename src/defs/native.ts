@@ -5,11 +5,22 @@ export type CON_NATIVE<Type> = Type;
 
 export class CON_NATIVE_POINTER { }
 
+export enum CON_NATIVE_STRUCT {
+    this = 1,
+    sprite = 2,
+    player = 4,
+    sector = 8,
+    wall = 16,
+    userdef = 32
+}; 
+
 export enum CON_NATIVE_TYPE {
     global = 1,
     actor = 2,
     player = 4,
-    variable = 8
+    variable = 8,
+    sector = 16,
+    wall = 32,
 }
 
 export enum CON_NATIVE_FLAGS {
@@ -62,7 +73,7 @@ export interface CON_NATIVE_FUNCTION {
 
 export interface CON_NATIVE_VAR {
     name: string,
-    object: string, //'none' if does belong to a object
+    object: CON_NATIVE_STRUCT, //'none' if does belong to a object
     var_type: CON_NATIVE_TYPE,
     type: 'variable' | 'string' | 'pointer' | 'ts',
     readonly: boolean,
@@ -403,7 +414,7 @@ state popd
 export const nativeVars: CON_NATIVE_VAR[] = [
     {
         name: 'actions',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'ts',
         readonly: false,
@@ -412,7 +423,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'moves',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'ts',
         readonly: false,
@@ -421,7 +432,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'ais',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'ts',
         readonly: false,
@@ -430,7 +441,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'curAction',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'pointer',
         readonly: false,
@@ -439,7 +450,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'curMove',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'pointer',
         readonly: false,
@@ -448,7 +459,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'curAI',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'pointer',
         readonly: false,
@@ -457,7 +468,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'extra',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: false,
@@ -466,7 +477,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'playerDist',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor | CON_NATIVE_TYPE.variable,
         type: 'variable',
         readonly: true,
@@ -475,7 +486,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'damage',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: false,
@@ -484,7 +495,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'htExtra',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: false,
@@ -493,7 +504,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'weaponHit',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: false,
@@ -502,7 +513,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'htPicnum',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: false,
@@ -511,7 +522,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'curActionFrame',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: false,
@@ -520,7 +531,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'vel',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: false,
@@ -529,7 +540,7 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'ang',
-        object: 'this',
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
         var_type: CON_NATIVE_TYPE.actor,
         type: 'variable',
         readonly: false,
@@ -538,8 +549,8 @@ export const nativeVars: CON_NATIVE_VAR[] = [
     },
     {
         name: 'picnum',
-        object: 'this',
-        var_type: CON_NATIVE_TYPE.actor,
+        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite | CON_NATIVE_STRUCT.wall | CON_NATIVE_STRUCT.sector,
+        var_type: CON_NATIVE_TYPE.actor | CON_NATIVE_TYPE.sector | CON_NATIVE_TYPE.wall,
         type: 'variable',
         readonly: false,
         code: 'picnum',

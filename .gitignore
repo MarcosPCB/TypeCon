@@ -3,3 +3,8 @@ compiled/*.con
 obj/*.AST
 test/eduke
 test/eduke32
+*.cfg
+*.log
+*.cache
+texturecache
+*.index
