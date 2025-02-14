@@ -3,7 +3,7 @@ import Parser = require('@babel/parser');
 import path = require('path');
 import Transpiler from './modules/transpiler/services/Transpiler';
 import * as T from '@babel/types';
-import { initCode, initStates } from './modules/transpiler/aux/translation';
+import { initCode, initStates } from './modules/transpiler/helper/translation';
 import GDBDebugger from './modules/debugger/services/GDBDebugger';
 import { CONDebugger } from './modules/debugger/debugger';
 
