@@ -3,45 +3,81 @@ import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 
 export default class GDBDebugger {
   private gdb: ChildProcessWithoutNullStreams;
-  public lastResponse: string;
+  private buffer: string = "";
+  private resolveOutput?: (output: string) => void;
   public ready: boolean;
   public bps: number[];
   public cleared: boolean;
   public bps_line: { file: string, line: number }[];
+  public pid: number;
 
   constructor(targetBin?: string, targetPID?: number) {
     if(!targetBin && !targetPID)
       throw 'You must specify a binary path OR a PID to be debugger';
 
-    this.gdb = spawn("gdb", ["-i=mi", targetBin ? `"${targetBin}"` : `--pid=${targetPID}`], {
+    this.gdb = spawn("gdb", ["-i=mi", targetBin ? `${targetBin}` : `--pid=${targetPID}`], {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    this.gdb.stdout.on("data", (data) => { this.handleOutput(data.toString()); this.ready = true; });
-    this.gdb.stderr.on("data", (data) => console.error("GDB Error:", data.toString()));
+    this.setupListeners();
 
-    this.gdb.on("close", (code) => console.log(`GDB exited with code ${code}`));
-
-    this.sendCommand('source set_jumps.py');
+    //this.sendCommand('handle SIGINT stop nopass');
 
     this.bps = [];
     this.cleared = true;
     this.ready = true;
     this.bps_line = [];
+    this.pid = 0;
   }
 
-  private handleOutput(output: string) {
-    console.log("GDB:", output); // Log all responses for now
+  private setupListeners() {
+    this.gdb.stdout.on('data', (data) => {
+        const output = data.toString();
+        console.log(output);
+        this.buffer += output;
 
-    this.lastResponse = output;
+        if (this.buffer.includes('^done') || this.buffer.includes('*stopped')) {
+            if (this.resolveOutput) {
+                this.resolveOutput(this.buffer);
+                this.resolveOutput = undefined;
+            }
+            //this.buffer = "";
 
-    if (output.includes("*stopped")) {
-      console.log("The program has stopped.");
-    } else if (output.includes("^running")) {
-      console.log("The program is running.");
+            this.ready = true;
+        }
+    });
+
+    this.gdb.stderr.on('data', (data) => {
+        console.error('GDB Error:', data.toString());
+    });
+
+    this.gdb.on('close', (code) => {
+        console.log(`GDB process exited with code ${code}`);
+    });
+  }
+
+  public getJSON(splitter: string) {
+    const str = this.buffer.split(splitter, 1);
+  }
+
+  public async getInferiorPidAsJson(): Promise<string> {
+    console.log('Fetching inferiors in JSON format...');
+    await this.sendCommand(`-list-thread-groups`);
+    
+    // Parse output as JSON format
+
+    if (match) {
+        const pid = match[1];
+        const jsonResult = JSON.stringify({ inferior_pid: pid }, null, 2);
+        console.log('Inferior PID JSON:', jsonResult);
+        this.pid = Number(jsonResult);
+        return jsonResult;
+    } else {
+        console.log("No PID found.");
+        return JSON.stringify({ error: "No PID found" });
     }
   }
-
+  /*
   public SetBreakpointAtLine(file: string, line: number, reset?: boolean) {
     this.sendAndWait(`watch g_tw`).then(async () => {
         const s = this.lastResponse.search('watchpoint');
@@ -70,33 +106,40 @@ export default class GDBDebugger {
         if(!reset)
           this.bps_line.push({ file, line });
     });
-}
-
+  }
+*/
   // Run the program inside GDB
   public run() {
     this.sendCommand("run");
-}
-
-  public sendCommand(command: string) {
-    this.ready = false;
-    this.gdb.stdin.write(command + "\n");
   }
 
-  public async sendAndWait(command: string) {
-    const sleep = (ms: any) =>
-      new Promise((resolve) => setTimeout(resolve, ms));
-    this.sendCommand(command);
-    
-    while(!this.ready)
-      await sleep(50);
+  public pause() {
+    process.kill(this.pid, 'SIGINT');
+  }
 
-    return this.ready;
+  public sendCommand(command: string): Promise<boolean> {
+    this.ready = false;
+    this.buffer = "";
+    return new Promise(async (resolve) => {
+        const sleep = (ms: any) =>
+          new Promise((resolve) => setTimeout(resolve, ms));
+
+        //this.resolveOutput = resolve;
+        this.gdb.stdin.write(`${command}\n`);
+
+        while(!this.ready)
+          await sleep(10);
+
+        console.log('ready');
+
+        resolve(true);
+    });
   }
 
   public continueExecution() {
     this.sendCommand('delete');
     this.cleared = false;
-    this.bps_line.forEach((e) => this.SetBreakpointAtLine(e.file, e.line, true));
+    //this.bps_line.forEach((e) => this.SetBreakpointAtLine(e.file, e.line, true));
     this.sendCommand("continue");
   }
 
