@@ -56,22 +56,30 @@ export default class GDBDebugger {
     });
   }
 
-  public getJSON(splitter: string) {
-    const str = this.buffer.split(splitter, 1);
+  public getJSONObj(splitter: string) {
+    const buf = this.buffer.split(splitter + ',', 2)[1];
+    if(buf.length > 0) {
+      const jsonStr = buf.split('[', 2)[1].split(']', 2)[0].replace(/=/g, ':').replace(/\b(\w+)\b(?=\s*:)/g, '"$1"');
+      const obj = JSON.parse(jsonStr);
+      return obj;
+    }
+
+    return null;
   }
 
-  public async getInferiorPidAsJson(): Promise<string> {
+  public async getInferiorPIDAsJson(): Promise<string> {
     console.log('Fetching inferiors in JSON format...');
     await this.sendCommand(`-list-thread-groups`);
     
-    // Parse output as JSON format
+    const obj = this.getJSONObj('^done');
+    if(!obj)
+      return JSON.stringify({ error: "No PID found" });
 
-    if (match) {
-        const pid = match[1];
-        const jsonResult = JSON.stringify({ inferior_pid: pid }, null, 2);
-        console.log('Inferior PID JSON:', jsonResult);
-        this.pid = Number(jsonResult);
-        return jsonResult;
+    // Parse output as JSON format
+    if (obj.pid) {
+        console.log('Inferior PID JSON:', obj.pid);
+        this.pid = obj.pid;
+        return obj.pid;
     } else {
         console.log("No PID found.");
         return JSON.stringify({ error: "No PID found" });

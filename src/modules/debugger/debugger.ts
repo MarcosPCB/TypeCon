@@ -49,7 +49,7 @@ async function Prompt(d: GDBDebugger) {
 
             case 'start':
                 await d.sendCommand('-exec-run --start');
-                await d.getInferiorPidAsJson();
+                await d.getInferiorPIDAsJson();
                 break;
 
             /*case 'log':

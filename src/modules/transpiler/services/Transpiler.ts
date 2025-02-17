@@ -1398,10 +1398,15 @@ function Traverse(
         }
       } else if(o.type == 'MemberExpression') {
 
+        let obj = '';
+        let index = '';
+        let nativeStruct = false;
+
         if(o.object.type == 'MemberExpression') {
           let n = o.object.object;
           let objs: { computed: boolean, property: T.Node }[] = []
           objs.push({computed: o.computed, property: o.property});
+          
 
           while(true) {
             if(n.type == 'MemberExpression') {
@@ -1411,9 +1416,74 @@ function Traverse(
             }
 
             if(n.type == 'ThisExpression') {
-
+              if(block == EBlock.ACTOR || block == EBlock.EVENT)
+                nativeStruct = true;
+              const o = objs.at(-1).property;
+              if(o.type == 'Identifier')
+                obj = o.name;
+              objs.pop();
               break;
             }
+
+            if(n.type == 'Identifier') {
+              obj = n.name;
+              if(['sprites', 'sectors', 'walls', 'player'].includes(obj))
+                nativeStruct = true;
+              break;
+            }
+          }
+
+          const properties: string[] = [];
+
+          if(objs.at(-1).computed != true && nativeStruct) {
+            errors.push({
+              type: 'error',
+              node: node.type,
+              location: node.loc as T.SourceLocation,
+              message: `Native objects are arrays`
+            });
+            return false;
+          }
+
+          for(let i = objs.length - 1; i >= 0; i--) {
+            if(objs[i].computed) {
+              const p = objs[i].property;
+
+              if(p.type == 'NumberLiteral')
+                code += `set ra ${p.value} \n`;
+
+              if(p.type == 'Identifier') {
+                const v = GetVar(p.name);
+                code += sp - v.pointer == 0 ? `set ra stack[rsp] \n` : `set ri rsp \nsub ri ${v.pointer} \nset ra stack[ri] \n`;
+              }
+
+              if(p.type == 'MemberExpression') {
+                if(!Traverse(p, mode))
+                  return false;
+              }
+            }
+          }
+
+          if(nativeStruct) {
+            switch(obj) {
+              case 'sprites':
+                code += mode == 'assignment' ? `seta` : 'geta';
+                break;
+
+              case 'sectors':
+                code += mode == 'assignment' ? `setsector` : 'getsector';
+                break;
+
+              case 'walls':
+                code += mode == 'assignment' ? `setwall` : 'getwall';
+                break;
+
+              case 'players':
+                code += mode == 'assignment' ? `setp` : 'getp';
+                break;
+            }
+
+            code += `[ra]`;
           }
 
           
@@ -1421,8 +1491,6 @@ function Traverse(
           return true;
         }
 
-        let obj = '';
-        let index = '';
         if(o.object.type == 'Identifier')
           obj = o.object.name;
 

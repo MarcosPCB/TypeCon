@@ -130,9 +130,7 @@ declare global {
         public curMove: CON_NATIVE_POINTER;
         public vel: CON_NATIVE<number>;
         public ang: CON_NATIVE<number>;
-        public x: CON_NATIVE<number>;
-        public y: CON_NATIVE<number>;
-        public z: CON_NATIVE<number>;
+        public pos: CON_NATIVE<vec3>;
 
         public curAI: CON_NATIVE_POINTER;
 
