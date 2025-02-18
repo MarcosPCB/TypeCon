@@ -3,7 +3,7 @@ import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IType, IVar,
 import { escape } from 'querystring';
 import { funcTranslator, IFuncTranslation, initCode, initStates } from '../helper/translation';
 import '../../../defs/TCSet100/types';
-import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars, EMoveFlags, CON_NATIVE_FUNCTION, CON_NATIVE_TYPE } from '../../../defs/TCSet100/native';
+import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars, EMoveFlags, CON_NATIVE_FUNCTION, CON_NATIVE_TYPE, CON_NATIVE_STRUCT } from '../../../defs/TCSet100/native';
 
 const errors: IError[] = [];
 var detailLines = false;
@@ -74,6 +74,28 @@ function GetVar(name: string) {
     variable = vars.find(e => (e.name == name || e.object_name == name) && e.global);
 
   return variable;
+}
+
+function FlattenMemberExpression(node: T.Node): string[] {
+  let parts = [];
+
+  while (node.type === "MemberExpression") {
+    if(node.property.type == 'NumericLiteral'
+      || node.property.type == 'StringLiteral') {
+      if(node.computed)
+        parts.unshift('[' + node.property.value + ']');
+      else parts.unshift(node.property.value);
+    } else parts.unshift((node.property as T.Identifier).name)
+    node = node.object;
+  }
+
+  if (node.type === "Identifier")
+      parts.unshift(node.name);
+
+  if(node.type == 'ThisExpression')
+    parts.unshift('this');
+
+  return parts;
 }
 
 function GetObject(name: string, array = false) {
@@ -1328,6 +1350,7 @@ function Traverse(
     const o = node.object;
     const p = node.property;
     let object: IVar | typeof EMoveFlags | null = null;
+    const exp = FlattenMemberExpression(node);
 
     if(o.type == 'Identifier') {
       switch(o.name) {
@@ -1370,7 +1393,7 @@ function Traverse(
     if(p.type == 'Identifier') {
       if(o.type == 'ThisExpression') {
         if(block == EBlock.ACTOR) {
-          let v = nativeVars.find(e => (e.name == p.name && (e.var_type & CON_NATIVE_TYPE.actor || e.var_type & CON_NATIVE_TYPE.variable )));
+          let v = nativeVars.find(e => (e.name == p.name && (e.var_type == CON_NATIVE_TYPE.object || e.var_type & CON_NATIVE_TYPE.variable )));
           if(!v) {
             errors.push({
               type: 'error',
@@ -1389,106 +1412,38 @@ function Traverse(
           if(mode == 'retrieval')
             ra = v.init;
           else {
-            if(v.var_type & CON_NATIVE_TYPE.actor) {
-              if(!(v.var_type & CON_NATIVE_TYPE.variable))
-                code += `geta[].${v.code} ra \n`
-              else  code += `set ra ${v.code} \n`;
-            }
+            if(!(v.var_type & CON_NATIVE_TYPE.variable))
+              code += `geta[].${v.code} ra \n`
+            else  code += `set ra ${v.code} \n`;
           }
         }
       } else if(o.type == 'MemberExpression') {
-
         let obj = '';
         let index = '';
         let nativeStruct = false;
 
-        if(o.object.type == 'MemberExpression') {
-          let n = o.object.object;
-          let objs: { computed: boolean, property: T.Node }[] = []
-          objs.push({computed: o.computed, property: o.property});
-          
+        
 
-          while(true) {
-            if(n.type == 'MemberExpression') {
-              objs.push({computed: n.computed, property: n.property});
-              n = n.object;
-              continue;
-            }
-
-            if(n.type == 'ThisExpression') {
-              if(block == EBlock.ACTOR || block == EBlock.EVENT)
-                nativeStruct = true;
-              const o = objs.at(-1).property;
-              if(o.type == 'Identifier')
-                obj = o.name;
-              objs.pop();
+        if(nativeStruct) {
+          switch(obj) {
+            case 'sprites':
+              code += mode == 'assignment' ? `seta` : 'geta';
               break;
-            }
 
-            if(n.type == 'Identifier') {
-              obj = n.name;
-              if(['sprites', 'sectors', 'walls', 'player'].includes(obj))
-                nativeStruct = true;
+            case 'sectors':
+              code += mode == 'assignment' ? `setsector` : 'getsector';
               break;
-            }
+
+            case 'walls':
+              code += mode == 'assignment' ? `setwall` : 'getwall';
+              break;
+
+            case 'players':
+              code += mode == 'assignment' ? `setp` : 'getp';
+              break;
           }
 
-          const properties: string[] = [];
-
-          if(objs.at(-1).computed != true && nativeStruct) {
-            errors.push({
-              type: 'error',
-              node: node.type,
-              location: node.loc as T.SourceLocation,
-              message: `Native objects are arrays`
-            });
-            return false;
-          }
-
-          for(let i = objs.length - 1; i >= 0; i--) {
-            if(objs[i].computed) {
-              const p = objs[i].property;
-
-              if(p.type == 'NumberLiteral')
-                code += `set ra ${p.value} \n`;
-
-              if(p.type == 'Identifier') {
-                const v = GetVar(p.name);
-                code += sp - v.pointer == 0 ? `set ra stack[rsp] \n` : `set ri rsp \nsub ri ${v.pointer} \nset ra stack[ri] \n`;
-              }
-
-              if(p.type == 'MemberExpression') {
-                if(!Traverse(p, mode))
-                  return false;
-              }
-            }
-          }
-
-          if(nativeStruct) {
-            switch(obj) {
-              case 'sprites':
-                code += mode == 'assignment' ? `seta` : 'geta';
-                break;
-
-              case 'sectors':
-                code += mode == 'assignment' ? `setsector` : 'getsector';
-                break;
-
-              case 'walls':
-                code += mode == 'assignment' ? `setwall` : 'getwall';
-                break;
-
-              case 'players':
-                code += mode == 'assignment' ? `setp` : 'getp';
-                break;
-            }
-
-            code += `[ra]`;
-          }
-
-          
-
-          return true;
+          code += `[ra]`;
         }
 
         if(o.object.type == 'Identifier')
@@ -1552,7 +1507,7 @@ function Traverse(
           }
 
           let v = nativeVars.find(e => (e.name == p.name 
-            && (obj == 'sprites' && e.var_type & CON_NATIVE_TYPE.actor || e.var_type & CON_NATIVE_TYPE.variable)));
+            && (obj == 'sprites' && e.object & CON_NATIVE_STRUCT.sprite || e.var_type & CON_NATIVE_TYPE.variable)));
           if(!v) {
             errors.push({
               type: 'error',

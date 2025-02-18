@@ -167,7 +167,7 @@ export default class GDBDebugger {
       }
     }
 
-    await this.sendCommand(`set $offptr = $ptr`);
+    await this.sendCommand(`set $offptr = $ptr->offset`);
 
     await this.sendCommand(`-break-condition ${bp} g_tw == ${line << 12} && $offptr <= (insptr - apScript)`);
 

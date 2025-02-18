@@ -5,22 +5,11 @@ export type CON_NATIVE<Type> = Type;
 
 export class CON_NATIVE_POINTER { }
 
-export enum CON_NATIVE_STRUCT {
-    this = 1,
-    sprite = 2,
-    player = 4,
-    sector = 8,
-    wall = 16,
-    userdef = 32
-}; 
-
 export enum CON_NATIVE_TYPE {
-    global = 1,
-    actor = 2,
-    player = 4,
-    variable = 8,
-    sector = 16,
-    wall = 32,
+    native = 1,
+    object = 2,
+    array = 4,
+    variable = 8
 }
 
 export enum CON_NATIVE_FLAGS {
@@ -71,14 +60,15 @@ export interface CON_NATIVE_FUNCTION {
     arguments_default?: any[]
 }
 
-export interface CON_NATIVE_VAR {
+interface CON_NATIVE_VAR {
     name: string,
-    object: CON_NATIVE_STRUCT, //'none' if does belong to a object
     var_type: CON_NATIVE_TYPE,
-    type: 'variable' | 'string' | 'pointer' | 'ts',
+    type: CON_NATIVE_FLAGS,
     readonly: boolean,
-    code: string, //set and get
-    init: string | number
+    init: string | number,
+    code: string | string[], //When override_code is true, code is an array containing the get and then the set code 
+    object?: CON_NATIVE_VAR[] | CON_NATIVE_VAR,
+    override_code?: boolean
 }
 
 export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
@@ -411,151 +401,181 @@ state popd
     }
 ]
 
-export const nativeVars: CON_NATIVE_VAR[] = [
-    {
-        name: 'actions',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'ts',
-        readonly: false,
-        code: '',
-        init: 0,
-    },
-    {
-        name: 'moves',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'ts',
-        readonly: false,
-        code: '',
-        init: 0,
-    },
-    {
-        name: 'ais',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'ts',
-        readonly: false,
-        code: '',
-        init: 0,
-    },
+export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
     {
         name: 'curAction',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'pointer',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'htg_t 4',
         init: 0,
     },
     {
         name: 'curMove',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'pointer',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'htg_t 1',
         init: 0,
     },
     {
         name: 'curAI',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'pointer',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'htg_t 5',
         init: 0,
     },
     {
         name: 'extra',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'variable',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'extra',
         init: 0
     },
     {
         name: 'playerDist',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor | CON_NATIVE_TYPE.variable,
-        type: 'variable',
+        var_type: CON_NATIVE_TYPE.variable,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: true,
         code: 'playerDist',
         init: 0
     },
     {
         name: 'damage',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'variable',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'htextra',
         init: -1
     },
     {
         name: 'htExtra',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'variable',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
-        code: 'htExtra',
+        code: 'htextra',
         init: -1
     },
     {
         name: 'weaponHit',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'variable',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
-        code: 'htPicnum',
+        code: 'htpicnum',
         init: -1
     },
     {
         name: 'htPicnum',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'variable',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
-        code: 'htPicnum',
+        code: 'htpicnum',
         init: -1
     },
     {
         name: 'curActionFrame',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'variable',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'htg_t 3',
         init: 0
     },
     {
         name: 'vel',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'variable',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'xvel',
         init: 0
     },
     {
         name: 'ang',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite,
-        var_type: CON_NATIVE_TYPE.actor,
-        type: 'variable',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'ang',
         init: 0
     },
     {
         name: 'picnum',
-        object: CON_NATIVE_STRUCT.this | CON_NATIVE_STRUCT.sprite | CON_NATIVE_STRUCT.wall | CON_NATIVE_STRUCT.sector,
-        var_type: CON_NATIVE_TYPE.actor | CON_NATIVE_TYPE.sector | CON_NATIVE_TYPE.wall,
-        type: 'variable',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'picnum',
         init: 0
+    }
+];
+
+const nativePos: CON_NATIVE_VAR[] = [
+    {
+        name: 'x',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'x',
+        init: 0
     },
+    {
+        name: 'y',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'y',
+        init: 0
+    },
+    {
+        name: 'z',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'z',
+        init: 0
+    },
+];
+
+export const nativeVars_Walls: CON_NATIVE_VAR[] = [
+    {
+        name: 'pos',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: nativePos
+    }
+]
+
+export const nativeVars_Sectors: CON_NATIVE_VAR[] = [
+    {
+        name: 'ceiling',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: true,
+        init: 0,
+        code: '',
+        object: [
+            {
+                name: 'z',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                init: 0,
+                code: `ceilingz`
+            }
+        ]
+    },
+    {
+        name: 'walls',
+        var_type: CON_NATIVE_TYPE.array,
+        type: CON_NATIVE_FLAGS.ARRAY,
+        readonly: true,
+        init: 0,
+        code: ['state push \ngetsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \n set ri ra \nstate popc \nstate pop \ngetwall[ra]'],
+        object: nativeVars_Walls,
+        override_code: true,
+    }
 ]
 
 export type pointer = void;
