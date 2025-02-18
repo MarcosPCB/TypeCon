@@ -10,7 +10,7 @@ const rl = readline.createInterface({
 async function Prompt(d: GDBDebugger) {
     rl.question('> ', async (e) => {
         if(e == 'quit' || e == 'q') {
-            await d.sendCommand('quit');
+            d.sendCommand('quit');
             console.log('Bye bye!');
             rl.close();
             process.exit(0);
@@ -21,30 +21,50 @@ async function Prompt(d: GDBDebugger) {
         switch(e.slice(0, e.indexOf(' '))) {
             case 'continue':
             case 'c':
-                d.continueExecution();
+                await d.continueExecution();
                 break;
 
             case 'step':
             case 's':
-                d.stepInto();
+                await d.stepInto();
                 break;
 
             case 'test':
-                d.pause();
-                //d.SetBreakpointAtLine('EDUKE.CON', 12);
-                await d.sendCommand("continue");
+                await d.pause();
+                await d.SetBreakpointAtLine('EDUKE.CON', 12);
+                d.sendCommand("-exec-continue");
                 break;
 
             case 'load':
-                await d.sendCommand('source ./jumps.py');
+                d.sendCommand('source ./jumps.py');
                 break;
 
             case 'cmd':
-                await d.sendCommand(e.slice(4, e.length));
+                d.sendCommand(e.slice(4, e.length));
                 break;
 
-            case 'stop':
+            case 'fullstop':
                 d.pause();
+                break;
+
+            /*case 'stop':
+                d.pause();
+                await d.sendCommand('-stack-list-frames');
+                const frames = d.getJSONObj('^done', true).stack as Array<any>;
+                const f = frames.find(e => e.frame.func == 'VM_Execute');
+
+                if(f) {
+                    await d.sendCommand(`-stack-select-frame ${f.frame.level}`);
+                    this.sendCommand('set_breaks');
+                    d.cleared = true;
+                    this.sendCommand("-exec-continue");
+                }
+                break;*/
+
+            case 'clear':
+                await d.sendCommand('-break-delete');
+                d.cleared = false;
+                d.bps.length = d.bps_line.length = 0;
                 break;
 
             case 'start':

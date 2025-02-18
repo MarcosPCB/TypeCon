@@ -1,6 +1,39 @@
 import { rejects } from "assert";
-import { spawn, ChildProcessWithoutNullStreams } from "child_process";
+import { spawn, ChildProcessWithoutNullStreams, execSync } from "child_process";
+import ffi from 'ffi-napi';
+import ref from 'ref-napi';
 
+/// Load kernel32.dll
+const kernel32 = ffi.Library("kernel32.dll", {
+  OpenProcess: ["int", ["int", "bool", "int"]],
+  DebugBreakProcess: ["bool", ["int"]],
+  CloseHandle: ["bool", ["int"]]
+});
+
+// Windows constants
+const PROCESS_ALL_ACCESS = 0x1F0FFF;
+
+function suspendProcess(pid: number) {
+  console.log(`Pausing process with PID ${pid}...`);
+
+  // Open the target process
+  const processHandle = kernel32.OpenProcess(PROCESS_ALL_ACCESS, false, pid);
+  if (processHandle === 0) {
+      console.error("Failed to open process!");
+      return;
+  }
+
+  // Send a break signal
+  const success = kernel32.DebugBreakProcess(processHandle);
+  if (!success) {
+      console.error("Failed to break process!");
+  } else {
+      console.log("Process paused!");
+  }
+
+  // Close the handle
+  kernel32.CloseHandle(processHandle);
+}
 export default class GDBDebugger {
   private gdb: ChildProcessWithoutNullStreams;
   private buffer: string = "";
@@ -15,11 +48,13 @@ export default class GDBDebugger {
     if(!targetBin && !targetPID)
       throw 'You must specify a binary path OR a PID to be debugger';
 
-    this.gdb = spawn("gdb", ["-i=mi", targetBin ? `${targetBin}` : `--pid=${targetPID}`], {
+    this.gdb = spawn("gdb", ["--interpreter=mi2", targetBin ? `${targetBin}` : `--pid=${targetPID}`], {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
     this.setupListeners();
+
+    this.sendCommand('source ./jumps.py');
 
     //this.sendCommand('handle SIGINT stop nopass');
 
@@ -56,12 +91,23 @@ export default class GDBDebugger {
     });
   }
 
-  public getJSONObj(splitter: string) {
-    const buf = this.buffer.split(splitter + ',', 2)[1];
+  public getJSONObj(splitter: string, frame_stack?: boolean) {
+    const g = this.buffer.indexOf('(gdb)');
+    let buf = this.buffer.split(splitter + ',', 2)[1].slice(0, g != -1 ? (g - String('(gdb)').length - 1)  : this.buffer.length);
+    if(frame_stack)
+      buf = buf.replace(/frame=/g, '');
     if(buf.length > 0) {
-      const jsonStr = buf.split('[', 2)[1].split(']', 2)[0].replace(/=/g, ':').replace(/\b(\w+)\b(?=\s*:)/g, '"$1"');
-      const obj = JSON.parse(jsonStr);
-      return obj;
+      let jsonStr = '';
+      //if(buf.startsWith('[') || buf.startsWith('{'))
+        //jsonStr = buf.replace(/\b(\w+)\b(?=\s*=)/g, '"$1"').replace(/=/g, ':');
+      jsonStr = String('{' + buf + '}').replace(/\b(\w+)\b(?=\s*=)/g, '"$1"').replace(/=/g, ':');
+      try {
+        const obj = JSON.parse(jsonStr);
+        return obj;
+      } catch(err) {
+        console.log(err);
+        console.log(jsonStr);
+      }
     }
 
     return null;
@@ -71,58 +117,74 @@ export default class GDBDebugger {
     console.log('Fetching inferiors in JSON format...');
     await this.sendCommand(`-list-thread-groups`);
     
-    const obj = this.getJSONObj('^done');
+    const obj = this.getJSONObj('^done').groups;
     if(!obj)
       return JSON.stringify({ error: "No PID found" });
 
     // Parse output as JSON format
-    if (obj.pid) {
-        console.log('Inferior PID JSON:', obj.pid);
-        this.pid = obj.pid;
-        return obj.pid;
+    if (obj[0].pid) {
+        console.log('Inferior PID JSON:', obj[0].pid);
+        this.pid = obj[0].pid;
+        return obj[0].pid;
     } else {
         console.log("No PID found.");
         return JSON.stringify({ error: "No PID found" });
     }
   }
-  /*
-  public SetBreakpointAtLine(file: string, line: number, reset?: boolean) {
-    this.sendAndWait(`watch g_tw`).then(async () => {
-        const s = this.lastResponse.search('watchpoint');
 
-        const bp = Number(this.lastResponse.slice(s + String('watchpoint').length + 1, this.lastResponse.indexOf(':')));
+  public async wait() {
+    const sleep = (ms: any) =>
+      new Promise((resolve) => setTimeout(resolve, ms));
+
+    while(!this.ready)
+      await sleep(10);
+
+    console.log('ready');
+  }
+  
+  public async SetBreakpointAtLine(file: string, line: number, reset?: boolean) {
+    await this.sendCommand(`-break-watch g_tw`);
+    
+    const obj = this.getJSONObj('^done').wpt;
+
+    const bp = obj.number;
         
         //Now we must find the correct offset for the file
-        await this.sendAndWait(`set $ptr = vmoffset->offset`)
-        await this.sendAndWait('print vmoffset->fn');
+    await this.sendCommand(`set $ptr = vmoffset`)
+    await this.sendCommand('-data-evaluate-expression vmoffset->fn');
 
-        let r = this.lastResponse.substring(this.lastResponse.indexOf('"') + 1, this.lastResponse.length - 1);
+    let r = this.getJSONObj('^done').value.match(/"([^"]+)"/)[1];
 
-        if(r != file) {
-            await this.sendAndWait(`print $ptr->fn`);
-            r = this.lastResponse.substring(this.lastResponse.indexOf('"') + 1, this.lastResponse.length - 1);
+    if(r != file) {
+      await this.sendCommand(`set $ptr = $ptr->next`)
+      await this.sendCommand('-data-evaluate-expression $ptr->fn');
+      r = this.getJSONObj('^done').value.match(/"([^"]+)"/)[1];
 
-            while(r != file) {
-                await this.sendAndWait(`set $ptr = $ptr->of`)
-                await this.sendAndWait(`print $ptr->fn`);
-                r = this.lastResponse.substring(this.lastResponse.indexOf('"') + 1, this.lastResponse.length - 1);
-            }
-        }
+      while(r != file) {
+        await this.sendCommand(`set $ptr = $ptr->next`)
+        await this.sendCommand('-data-evaluate-expression $ptr->fn');
+        r = this.getJSONObj('^done').value.match(/"([^"]+)"/)[1];
+      }
+    }
 
-        this.sendCommand(`condition ${bp} g_tw == ${line << 12} && $ptr->offset > (insptr - apScript)`);
+    await this.sendCommand(`set $offptr = $ptr`);
 
-        if(!reset)
-          this.bps_line.push({ file, line });
-    });
+    await this.sendCommand(`-break-condition ${bp} g_tw == ${line << 12} && $offptr <= (insptr - apScript)`);
+
+    if(!reset)
+      this.bps_line.push({ file, line });
   }
-*/
+
   // Run the program inside GDB
   public run() {
     this.sendCommand("run");
   }
 
-  public pause() {
-    process.kill(this.pid, 'SIGINT');
+  public async pause() {
+    this.ready = false;
+    suspendProcess(this.pid);
+    await this.wait();
+    console.log('Stopped');
   }
 
   public sendCommand(command: string): Promise<boolean> {
@@ -144,22 +206,24 @@ export default class GDBDebugger {
     });
   }
 
-  public continueExecution() {
-    this.sendCommand('delete');
+  public async continueExecution() {
+    await this.sendCommand('-break-delete');
     this.cleared = false;
-    //this.bps_line.forEach((e) => this.SetBreakpointAtLine(e.file, e.line, true));
-    this.sendCommand("continue");
+    this.bps_line.forEach((e) => this.SetBreakpointAtLine(e.file, e.line, true));
+    this.sendCommand("-exec-continue");
   }
 
-  public stepInto() {
-    if(!this.cleared)
-      this.sendCommand('set_jumps');
+  public async stepInto() {
+    if(!this.cleared) {
+      this.sendCommand('set_breaks');
+      this.cleared = true;
+    }
 
-    this.sendCommand("continue");
+    this.sendCommand("-exec-continue");
   }
 
-  public stepOver() {
-    this.sendCommand("next");
+  public async stepOver() {
+    await this.sendCommand("next");
   }
 
   public close() {
