@@ -16,6 +16,8 @@ async function Prompt(d: GDBDebugger) {
             process.exit(0);
         }
 
+        let args: string[] = [];
+
         e += ' ';
 
         switch(e.slice(0, e.indexOf(' '))) {
@@ -31,12 +33,26 @@ async function Prompt(d: GDBDebugger) {
 
             case 'test':
                 await d.pause();
-                await d.SetBreakpointAtLine('EDUKE.CON', 12);
+                await d.SetBreakpointAtLine('test/game.CON', 3304);
                 d.sendCommand("-exec-continue");
                 break;
 
-            case 'load':
-                d.sendCommand('source ./jumps.py');
+            case 'break-line':
+                await d.pause();
+                args = e.slice(String('break-line').length + 1, e.length).split(' ');
+                await d.SetBreakpointAtLine(args[0], Number(args[1]));
+                d.sendCommand('-exec-continue');
+                break;
+
+            case 'clear-break-line':
+                await d.pause();
+                args = e.slice(String('clear-break-line').length + 1, e.length).split(' ');
+                await d.UnsetBreakpointAtLine(args[0], Number(args[1]));
+                d.sendCommand('-exec-continue');
+                break;
+
+            case 'list-files':
+                console.log(d.scriptFilenames.join(', '));
                 break;
 
             case 'cmd':
@@ -47,29 +63,30 @@ async function Prompt(d: GDBDebugger) {
                 d.pause();
                 break;
 
-            /*case 'stop':
+            case 'stop':
                 d.pause();
-                await d.sendCommand('-stack-list-frames');
-                const frames = d.getJSONObj('^done', true).stack as Array<any>;
-                const f = frames.find(e => e.frame.func == 'VM_Execute');
-
-                if(f) {
-                    await d.sendCommand(`-stack-select-frame ${f.frame.level}`);
-                    this.sendCommand('set_breaks');
-                    d.cleared = true;
-                    this.sendCommand("-exec-continue");
-                }
-                break;*/
+                await d.stepInto();
+                break;
 
             case 'clear':
+                await d.RemoveAllLineBreapoints();
                 await d.sendCommand('-break-delete');
                 d.cleared = false;
                 d.bps.length = d.bps_line.length = 0;
                 break;
 
+            case 'print-lines': 
+                args = e.slice(String('print-lines').length + 1, e.length).split(' ');
+                let num_lines = 6;
+                if(args.length > 0)
+                    num_lines = Number(args[0]);
+
+                await d.PrintWhereItStopped(num_lines);
+                break;
+
             case 'start':
-                await d.sendCommand('-exec-run --start');
-                await d.getInferiorPIDAsJson();
+                await d.firstStart();
+                d.sendCommand('-exec-continue');
                 break;
 
             /*case 'log':
@@ -88,7 +105,7 @@ async function Prompt(d: GDBDebugger) {
 
 export function CONDebugger(target: string, PID: boolean) {
     debugger;
-    const d = new GDBDebugger(!PID ? target : undefined, PID ? Number(target) : undefined);
+    const d = new GDBDebugger(!PID ? target : undefined, PID ? Number(target) : undefined, false);
     //d.run();
 
     /*d.sendCommand('start');

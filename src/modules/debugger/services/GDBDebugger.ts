@@ -1,7 +1,8 @@
 import { rejects } from "assert";
 import { spawn, ChildProcessWithoutNullStreams, execSync } from "child_process";
 import ffi from 'ffi-napi';
-import ref from 'ref-napi';
+import path from "path";
+import fs from 'fs';
 
 /// Load kernel32.dll
 const kernel32 = ffi.Library("kernel32.dll", {
@@ -43,8 +44,12 @@ export default class GDBDebugger {
   public cleared: boolean;
   public bps_line: { file: string, line: number }[];
   public pid: number;
+  public stepBP: number;
+  public scriptFilenames: string[];
+  public scriptOffsets: number[];
+  private gdbLog: boolean;
 
-  constructor(targetBin?: string, targetPID?: number) {
+  constructor(targetBin?: string, targetPID?: number, gdbLog = false) {
     if(!targetBin && !targetPID)
       throw 'You must specify a binary path OR a PID to be debugger';
 
@@ -54,21 +59,25 @@ export default class GDBDebugger {
 
     this.setupListeners();
 
-    this.sendCommand('source ./jumps.py');
-
-    //this.sendCommand('handle SIGINT stop nopass');
+    this.sendCommand('break G_LoadLookups');
 
     this.bps = [];
-    this.cleared = true;
+    this.cleared = false;
     this.ready = true;
     this.bps_line = [];
     this.pid = 0;
+    this.stepBP = 0;
+    this.scriptFilenames = [];
+    this.scriptOffsets = [];
+    this.gdbLog = gdbLog;
   }
 
   private setupListeners() {
     this.gdb.stdout.on('data', (data) => {
         const output = data.toString();
-        console.log(output);
+        if(this.gdbLog)
+          console.log(output);
+
         this.buffer += output;
 
         if (this.buffer.includes('^done') || this.buffer.includes('*stopped')) {
@@ -142,42 +151,92 @@ export default class GDBDebugger {
     console.log('ready');
   }
   
-  public async SetBreakpointAtLine(file: string, line: number, reset?: boolean) {
-    await this.sendCommand(`-break-watch g_tw`);
-    
-    const obj = this.getJSONObj('^done').wpt;
+  public async SetBreakpointAtLine(file: string, line: number) {
+    if(path.isAbsolute(file) || file.includes('\\') || file.includes('/')) {
+      const baseFile = path.basename(file);
+      file = file.slice(0, file.length - baseFile.length) + baseFile.toUpperCase();
+    } else file = file.toUpperCase();
 
-    const bp = obj.number;
-        
-        //Now we must find the correct offset for the file
-    await this.sendCommand(`set $ptr = vmoffset`)
-    await this.sendCommand('-data-evaluate-expression vmoffset->fn');
+    await this.sendCommand('-data-evaluate-expression ' + `"VM_CONSetDebugLine(${line}, \\\"${file}\\\")"`);
 
-    let r = this.getJSONObj('^done').value.match(/"([^"]+)"/)[1];
+    this.bps_line.push({
+      file,
+      line
+    });
 
-    if(r != file) {
-      await this.sendCommand(`set $ptr = $ptr->next`)
-      await this.sendCommand('-data-evaluate-expression $ptr->fn');
-      r = this.getJSONObj('^done').value.match(/"([^"]+)"/)[1];
+    console.log(`Added breakpoint in line: ${line} at file: ${file}`);
+  }
 
-      while(r != file) {
-        await this.sendCommand(`set $ptr = $ptr->next`)
-        await this.sendCommand('-data-evaluate-expression $ptr->fn');
-        r = this.getJSONObj('^done').value.match(/"([^"]+)"/)[1];
-      }
+  public async UnsetBreakpointAtLine(file: string, line: number) {
+    if(path.isAbsolute(file) || file.includes(path.sep)) {
+      const baseFile = path.basename(file);
+      file = file.slice(0, file.length - baseFile.length) + baseFile.toUpperCase();
+    } else file = file.toUpperCase();
+
+    const index = this.bps_line.findIndex(e => e.file == file && e.line == line);
+
+    if(!index) {
+      console.log('No break point was found for line: ' + line + ' at file: ' + file);
+      return;
     }
 
-    await this.sendCommand(`set $offptr = $ptr->offset`);
+    await this.sendCommand('-data-evaluate-expression ' + `"VM_CONUnsetDebugLine(${line}, \\\"${file}\\\")"`);
 
-    await this.sendCommand(`-break-condition ${bp} g_tw == ${line << 12} && $offptr <= (insptr - apScript)`);
+    this.bps_line.splice(index, 1);
+    console.log(`Removed breakpoint in line: ${line} at file: ${file}`);
+  }
 
-    if(!reset)
-      this.bps_line.push({ file, line });
+  public async RemoveAllLineBreapoints() {
+    this.bps_line.forEach(async e => {
+      await this.sendCommand('-data-evaluate-expression ' + `"VM_CONUnsetDebugLine(${e.line}, \\\"${e.file}\\\")"`);
+      console.log(`Removed breakpoint in line: ${e.line} at file: ${e.file}`);
+    });
+
+    this.bps_line.length = 0;
   }
 
   // Run the program inside GDB
   public run() {
     this.sendCommand("run");
+  }
+
+  public GetScriptContent(index) {
+    try {
+      return fs.readFileSync(this.scriptFilenames[index]).toString();
+    } catch(err) {
+      console.log(err);
+      return null;
+    }
+  }
+
+  public async PrintWhereItStopped(num_lines = 6) {
+    await this.sendCommand(`-data-evaluate-expression g_tw`);
+    const line = this.getJSONObj('^done').value >> 12;
+
+    await this.sendCommand(`-data-evaluate-expression "(insptr - apScript)"`);
+    const offset = Number(this.getJSONObj('^done').value);
+
+    const index = this.scriptOffsets.findIndex(e => offset >= e);
+    const file = this.GetScriptContent(index);
+
+    if(!file) {
+      console.log('Unable to open script: ' + this.scriptFilenames[index]);
+      return;
+    }
+
+    const script = file.split('\n');
+
+    for (let i = line - Math.ceil(num_lines / 2); i < Math.min((line - Math.ceil(num_lines / 2)) + num_lines, script.length); i++) {
+      const lineNumber = (i + 1).toString().padStart(4, " ");
+      const separator = " | ";
+      
+      if (i + 1 == line) {
+          // Highlight current line in yellow
+          console.log(`\x1b[33m${lineNumber}${separator}${script[i]}\x1b[0m`);
+      } else {
+          console.log(`${lineNumber}${separator}${script[i]}`);
+      }
+    }
   }
 
   public async pause() {
@@ -207,15 +266,20 @@ export default class GDBDebugger {
   }
 
   public async continueExecution() {
-    await this.sendCommand('-break-delete');
+    await this.sendCommand(`-break-delete ${this.stepBP}`);
     this.cleared = false;
-    this.bps_line.forEach((e) => this.SetBreakpointAtLine(e.file, e.line, true));
+    //this.bps_line.forEach((e) => this.SetBreakpointAtLine(e.file, e.line, true));
     this.sendCommand("-exec-continue");
   }
 
   public async stepInto() {
     if(!this.cleared) {
-      this.sendCommand('set_breaks');
+      await this.wait();
+      await this.sendCommand(`-break-watch g_tw`);
+      const obj = this.getJSONObj('^done').wpt;
+
+      this.stepBP = obj.number;
+        
       this.cleared = true;
     }
 
@@ -228,6 +292,38 @@ export default class GDBDebugger {
 
   public close() {
     this.gdb.stdin.end();
+  }
+
+  public async firstStart() {
+    await this.sendCommand('-exec-run --start');
+    await this.getInferiorPIDAsJson();
+    await this.sendCommand(`-exec-continue`);
+    await this.sendCommand(`set $ptr = vmoffset`)
+
+    await this.sendCommand('-data-evaluate-expression vmoffset->fn');
+
+    let r = this.getJSONObj('^done').value.match(/"([^"]+)"/)[1];
+    this.scriptFilenames.push(r);
+
+    await this.sendCommand('-data-evaluate-expression vmoffset->offset');
+    this.scriptOffsets.push(this.getJSONObj('^done').value);
+
+    while(true) {
+      await this.sendCommand('-data-evaluate-expression $ptr->next');
+      r = Number(this.getJSONObj('^done').value);
+      if(r != 0) {
+        await this.sendCommand(`set $ptr = $ptr->next`);
+        await this.sendCommand('-data-evaluate-expression $ptr->fn');
+        r = this.getJSONObj('^done').value.match(/"([^"]+)"/)[1];
+        if(!this.scriptFilenames.includes(r)) {
+          this.scriptFilenames.push(r);
+          await this.sendCommand('-data-evaluate-expression $ptr->offset');
+          this.scriptOffsets.push(this.getJSONObj('^done').value);
+        }
+      } else break;
+    }
+
+    console.log(`Script files are: ${this.scriptFilenames.join(', ')}`);
   }
 }
 
