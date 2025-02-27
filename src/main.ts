@@ -21,6 +21,8 @@ let init_file = 'init.con';
 let debug_mode = false;
 let path_or_PID = '';
 let PID = false;
+let gdb_log = false;
+let gdb_err = false;
 
 /*
     1 - don't put header in the CONs
@@ -50,6 +52,12 @@ for(let i = 0; i < process.argv.length; i++) {
         } else path_or_PID = arg;
         break;
     }
+
+    if(a == `-gdblog`)
+        gdb_log = true;
+
+    if(a == `-gdberr`)
+        gdb_err = true;
 
     if(a == '-c') {
         fileName = process.argv[i + 1];
@@ -117,7 +125,7 @@ for(let i = 0; i < process.argv.length; i++) {
 }
 
 if(debug_mode) {
-    CONDebugger(path_or_PID, PID);
+    CONDebugger(path_or_PID, PID, gdb_log, gdb_err);
 } else {
     if(stack_size < 1024)
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
