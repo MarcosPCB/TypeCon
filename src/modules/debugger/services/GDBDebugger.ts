@@ -35,6 +35,9 @@ function suspendProcess(pid: number) {
   // Close the handle
   kernel32.CloseHandle(processHandle);
 }
+
+const GV_FLAG_CONSTANT = 2048;
+
 export default class GDBDebugger {
   private gdb: ChildProcessWithoutNullStreams;
   private buffer: string = "";
@@ -48,6 +51,7 @@ export default class GDBDebugger {
   public scriptFilenames: string[];
   public scriptOffsets: number[];
   private gdbLog: boolean;
+  public paused: boolean;
 
   constructor(targetBin?: string, targetPID?: number, gdbLog = false) {
     if(!targetBin && !targetPID)
@@ -70,6 +74,7 @@ export default class GDBDebugger {
     this.scriptFilenames = [];
     this.scriptOffsets = [];
     this.gdbLog = gdbLog;
+    this.paused = true;
   }
 
   private setupListeners() {
@@ -80,7 +85,7 @@ export default class GDBDebugger {
 
         this.buffer += output;
 
-        if (this.buffer.includes('^done') || this.buffer.includes('*stopped')) {
+        if (this.buffer.includes('^done') || this.buffer.includes('*stopped') || this.buffer.includes('^error')) {
             if (this.resolveOutput) {
                 this.resolveOutput(this.buffer);
                 this.resolveOutput = undefined;
@@ -101,8 +106,8 @@ export default class GDBDebugger {
   }
 
   public getJSONObj(splitter: string, frame_stack?: boolean) {
-    const g = this.buffer.indexOf('(gdb)');
-    let buf = this.buffer.split(splitter + ',', 2)[1].slice(0, g != -1 ? (g - String('(gdb)').length - 1)  : this.buffer.length);
+    this.buffer = this.buffer.replace(/\(gdb\)\s*/g, "");
+    let buf = this.buffer.split(splitter + ',', 2)[1].slice(0, this.buffer.length);
     if(frame_stack)
       buf = buf.replace(/frame=/g, '');
     if(buf.length > 0) {
@@ -200,6 +205,72 @@ export default class GDBDebugger {
     this.sendCommand("run");
   }
 
+  public async GetGameVarID(name: string) {
+    await this.sendCommand(`-data-evaluate-expression "hash_find(&h_gamevars, \\\"${name}\\\")"`);
+    const id = Number(this.getJSONObj('^done').value);
+
+    return id;
+  }
+
+  public async GetGameArrayID(name: string) {
+    await this.sendCommand(`-data-evaluate-expression "hash_find(&h_arrays, \\\"${name}\\\")"`);
+    const id = Number(this.getJSONObj('^done').value);
+
+    return id;
+  }
+
+  public async GetCurrentGameVarValue(name: string, type: number) {
+    if(type < 0 || type > 2) {
+      console.log(`Type must be 0: global, 1: per-player or 2: per-actor`);
+      return;
+    }
+
+    const varID = await this.GetGameVarID(name);
+
+    if(varID == -1) {
+      console.log(`Variable ${name} does not exist`);
+      return;
+    }
+
+    await this.sendCommand(`-data-evaluate-expression aGameVars[${varID}].flags`);
+    const flags = Number(this.getJSONObj('^done').value)
+    if((type > 0 && !(flags & type)) || (type == 0 && (flags & type))) {
+      console.log(`Variable ${name} is not the requested type. Requested type: ${type}, flags: ${flags}`);
+      return;
+    }
+
+    switch(type) {
+      case 0:
+        await this.sendCommand(`-data-evaluate-expression aGameVars[${varID}].global`);
+        break;
+
+      case 1:
+        await this.sendCommand(`-data-evaluate-expression aGameVars[${varID}].pValues[vm.playerNum]`);
+        break;
+
+      case 2:
+        await this.sendCommand(`-data-evaluate-expression aGameVars[${varID}].pValues[vm.spriteNum]`);
+        break;
+    }
+
+    const val = Number(this.getJSONObj('^done').value);
+    console.log(`Variable ${name}: ${val}`);
+  }
+
+  public async GetCurrentGameArrayValue(name: string, index: number) {
+    const varID = await this.GetGameArrayID(name);
+
+    if(varID == -1) {
+      console.log(`Array ${name} does not exist`);
+      return;
+    }
+
+    await this.sendCommand(`-data-evaluate-expression aGameArrays[${varID}].pValues[${index}]`);
+    
+    const val = Number(this.getJSONObj('^done').value);
+    console.log(`Array ${name}[${index}]: ${val}`);
+  }
+
   public GetScriptContent(index) {
     try {
       return fs.readFileSync(this.scriptFilenames[index]).toString();
@@ -239,11 +310,78 @@ export default class GDBDebugger {
     }
   }
 
-  public async pause() {
-    this.ready = false;
-    suspendProcess(this.pid);
-    await this.wait();
-    console.log('Stopped');
+  public async pause(force?: boolean) {
+    //if(!this.paused || force) {
+      this.ready = false;
+      suspendProcess(this.pid);
+      await this.wait();
+      console.log('Stopped');
+      //this.paused = true;
+    //}
+  }
+
+  public async Data(data: string) {
+    await this.sendCommand(`-data-evaluate-expression ${data}`);
+  }
+
+  //First part must be the instruction and then the arguments
+  //If you pass more arguments than the command requires, it might lead to bugs or it will break the VM
+  //SO BE CAREFUL
+  public async ExecuteCON(instructions: string) {
+    const tokens = instructions.trim().split(' ');
+    let byteCode: number[] = [];
+
+    for(let i = 0; i < tokens.length; i++) {
+      if(tokens[i] == ``)
+        continue;
+
+      if(!i) {
+        await this.Data(`"hash_find(&h_keywords, \\\"${tokens[i]}\\\")"`);
+        const ins = Number(this.getJSONObj('^done').value);
+        
+        if(ins == -1) {
+          console.log(`Instruction in ${instructions} is not valid`);
+          return;
+        }
+
+        byteCode.push(ins);
+        continue;
+      }
+
+      if(!isNaN(Number(tokens[i]))) {
+        byteCode.push(GV_FLAG_CONSTANT);
+        byteCode.push(Number(tokens[i]));
+        continue;
+      }
+
+      await this.Data(`"hash_find(&h_labels, \\\"${tokens[i]}\\\")"`);
+      let ins = Number(this.getJSONObj('^done').value);
+
+      if(ins == -1) {
+        await this.Data(`"hash_find(&h_gamevars, \\\"${tokens[i]}\\\")"`);
+        ins = Number(this.getJSONObj('^done').value);
+
+        if(ins == -1) {
+          console.log(`Argument ${tokens[i]} in ${instructions} is not a valid label nor variable`);
+          return;
+        }
+      } else {
+        await this.Data(`"labelcode[${ins}]"`);
+        ins = Number(this.getJSONObj('^done').value);
+        byteCode.push(GV_FLAG_CONSTANT);
+      }
+
+      byteCode.push(ins);
+      continue;
+
+    }
+
+    if(byteCode.length < 40)
+      for(let i = byteCode.length; i < 50; i++)
+        byteCode.push(0);
+
+    await this.sendCommand(`set $inst = (intptr_t[${byteCode.length}]) {${new Int32Array(byteCode).join(', ')}}`)
+    this.Data(`"VM_DebugSandBox($inst)"`);
   }
 
   public sendCommand(command: string): Promise<boolean> {
@@ -268,6 +406,7 @@ export default class GDBDebugger {
   public async continueExecution() {
     await this.sendCommand(`-break-delete ${this.stepBP}`);
     this.cleared = false;
+    this.paused = false;
     //this.bps_line.forEach((e) => this.SetBreakpointAtLine(e.file, e.line, true));
     this.sendCommand("-exec-continue");
   }

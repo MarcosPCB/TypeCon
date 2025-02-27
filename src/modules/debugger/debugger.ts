@@ -60,7 +60,7 @@ async function Prompt(d: GDBDebugger) {
                 break;
 
             case 'fullstop':
-                d.pause();
+                d.pause(true);
                 break;
 
             case 'stop':
@@ -78,15 +78,47 @@ async function Prompt(d: GDBDebugger) {
             case 'print-lines': 
                 args = e.slice(String('print-lines').length + 1, e.length).split(' ');
                 let num_lines = 6;
-                if(args.length > 0)
-                    num_lines = Number(args[0]);
+                num_lines = isNaN(Number(args[0])) ? 6 : Number(args[0]);
 
                 await d.PrintWhereItStopped(num_lines);
+                break;
+
+            case 'print-var': 
+                args = e.slice(String('print-var').length + 1, e.length).split(' ');
+
+                let type = isNaN(Number(args[1])) ? 0 : Number(args[1]);
+
+                await d.GetCurrentGameVarValue(args[0], type);
+                break;
+
+            case 'print-array': 
+                args = e.slice(String('print-var').length + 1, e.length).split(' ');
+
+                let index = isNaN(Number(args[1])) ? 0 : Number(args[1]);
+
+                await d.GetCurrentGameArrayValue(args[0], index);
+                break;
+
+            case 'dump-vars':
+                d.sendCommand('call Gv_DumpValues()');
+                break;
+
+            case 'info':
+                d.sendCommand('call VM_ScriptInfo()');
                 break;
 
             case 'start':
                 await d.firstStart();
                 d.sendCommand('-exec-continue');
+                break;
+
+            case `con`:
+                args = e.slice(String('con').length + 1, e.length).split(' ');
+                await d.ExecuteCON(args.join(` `));
+                break;
+
+            case `render`:
+                await d.Data(`"videoNextPage()"`);
                 break;
 
             /*case 'log':
@@ -105,7 +137,7 @@ async function Prompt(d: GDBDebugger) {
 
 export function CONDebugger(target: string, PID: boolean) {
     debugger;
-    const d = new GDBDebugger(!PID ? target : undefined, PID ? Number(target) : undefined, false);
+    const d = new GDBDebugger(!PID ? target : undefined, PID ? Number(target) : undefined, true);
     //d.run();
 
     /*d.sendCommand('start');
