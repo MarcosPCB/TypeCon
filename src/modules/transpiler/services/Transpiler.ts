@@ -1,9 +1,9 @@
 import * as T from '@babel/types';
-import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IType, IVar, TClassType, TVar, Names, EventList } from '../types';
+import { EBlock, EState, IActor, IBlock, IError, IFunction, ILabel, IType, IVar, TClassType, TVar, Names, EventList, TObjectType } from '../types';
 import { escape } from 'querystring';
 import { funcTranslator, IFuncTranslation, initCode, initStates } from '../helper/translation';
 import '../../../defs/TCSet100/types';
-import { CON_NATIVE_FLAGS, nativeFunctions, nativeVars, EMoveFlags, CON_NATIVE_FUNCTION, CON_NATIVE_TYPE, CON_NATIVE_STRUCT } from '../../../defs/TCSet100/native';
+import { CON_NATIVE_FLAGS, nativeFunctions, EMoveFlags, CON_NATIVE_FUNCTION, CON_NATIVE_TYPE, nativeVars_Sprites, CON_NATIVE_VAR, nativeVars_Sectors } from '../../../defs/TCSet100/native';
 
 const errors: IError[] = [];
 var detailLines = false;
@@ -85,7 +85,31 @@ function FlattenMemberExpression(node: T.Node): string[] {
       if(node.computed)
         parts.unshift('[' + node.property.value + ']');
       else parts.unshift(node.property.value);
-    } else parts.unshift((node.property as T.Identifier).name)
+    } else {
+      if(node.property.type == 'MemberExpression') {
+        code += `state push \n`;
+        if(!Traverse(node.property, 'declaration'))
+          return [];
+        code += `add rsp 1 \nsetarray stack[rsp] ra \nstate pop \n`;
+
+        sp++;
+
+        vars.push({
+          name: parts[0] + '_' + Math.ceil(Math.random() * 100000) + '_temp',
+          global: false,
+          block: bBlock.length - 1,
+          constant: false,
+          type: 'integer',
+          init: 0,
+          pointer: sp,
+          heap: false
+        });
+
+        if(node.computed)
+          parts.unshift(`[${vars.at(-1).name}]`);
+      } else
+        parts.unshift((node.property as T.Identifier).name)
+    }
     node = node.object;
   }
 
@@ -99,10 +123,10 @@ function FlattenMemberExpression(node: T.Node): string[] {
 }
 
 function GetObject(name: string, array = false) {
-  let variable = vars.find(e => (array ? (e.name == name && e.object_name == '_array') : e.object_name == name) && e.object && e.block == bBlock.length - 1);
+  let variable = vars.find(e => e.object_name == name && e.object && e.block == bBlock.length - 1);
 
   if(!variable)
-    variable = vars.find(e => (array ? (e.name == name && e.object_name == '_array') : e.object_name == name) && e.object && e.global);
+    variable = vars.find(e => e.object_name == name && e.object && e.global);
 
   return variable;
 }
@@ -134,6 +158,17 @@ function GetVarType(node: T.Identifier) {
 
           case 'TLabel':
             return 'label';
+
+          default:
+            const t = types.find(e => e.name == (type2 as T.Identifier).name);
+
+            if(!t)
+              return null;
+
+            return {
+              array: true,
+              type: t
+            }
         }
       } else if(type.type == 'TSArrayType') {
         const type2 = type.elementType;
@@ -596,15 +631,97 @@ function Traverse(
     if(node.id.type == 'Identifier')
       name = node.id.name;
 
+    let obj: TObjectType[] = [];
+
     if(node.typeAnnotation.type == 'TSTypeLiteral') {
       aliasTo = 'object';
       size = node.typeAnnotation.members.length;
+
+      const members = node.typeAnnotation.members;
+      let objType: IType;
+
+      for(let i = 0; i < members.length; i++) {
+        const m = members[i] as T.TSPropertySignature;
+        let type = '';
+        let array = false;
+        switch((m.typeAnnotation as T.TSTypeAnnotation).typeAnnotation.type) {
+          case 'TSNumberKeyword':
+            type = 'integer';
+            break;
+
+          case 'TSStringKeyword':
+            type = 'string';
+            break;
+
+          case 'TSArrayType':
+            array = true;
+            switch(((m.typeAnnotation as T.TSTypeAnnotation).typeAnnotation as T.TSArrayType).elementType.type) {
+              case 'TSNumberKeyword':
+                type = 'integer';
+                break;
+    
+              case 'TSStringKeyword':
+                type = 'string';
+                break;
+    
+              case 'TSObjectKeyword':
+                type = 'integer';
+                break;
+
+              case 'TSTypeReference':
+                const tName = ((((m.typeAnnotation as T.TSTypeAnnotation)
+                .typeAnnotation as T.TSArrayType)
+                .elementType as T.TSTypeReference)
+                .typeName as T.Identifier).name;
+
+                objType = types.find(e => e.name == tName);
+
+                if(!objType) {
+                  console.log(`ERROR: type ${tName} does not exist`);
+                  return false;
+                }
+
+                type = 'OBJ_' + tName;
+
+                break;
+            }
+            break;
+
+          case 'TSObjectKeyword':
+            type = 'integer';
+            break;
+
+          case 'TSTypeReference':
+            const tName = (((m.typeAnnotation as T.TSTypeAnnotation)
+            .typeAnnotation as T.TSTypeReference)
+            .typeName as T.Identifier).name;
+
+            objType = types.find(e => e.name == tName);
+
+            if(!objType) {
+              console.log(`ERROR: type ${tName} does not exist`);
+              return false;
+            }
+
+            type = 'OBJ_' + tName;
+
+            break;
+        }
+
+        obj.push({
+            name: (m.key as T.Identifier).name,
+            type: type.startsWith('OBJ_') ? 'object' : type as "string" | "object" | "integer" | "label",
+            array,
+            object: type.startsWith('OBJ_') ? objType.object : undefined 
+          });
+      }
     }
 
     types.push({
       name,
       aliasTo,
-      size
+      size,
+      object: obj.length > 0 ? obj : undefined
     });
 
     return true;
@@ -1347,306 +1464,258 @@ function Traverse(
   }
 
   if(node.type == 'MemberExpression') {
-    const o = node.object;
-    const p = node.property;
+    //const o = node.object;
+    //const p = node.property;
     let object: IVar | typeof EMoveFlags | null = null;
     const exp = FlattenMemberExpression(node);
 
-    if(o.type == 'Identifier') {
-      switch(o.name) {
-        case 'EMoveFlags':
-          object = EMoveFlags;
-          break;
-      }
-
-      //Search for stack objects
-      if(!object) {
-        object = GetObject(o.name, node.computed);
-
-        if(!object) {
-          errors.push({
-            type: 'error',
-            node: node.type,
-            location: node.loc as T.SourceLocation,
-            message: `Object or array ${o.name} does not exist or hasn't been declared yet`
-          });
-          return false;
+    switch(exp[0]) {
+      case 'EMoveFlags':
+        object = EMoveFlags;
+        if(mode == 'retrieval') {
+            ra = object[exp[1]];
+          return true;
         }
-      }
-    }
+        break;
 
-    /*
-    //For now, work in retrieval mode
-    if(o.type == 'MemberExpression') {
-      if(!Traverse(o, 'retrieval'))
-        return false;
+      case 'this':
+        if(mode == 'assignment')
+          code += `state push \n`;
 
-      if(node.computed) {
-        if(p.type == 'NumericLiteral')
-          ra = ra[p.value];
-  
-        return true;
-      }
-    }
-    */
-
-    if(p.type == 'Identifier') {
-      if(o.type == 'ThisExpression') {
         if(block == EBlock.ACTOR) {
-          let v = nativeVars.find(e => (e.name == p.name && (e.var_type == CON_NATIVE_TYPE.object || e.var_type & CON_NATIVE_TYPE.variable )));
+          let p = 1;
+          let v = nativeVars_Sprites.find(e => e.name == exp[p]);
+
           if(!v) {
             errors.push({
               type: 'error',
               node: node.type,
               location: node.loc as T.SourceLocation,
-              message: `Property ${p.name} does not exist in CActor or its own actor`
+              message: `Property ${exp[p]} does not exist in CActor or its own actor`
             });
             return false;
           }
 
-          if(v.type == 'ts' && mode == 'retrieval') {
-            ra = (curActor as any)[v.name];
+          if(v.var_type == CON_NATIVE_TYPE.variable) {
+            if(mode == 'assignment')
+              code += `set ${v.code} ra \n`;
+            else code += `set ra ${v.code} \n`;
             return true;
           }
 
-          if(mode == 'retrieval')
-            ra = v.init;
-          else {
-            if(!(v.var_type & CON_NATIVE_TYPE.variable))
-              code += `geta[].${v.code} ra \n`
-            else  code += `set ra ${v.code} \n`;
-          }
-        }
-      } else if(o.type == 'MemberExpression') {
-        let obj = '';
-        let index = '';
-        let nativeStruct = false;
+          if(v.var_type == CON_NATIVE_TYPE.object) {
+            let overriden = false;
+            for(p = 1; p < exp.length; p++) {
+              v = v.object.find(e => e.name == exp[p]);
 
-        
-
-        if(nativeStruct) {
-          switch(obj) {
-            case 'sprites':
-              code += mode == 'assignment' ? `seta` : 'geta';
-              break;
-
-            case 'sectors':
-              code += mode == 'assignment' ? `setsector` : 'getsector';
-              break;
-
-            case 'walls':
-              code += mode == 'assignment' ? `setwall` : 'getwall';
-              break;
-
-            case 'players':
-              code += mode == 'assignment' ? `setp` : 'getp';
-              break;
-          }
-
-          code += `[ra]`;
-        }
-
-        if(o.object.type == 'Identifier')
-          obj = o.object.name;
-
-        if(obj == 'sprites' || obj == 'player') {
-          if(!o.computed) {
-            errors.push({
-              type: 'error',
-              node: node.type,
-              location: node.loc as T.SourceLocation,
-              message: `Missing index for ${obj} array`
-            });
-            return false;
-          }
-
-          if(o.property.type == 'NumericLiteral')
-            index = `[${o.property.value}]`;
-
-          if(o.property.type == 'StringLiteral') {
-            const l = labels.find(e => e.label == (o.property as T.StringLiteral).value);
-
-            if(!l) {
-              errors.push({
-                type: 'error',
-                node: node.type,
-                location: node.loc as T.SourceLocation,
-                message: `Keyword, label or variable ${o.property.value} does not exist`
-              });
-              return false;
-            }
-
-            index = `[${o.property.value}]`;
-          }
-
-          if(o.property.type == 'Identifier') {
-            if(o.property.name == 'RETURN')
-              index += '[RETURN]';
-            else {
-              const variable = GetVar(o.property.name);
-
-              if(!variable) {
+              if(!v) {
                 errors.push({
                   type: 'error',
                   node: node.type,
                   location: node.loc as T.SourceLocation,
-                  message: `Keyword, label or variable ${o.property.name} does not exist`
+                  message: `Property ${exp[p]} does not exist in CActor or its own actor`
                 });
                 return false;
               }
 
-              const loc = sp - variable.pointer;
-              
-              if(loc == 0)
-                index = '[stack[rsp]]';
-              else {
-                code += `set ri rsp \nsub ri ${loc} \n`;
-                index = '[stack[ri]]';
+              if(v.override_code) {
+                code += v.code[mode == 'assignment' ? 1 : 0];
+                overriden = true;
               }
             }
+            if(!overriden)
+              code += mode == 'assignment' ? 'seta[]' : 'geta[]';
+
+            code += `.${v.code} ra\n`;
+            return true;
           }
 
-          let v = nativeVars.find(e => (e.name == p.name 
-            && (obj == 'sprites' && e.object & CON_NATIVE_STRUCT.sprite || e.var_type & CON_NATIVE_TYPE.variable)));
-          if(!v) {
+          if(mode == 'assignment')
+            code += `seta[].${v.code} ra \n`;
+          else code += `geta[].${v.code} ra \n`;
+
+          return true;
+        }
+        break;
+
+      case 'sectors':
+        if(mode == 'assignment')
+          code += `state push \n`;
+
+        if(exp[1].charAt(0) != '[' || exp[1].charAt(exp[1].length - 1) != ']') {
+          errors.push({
+            type: 'error',
+            node: node.type,
+            location: node.loc as T.SourceLocation,
+            message: `Missing index for native object ${exp[0]}`
+          });
+          return false;
+        }
+
+        const index = exp[1].slice(1, exp[1].length - 1);
+
+        if(!isNaN(Number(index)))
+          code += `set ri ${Number(index)} \n`;
+        else {
+          const variable = GetVar(index);
+
+          if(!variable) {
             errors.push({
               type: 'error',
               node: node.type,
               location: node.loc as T.SourceLocation,
-              message: `Property ${p.name} does not exist in CActor or its own actor`
+              message: `Unknown keyword or variable ${index}`
             });
             return false;
           }
 
-          if(!(v.var_type & CON_NATIVE_TYPE.variable)) {
-            if(mode == 'assignment')
-              code += `set${obj == 'sprites' ? 'a' : 'p'}${index}.${v.code} ra \n`;
-            else code += `get${obj == 'sprites' ? 'a' : 'p'}${index}.${v.code} ra \n`
-          } else {
-            if(mode == 'assignment')
-              code += `set${obj == 'sprites' ? 'actorvar' : 'playervar'}${index}.${v.code} ra`
-            else code += `get${obj == 'sprites' ? 'actorvar' : 'playervar'}${index}.${v.code} ra`
-          }
+          code += `set ri rsp \nsub ri ${sp - variable.pointer} \nset ri stack[ri] \n`;
         }
-      } else {
-        if(mode == 'retrieval') {
-          if(o.type == 'Identifier')
-            ra = object[p.name]
 
-          //if(o.type == 'MemberExpression')
-            //ra = ra[p.name];
-        } else {
-          const obj = object as IVar;
-          let pointer = 0;
+        let p = 2;
+        let v = nativeVars_Sectors.find(e => e.name == exp[p]);
 
-          if(node.computed) {
-            const variable = GetVar(p.name);
+        if(!v) {
+          errors.push({
+            type: 'error',
+            node: node.type,
+            location: node.loc as T.SourceLocation,
+            message: `Property ${exp[p]} does not exist in ${exp[0]}`
+          });
+          return false;
+        }
 
-            if(!variable) {
+        let overriden = false;
+        let after_code = ''
+
+        if(v.override_code) {
+          after_code += v.code[mode == 'assignment' ? 1 : 0];
+          overriden = true;
+        }
+
+        if(v.var_type == CON_NATIVE_TYPE.object || v.var_type == CON_NATIVE_TYPE.array) {
+          for(p = 3; p < exp.length; p++) {
+            if(exp[p].charAt(0) == '[' && exp[p].charAt(exp[p].length - 1) == ']') {
+              const index = exp[p].slice(1, exp[p].length - 1);
+
+              if(!isNaN(Number(index)))
+                code += `set rd ${Number(index)} \n`;
+              else {
+                const variable = GetVar(index);
+
+                if(!variable) {
+                  errors.push({
+                    type: 'error',
+                    node: node.type,
+                    location: node.loc as T.SourceLocation,
+                    message: `Unknown keyword or variable ${index}`
+                  });
+                  return false;
+                }
+
+                code += `set ri rsp \nsub ri ${sp - variable.pointer} \nset rd stack[ri] \n`;
+              }
+
+              continue;
+            }
+
+            v = v.object.find(e => e.name == exp[p]);
+
+            if(!v) {
               errors.push({
                 type: 'error',
                 node: node.type,
                 location: node.loc as T.SourceLocation,
-                message: `Variable ${p.name} does not exist or hasn't been declared yet`
+                message: `Property ${exp[p]} does not exist in object ${exp[0]}`
               });
               return false;
             }
 
-            pointer = variable.pointer;
-
-            const index = sp - pointer;
-            if(mode == 'assignment') {
-              if(!index)
-                code += `set ri stack[rsp] \nadd ri ${obj.pointer} \nsetarray heap[ri] ra \n`;
-              else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${obj.pointer} \nsetarray heap[ri] ra \n`;
-            } else {
-              if(!index)
-                code += `set ri stack[rsp] \nadd ri ${obj.pointer} \nset ra heap[ri] \n`;
-              else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${obj.pointer} \nset ra heap[ri] \n`;
+            if(v.override_code) {
+              after_code += v.code[mode == 'assignment' ? 1 : 0];
+              overriden = true;
             }
-          } else {
-            //Find property
-            const property = obj.object[p.name];
-
-            if(!property) {
-              errors.push({
-                type: 'error',
-                node: node.type,
-                location: node.loc as T.SourceLocation,
-                message: `Property ${p.name} does not exist in object ${obj.object_name}`
-              });
-              return false;
-            }
-
-            pointer = property.index;
           }
 
-          const index = sp - obj.pointer;
+          if(overriden)
+            code += after_code;
+          else
+            code += mode == 'assignment' ? 'setsector[ri]' : 'getsector[ri]';
 
-          if(mode == 'assignment') {
-            if(!index)
-              code += `set ri rsp \nadd ri ${pointer} \nsetarray stack[ri] ra \n`;
-            else code += `set ri rsp \nsub ri ${index} \nadd ri ${pointer} \nsetarray stack[ri] ra \n`;
-          } else {
-            if(!index)
-              code += `set ri rsp \nadd ri ${pointer} \nset ra stack[ri] \n`;
-            else code += `set ri rsp\nsub ri ${index} \nadd ri ${pointer} \nset ra stack[ri] \n`;
-          }
+          code += `.${v.code} ra\n`;
+          return true;
         }
-      }
-    } else {
-      const obj = object as IVar;
 
-      if(node.computed) {
-        if(p.type == 'NumericLiteral') {
-          const i = p.value;
+        if(mode == 'assignment')
+          code += `state pop \nsetsector[ri].${v.code} ra \n`;
+        else code += `getsector[ri].${v.code} ra \n`;
 
-          if(obj.size && i > obj.size) {
+        return true;
+        break;
+
+        default:
+          if(mode == 'assignment')
+            code += `state push \n`;
+
+          const obj = GetObject(exp[0]);
+
+          if(!obj) {
             errors.push({
-              type: 'warning',
+              type: 'error',
               node: node.type,
               location: node.loc as T.SourceLocation,
-              message: `Array index is bigger than its size`
+              message: `Object ${exp[0]} not found or not declared yet`
             });
             return false;
           }
 
-          const index = sp - obj.pointer;
+          let keys = Object.keys(obj.object);
+          let fObj = obj.object;
 
-          if(obj.heap) {
-            if(mode == 'assignment') {
-              if(!index)
-                code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] ra \n`;
-              else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${i} \nsetarray heap[ri] ra \n`;
-            } else {
-              if(!index)
-                code += `set ri stack[rsp] \nadd ri ${i} \nset ra heap[ri] \n`;
-              else code += `state push \nset ri rsp \nsub ri ${index} \nset ra stack[ri] \nset ri ra \nstate pop \nadd ri ${i} \nset ra heap[ri] \n`;
+          for(let p = 1; p < exp.length; p++) {
+            if(exp[p].charAt(0) == '[' && exp[p].charAt(exp[p].length - 1) == ']') {
+              const index = exp[p].slice(1, exp[p].length - 1);
+
+              if(!isNaN(Number(index)))
+                code += `set rd ${Number(index)} \n`;
+              else {
+                const variable = GetVar(index);
+
+                if(!variable) {
+                  errors.push({
+                    type: 'error',
+                    node: node.type,
+                    location: node.loc as T.SourceLocation,
+                    message: `Unknown keyword or variable ${index}`
+                  });
+                  return false;
+                }
+
+                code += `set ri rsp \nsub ri ${sp - variable.pointer} \nset rd stack[ri] \n`;
+              }
+
+              continue;
             }
-          } else {
-            if(mode == 'assignment') {
-              //if(!index)
-                //code += `set ri rsp \nadd ri ${i} \nsetarray heap[ri] ra \n`;
-              /*else*/ code += `set ri rsp \nsub ri ${index} \nadd ri ${i}\nsetarray stack[ri] ra \n`;
+
+            if(!keys.find(e => e == exp[p])) {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Property ${exp[p]} not found in object ${exp[0]}`
+              });
+              return false;
+            }
+
+            if(p != exp.length - 1) {
+              keys = Object.keys(obj.object[exp[p]]['object']);
+              fObj = obj.object[exp[p]]['object'];
             } else {
-              //if(!index)
-                //code += `set ri stack[rsp] \nadd ri ${i} \nset ra heap[ri] \n`;
-              /*else*/ code += `set ri rsp \nsub ri ${index} \nadd ri ${i} \nset ra stack[ri] \n`;
+              code += `set ri rsp \nsub ri ${sp - fObj.index} \nmul rd ${fObj.size} \nadd ri rd \nset ra stack[ri] \n`;
             }
           }
-        } else if(p.type == 'MemberExpression') {
-          if(mode == 'assignment')
-            code += 'state push \n';
-          if(!Traverse(p, 'function_body'))
-            return false;
 
-          if(mode == 'assignment') {
-            code += `set ri ra \nstate pop \nsetarray stack[ri] ra \n`;
-          } else {
-            code += `set ri ra \nset ra stack[ri] \n`;
-          }
-        }
-      }
+          break;
     }
 
     if(typeof argument !== 'undefined') {
@@ -1684,6 +1753,18 @@ function Traverse(
           const v = vars.at(-1) as IVar;
           const pName = (p.key as T.Identifier).name;
           //let v2: IVar;
+
+          if(v.typeRef) {
+            if(!v.typeRef.object.find(e => e.name == pName)) {
+              errors.push({
+                type: 'error',
+                node: node.type,
+                location: node.loc as T.SourceLocation,
+                message: `Property ${pName} does not exist on type ${v.typeRef.name}`
+              });
+              return false;
+            }
+          }
 
           if(i == 0) {
             v.object_name = v.name;
@@ -1734,6 +1815,83 @@ function Traverse(
               code += `setarray stack[rsp] ra \n`
               //code += `set ri stack[rsp] \nadd ri ${i} \nsetarray heap[ri] ra \n`;
           }
+
+          if(p.value.type == 'CallExpression') {
+            if((p.value.callee as T.Identifier).name == 'Array') {
+              const a = p.value.arguments;
+
+              if(a.length > 0) {
+                if(a[0].type == 'NumericLiteral') {
+                  const val = a[0].value;
+
+                  if(v.typeRef && v.typeRef.object.find(e => e.name == pName)['object']) {
+                    const o = v.typeRef.object.find(e => e.name == pName).object;
+
+                    v.object[pName]['object'] = o.map((e, j): any => {
+                      return { [e.name]: {
+                        value: 0,
+                        index: i + j,
+                        object: e.object,
+                        size: e.size
+                      }}
+                    }).reduce((a, e) => {
+                      const [key, obj] = Object.entries(e)[0];
+                      a[key] = obj;
+                      return a;
+                    });
+                    const nKeys = Object.keys(v.typeRef.object.find(e => e.name == pName)['object']);
+                    for(let j = 0; j < val; j++)
+                      for(let k = 0; k < nKeys.length; k++)
+                        code += `add rsp 1 \nsetarray stack[rsp] 0`;
+                  } else {
+                    for(let j = 0; j < val; j++)
+                      code += `add rsp 1 \nsetarray stack[rsp] 0`;
+                  }
+                }
+              } else {
+                //Heap allocation
+                let size = CalculateObjArraySize(2);
+
+                if(v.typeRef) {
+                  size = CalculateObjArraySize(v.typeRef.size);
+                  v.object[pName]['object'] = v.typeRef.object;
+                }
+
+                code += `state pushr1 \nset r0 ${size} \nstate alloc \nadd rsp1 \nset stack[rsp] rb \nstate popr1 \n`;
+                v.object[pName]['heap'] = true;
+              }
+            }
+          }
+
+          if(p.value.type == 'ArrayExpression') {
+            const a = p.value.elements;
+
+            if(a.length > 0) {
+              if(a[0].type == 'NumericLiteral') {
+                const val = a[0].value;
+
+                if(v.typeRef && v.typeRef.object.find(e => e.name == pName)['object']) {
+                  v.object[pName]['object'] = v.typeRef.object.find(e => e.name == pName)['object'];
+                  const nKeys = Object.keys(v.typeRef.object.find(e => e.name == pName)['object']);
+                  for(let j = 0; j < val; j++)
+                    for(let k = 0; k < nKeys.length; k++)
+                      code += `add rsp 1 \nsetarray stack[rsp] 0`;
+                } else {
+                  for(let j = 0; j < val; j++)
+                    code += `add rsp 1 \nsetarray stack[rsp] 0`;
+                }
+              }
+            } else {
+              //Heap allocation
+              let size = CalculateObjArraySize(2);
+
+              if(v.typeRef)
+                size = CalculateObjArraySize(v.typeRef.size);
+
+              code += `state pushr1 \nset r0 ${size} \nstate alloc \nadd rsp1 \nset stack[rsp] rb \nstate popr1 \n`;
+              v.object[pName]['heap'] = true;
+            }
+          }
         }
       }
     }
@@ -1763,6 +1921,7 @@ function Traverse(
           constant: node.kind == 'const',
           //@ts-ignore
           type: typeof vType === 'string' ? vType : vType.name,
+          typeRef: typeof vType === 'object' ? vType.type : undefined,
           init: 0,
           pointer: sp,
           block: bBlock.length - 1,
@@ -1932,7 +2091,7 @@ function Traverse(
               variable.init = ra;
 
             if(mode != 'retrieval' && traverseMode != 'retrieval' && node.declarations[0].init.type != 'ObjectExpression' && !returnedBuffer)
-              code += `setarray stack[rsp] ra \n`;
+              code += `add rsp 1 \nsetarray stack[rsp] ra \n`;
           }
         }
       }

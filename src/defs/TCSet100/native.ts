@@ -60,14 +60,14 @@ export interface CON_NATIVE_FUNCTION {
     arguments_default?: any[]
 }
 
-interface CON_NATIVE_VAR {
+export interface CON_NATIVE_VAR {
     name: string,
     var_type: CON_NATIVE_TYPE,
     type: CON_NATIVE_FLAGS,
     readonly: boolean,
     init: string | number,
     code: string | string[], //When override_code is true, code is an array containing the get and then the set code 
-    object?: CON_NATIVE_VAR[] | CON_NATIVE_VAR,
+    object?: CON_NATIVE_VAR[],
     override_code?: boolean
 }
 
@@ -401,6 +401,34 @@ state popd
     }
 ]
 
+
+const nativePos: CON_NATIVE_VAR[] = [
+    {
+        name: 'x',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'x',
+        init: 0
+    },
+    {
+        name: 'y',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'y',
+        init: 0
+    },
+    {
+        name: 'z',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'z',
+        init: 0
+    },
+];
+
 export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
     {
         name: 'curAction',
@@ -505,34 +533,16 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
         readonly: false,
         code: 'picnum',
         init: 0
+    },
+    {
+        name: 'pos',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: nativePos
     }
-];
-
-const nativePos: CON_NATIVE_VAR[] = [
-    {
-        name: 'x',
-        var_type: CON_NATIVE_TYPE.native,
-        type: CON_NATIVE_FLAGS.VARIABLE,
-        readonly: false,
-        code: 'x',
-        init: 0
-    },
-    {
-        name: 'y',
-        var_type: CON_NATIVE_TYPE.native,
-        type: CON_NATIVE_FLAGS.VARIABLE,
-        readonly: false,
-        code: 'y',
-        init: 0
-    },
-    {
-        name: 'z',
-        var_type: CON_NATIVE_TYPE.native,
-        type: CON_NATIVE_FLAGS.VARIABLE,
-        readonly: false,
-        code: 'z',
-        init: 0
-    },
 ];
 
 export const nativeVars_Walls: CON_NATIVE_VAR[] = [
@@ -567,12 +577,20 @@ export const nativeVars_Sectors: CON_NATIVE_VAR[] = [
         ]
     },
     {
+        name: 'extra',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'extra',
+        init: 0
+    },
+    {
         name: 'walls',
         var_type: CON_NATIVE_TYPE.array,
         type: CON_NATIVE_FLAGS.ARRAY,
         readonly: true,
         init: 0,
-        code: ['state push \ngetsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \n set ri ra \nstate popc \nstate pop \ngetwall[ra]'],
+        code: ['getsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \nset ri ra \nstate popc \nstate pop \ngetwall[ri]', 'getsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \nset ri ra \nstate popc \nstate pop \nsetwall[ri]'],
         object: nativeVars_Walls,
         override_code: true,
     }

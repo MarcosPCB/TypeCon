@@ -42,6 +42,14 @@ interface IArg {
     variable: IVar
 }
 
+export type TObjectType = {
+    name: string;
+    type: 'string' | 'integer' | 'label' | 'object',
+    array: boolean,
+    object?: TObjectType[],
+    size?: number
+}
+
 export interface IFunction {
     name: string,
     args: IArg[]
@@ -56,6 +64,7 @@ export interface IVar {
     name: string,
     constant: boolean,
     type: 'integer' | 'string' | 'action' | 'move' | 'ai' | 'label' | 'any',
+    typeRef?: IType,
     init: any,
     pointer: number,
     object_name?: string, //If object_name is _array, then it's an array
@@ -76,7 +85,8 @@ export type TVar = {
 export interface IType {
     name: string,
     aliasTo: 'object' | 'number' | 'string',
-    size: number
+    size: number,
+    object?: TObjectType[]
 }
 
 export interface IActor {

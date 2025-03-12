@@ -1,8 +1,14 @@
 import '../../src/defs/TCSet100/types';
 
 type wow = {
-    name: string,
+    name: number,
     ball: number
+}
+
+type test = {
+    name: number,
+    god: number,
+    low: wow[]
 }
 
 class newEnemy extends CActor {
@@ -129,8 +135,19 @@ class displayRest extends CEvent {
 
     public Append(): void {
         this.RotateSprite(160, 100, 0, 65536, 0, 0, 0, 0, 0, 0, 0, 0);
-        console.log(sectors[0].ceiling.z);
-        console.log(sectors[0].walls[0].pos.x);
+        const t = sectors[0].ceiling.z
+        const a = sectors[sectors[0].extra].walls[0].pos.x
+        console.log(t);
+        console.log(a);
+        sectors[sectors[0].extra].walls[0].pos.x = 1;
+
+        const obj: test = {
+            name: 2,
+            god: 15,
+            low: Array(4)
+        }
+
+        const y = obj.low[1].ball;
     }
 }
 
