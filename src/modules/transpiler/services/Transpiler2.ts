@@ -36,7 +36,9 @@ import {
     TypeAliasDeclaration,
     TypeLiteralNode,
     PropertySignature,
-    PropertyAssignment
+    PropertyAssignment,
+    SwitchStatement,
+    NumericLiteral
   } from "ts-morph";
   
   // Import your native data
@@ -48,7 +50,8 @@ import {
     CON_NATIVE_TYPE,
     nativeVars_Sprites,
     CON_NATIVE_VAR,
-    nativeVars_Sectors
+    nativeVars_Sectors,
+    nativeVars_Walls
   } from "../../../defs/TCSet100/native";
 
   import { Names } from "../types";
@@ -66,6 +69,23 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
   | { op: "ifand" | "ifeither" | "ifneither" | "ife" | "ifn" | "ifl" | "ifg" | "ifle" | "ifge"; left: Expression; right: Expression | number };
 
   
+  interface SegmentIdentifier {
+    kind: "identifier" | "this";
+    name: string; // e.g. "foo" or "this"
+  }
+  
+  interface SegmentProperty {
+    kind: "property";
+    name: string; // e.g. "bar"
+  }
+  
+  interface SegmentIndex {
+    kind: "index";
+    expr: Expression; // the expression inside [...], e.g. "baz"
+  }
+
+  type MemberSegment = SegmentIdentifier | SegmentProperty | SegmentIndex;
+
   interface TranspileDiagnostic {
     line: number;
     message: string;
@@ -78,9 +98,10 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
 
   interface SymbolDefinition {
     name: string;
-    type: "number" | "string" | "object" | "array" | "pointer";
+    type: "number" | "string" | "object" | "array" | "pointer" | 'function';
     offset: number;        // Delta from the object's base pointer.
     size?: number;         // How many slots this symbol occupies.
+    num_elements?: number;
     children?: { [key: string]: SymbolDefinition }; // For nested objects.
   }
   
@@ -216,7 +237,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         }
         const typeLiteral = typeNode as TypeLiteralNode;
         const members: Record<string, string> = {};
-        typeLiteral.getMembers().forEach(member => {
+        typeLiteral.getMembers().forEach((member, i) => {
           if (member.getKind() === SyntaxKind.PropertySignature) {
             const prop = member as PropertySignature;
             members[prop.getName()] = prop.getType().getText();
@@ -255,6 +276,47 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         // If the type is not defined as a type alias, assume it is primitive and occupies 1 slot.
         return 1;
       }
+
+      private getObjectTypeLayout(typeName: string, context: TranspilerContext): { [key: string]: SymbolDefinition } {
+        if (context.typeAliases.has(typeName)) {
+            const typeDef = context.typeAliases.get(typeName)!;
+            let layout: { [key: string]: SymbolDefinition } = {};
+            const keys = Object.keys(typeDef.members);
+            for (let i = 0; i < keys.length; i++) {
+                const t = typeDef.members[keys[i]];
+                const k = keys[i];
+                // If the member is an array type (e.g., "wow[]")
+                if (t.endsWith("[]")) {
+                    // Strip the brackets to get the base type.
+                    const baseType = t.slice(0, -2).trim();
+                    // Recursively compute the layout for one element of the array.
+                    if (context.typeAliases.has(baseType)) {
+                        layout = { ...this.getObjectTypeLayout(baseType, context) };
+                    } else {
+                        // For primitive arrays, assume one slot per element.
+                        layout[k] = {
+                            name: k,
+                            //@ts-ignore
+                            type: baseType,
+                            offset: i,
+                            size: 1
+                        };
+                    }
+                } else {
+                    // Otherwise, assume a primitive type takes one slot.
+                    layout[k] = {
+                        name: k,
+                        //@ts-ignore
+                        type: t,
+                        offset: i,
+                        size: 1
+                    };
+                }
+            }
+
+            return layout;
+        }
+      }
       
       
       private getArraySize(initText: string): number {
@@ -281,9 +343,15 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         case SyntaxKind.IfStatement:
           return code + this.visitIfStatement(stmt as IfStatement, context);
 
+        case SyntaxKind.SwitchStatement:
+            return code + this.visitSwitchStatement(stmt as SwitchStatement, context);
+
         case SyntaxKind.TypeAliasDeclaration:
             this.storeTypeAlias(stmt as TypeAliasDeclaration, context);
             break;
+
+        case SyntaxKind.BreakStatement:
+            return code + `break\n`;
   
         default:
           addDiagnostic(stmt, context, "warning", `Unhandled statement kind: ${stmt.getKindName()}`);
@@ -310,6 +378,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         const init = decl.getInitializer();
         if (init && init.isKind(SyntaxKind.ObjectLiteralExpression)) {
           code += this.visitObjectLiteral(init as ObjectLiteralExpression, context);
+          context.localVarCount++;
           // Store in symbol table that varName is an object.
           const aliasName = this.getTypeAliasNameForObjectLiteral(init as ObjectLiteralExpression);
           const size = aliasName ? this.getObjectSize(aliasName, context) : 0;
@@ -381,6 +450,38 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         return code;
       }
       
+    private visitSwitchStatement(sw: SwitchStatement, context: TranspilerContext) {
+        let code = this.visitExpression(sw.getExpression(), context);
+        const cases = sw.getCaseBlock().getClauses();
+        code += `switch ra\n`;
+        for(let i = 0; i < cases.length; i++) {
+            const c = cases[i];
+            if(c.isKind(SyntaxKind.DefaultClause))
+                code += `default:\n`;
+            else {
+                const clause = c.getExpression();
+                if(clause.isKind(SyntaxKind.CallExpression) && clause.getExpression().getText() == 'Label') {
+                    const innerArgs = (clause as CallExpression).getArguments();
+                    if (innerArgs.length > 0) {
+                        code += `case ${innerArgs[0].getText().replace(/['"]/g, "")}:\n`;
+                      } else {
+                        addDiagnostic(clause, context, "error", "Label() called without an argument");
+                        return code;
+                      }
+                } else if(clause.isKind(SyntaxKind.NumericLiteral))
+                    code += `case ${(clause as NumericLiteral).getText()}:\n`
+                else {
+                    addDiagnostic(clause, context, "error", `Invalid case clause: ${clause.getText()}`);
+                        return code;
+                }
+            }
+
+            c.getStatements().forEach(e => code += this.visitStatement(e, context));
+        }
+        code += `endswitch\n`;
+
+        return code;
+    }
   
     private visitBlockOrStmt(s: Statement, context: TranspilerContext): string {
       if (s.isKind(SyntaxKind.Block)) {
@@ -600,9 +701,8 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
       }
   
       if (left.isKind(SyntaxKind.PropertyAccessExpression) || left.isKind(SyntaxKind.ElementAccessExpression)) {
-        // e.g. this.vel = ...
-        addDiagnostic(left, context, "warning", `Assigning to property => handle with native var logic etc.`);
-        code += `/* partial assign property placeholder */\nset ra 0\n`;
+        code += `state push\n`;
+        code += this.visitMemberExpression(left, context, true);
         return code;
       }
   
@@ -636,6 +736,20 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           if (arg.isKind(SyntaxKind.NumericLiteral)) {
             return arg.getText();
           }
+
+          if(arg.isKind(SyntaxKind.PropertyAccessExpression) || arg.isKind(SyntaxKind.ElementAccessExpression))
+            return this.visitMemberExpression(arg, context, false, true);
+
+          if (arg.isKind(SyntaxKind.CallExpression) && arg.getExpression().getText() === "Label") {
+            const innerArgs = (arg as CallExpression).getArguments();
+            if (innerArgs.length > 0) {
+              return innerArgs[0].getText().replace(/['"]/g, "");
+            } else {
+              addDiagnostic(arg, context, "error", "Label() called without an argument");
+              return "";
+            }
+          }
+
           addDiagnostic(arg, context, "error", "Expected a numeric constant for a native CONSTANT argument");
           return "";
         }
@@ -688,13 +802,20 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
             code += fnCode + "\n";
           }
         } else {
+          const fnName = fnNameRaw.startsWith("this.") ? fnNameRaw.substring(5) : fnNameRaw;
+          const func = context.symbolTable.get(fnName);
+
+          if(!func) {
+            addDiagnostic(call, context, 'error', `Invalid function ${fnNameRaw}`);
+            return '';
+          }
           // If not native, assume it's a user function state.
           for (let i = 0; i < args.length; i++) {
             code += this.visitExpression(args[i] as Expression, context);
             code += `set r${i} ra\n`;
             resolvedLiterals.push(null);
           }
-          code += `state ${fnNameRaw}\n`;
+          code += `state ${func.name}\n`;
         }
         if (nativeFn && nativeFn.returns) {
           code += `set ra rb\n`;
@@ -757,19 +878,40 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                 const initText = pa.getInitializerOrThrow().getText();
                 const count = this.getArraySize(initText);
                 const instanceSize = this.getObjectSize(baseType, context);
-                // For each element, allocate instanceSize slots.
-                for (let j = 0; j < count; j++) {
-                  for (let k = 0; k < instanceSize; k++) {
-                    code += `set ra 0\nadd rsp 1\nset stack[rsp] ra\n`;
-                    totalSlots++;
-                  }
+                const instanceType = context.typeAliases.get(baseType);
+                if(instanceType) {
+                    const result = this.getObjectTypeLayout(baseType, context);
+                    for (let j = 0; j < count; j++) {
+                        for (let k = 0; k < instanceSize; k++) {
+                            code += `set ra 0\nadd rsp 1\nset stack[rsp] ra\n`;
+                            totalSlots++;
+                        }
+                    }
+
+                    layout[propName] = { 
+                        name: propName, 
+                        type: "array", 
+                        offset: totalSlots - (count * instanceSize), 
+                        size: count * instanceSize,
+                        num_elements: count, 
+                        children: { ...result }  // clone children as plain object
+                    };
+                } else {
+                    // For each element, allocate instanceSize slots.
+                    for (let j = 0; j < count; j++) {
+                        for (let k = 0; k < instanceSize; k++) {
+                            code += `set ra 0\nadd rsp 1\nset stack[rsp] ra\n`;
+                            totalSlots++;
+                        }
+                    }
+                    layout[propName] = { 
+                        name: propName, 
+                        type: "array", 
+                        offset: totalSlots - (count * instanceSize), 
+                        size: count * instanceSize, 
+                        num_elements: count,
+                    };
                 }
-                layout[propName] = { 
-                  name: propName, 
-                  type: "array", 
-                  offset: totalSlots - (count * instanceSize) + 1, 
-                  size: count * instanceSize 
-                };
               } else if (context.typeAliases.has(propType)) {
                 // For a nested object property.
                 const result = this.processObjectLiteral(pa.getInitializerOrThrow() as ObjectLiteralExpression, context);
@@ -815,111 +957,271 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         const varName = this.getVarNameForObjectLiteral(objLit);
         if (varName) {
           // Store the layout in the global symbol table.
-          context.symbolTable.set(varName, { name: varName, type: "object", offset: 1, size: result.size, children: result.layout });
+          context.symbolTable.set(varName, { name: varName, type: "object", offset: context.localVarCount + result.size + 1, size: result.size, children: result.layout });
         }
         return result.code;
       }      
-  
-      private visitMemberExpression(expr: Expression, context: TranspilerContext): string {
-        let code = `/* ${expr.getText()} */\n`;
-        
-        if (expr.isKind(SyntaxKind.PropertyAccessExpression)) {
-          const pae = expr as PropertyAccessExpression;
-          const objectExpr = pae.getExpression();
-          const propName = pae.getName();
+
+      private unrollMemberExpression(expr: Expression): MemberSegment[] {
+        const segments: MemberSegment[] = [];
       
-          // If object is "this"
-          if (objectExpr.getText() === "this") {
-            const nativeVar = findNativeVar_Sprite(propName);
-            if (nativeVar) {
-              if (nativeVar.var_type === CON_NATIVE_TYPE.variable) {
-                code += `set ra ${nativeVar.code}\n`;
-                return code;
-              } else {
-                code += `geta[].${nativeVar.code} ra\n`;
-                return code;
-              }
-            } else {
-              addDiagnostic(expr, context, "warning", `Property "${propName}" not found in nativeVars_Sprites`);
-              code += `/* default access for ${propName} */\nset ra 0\n`;
-              return code;
-            }
+        function climb(e: Expression) {
+          // For property access: objectExpression.propertyName
+          if (e.isKind(SyntaxKind.PropertyAccessExpression)) {
+            const pae = e as PropertyAccessExpression;
+            // Recurse first on the object expression
+            climb(pae.getExpression());
+            // Then add the property name
+            segments.push({
+              kind: "property",
+              name: pae.getName(),
+            });
           }
-          
-          // If object is the Names enum.
-          if (objectExpr.getText() === "Names") {
-            const enumVal = (Names as any)[propName];
-            if (typeof enumVal === "number") {
-              code += `set ra ${enumVal}\n`;
-              return code;
-            } else {
-              addDiagnostic(expr, context, "error", `Unknown Names member: ${propName}`);
-              code += `set ra 0\n`;
-              return code;
-            }
+          // For element access: objectExpression[indexExpression]
+          else if (e.isKind(SyntaxKind.ElementAccessExpression)) {
+            const eae = e as ElementAccessExpression;
+            // Recurse on the object expression
+            climb(eae.getExpression());
+            // Then add the index expression
+            segments.push({
+              kind: "index",
+              expr: eae.getArgumentExpressionOrThrow(),
+            });
           }
-          
-          // If object is the sprites array.
-          if (objectExpr.getText() === "sprites") {
-            const nativeVar = findNativeVar_Sprite(propName);
-            if (nativeVar) {
-              code += `geta[THISACTOR].${nativeVar.code} ra\n`;
-              return code;
-            } else {
-              addDiagnostic(expr, context, "warning", `Property "${propName}" not found in nativeVars_Sprites for sprites`);
-              code += `set ra 0\n`;
-              return code;
-            }
+          // For a simple identifier: e.g. "foo"
+          else if (e.isKind(SyntaxKind.Identifier)) {
+            segments.push({
+              kind: "identifier",
+              name: e.getText(),
+            });
           }
-          
-          // Otherwise, assume it's a user-defined object.
-          // We expect the object to be an identifier whose layout was recorded in context.symbolTable.
-          if (objectExpr.isKind(SyntaxKind.Identifier)) {
-            const objName = objectExpr.getText();
-            const sym = context.symbolTable.get(objName);
-            if (sym) {
-              // Load the object's base pointer from the stack.
-              // Assume sym.offset stores the delta from rsp where the object pointer is stored.
-              code += `set ri rsp\nsub ri ${sym.offset}\n`;
-              // Load the object's pointer into rd.
-              code += `set rd stack[ri]\n`;
-              // Look up the requested property in the children map.
-              if (sym.children && sym.children[propName]) {
-                const propSym = sym.children[propName];
-                // Now add the property's offset.
-                code += `add rd ${propSym.offset}\n`;
-                // Then load the property value from the stack.
-                code += `set ra stack[rd]\n`;
-                return code;
-              } else {
-                addDiagnostic(expr, context, "warning", `Property "${propName}" not found in symbol table for ${objName}`);
-                code += `set ra 0\n`;
-                return code;
-              }
-            }
+          // For "this"
+          else if (e.isKind(SyntaxKind.ThisKeyword)) {
+            segments.push({
+              kind: "this",
+              name: "this",
+            });
           }
-          
-          // Fallback: evaluate the object and produce a placeholder.
-          code += this.visitExpression(objectExpr, context);
-          code += `set rd ra\n`;
-          code += `/* default access for property .${propName} of custom object */\nset ra 123\n`;
-          return code;
-        } 
-        else if (expr.isKind(SyntaxKind.ElementAccessExpression)) {
-          const eae = expr as ElementAccessExpression;
-          code += this.visitExpression(eae.getExpression(), context);
-          code += `set rd ra\n`;
-          code += this.visitExpression(eae.getArgumentExpressionOrThrow(), context);
-          code += `set ri ra\n`;
-          code += `/* default element access placeholder */\nset ra 777\n`;
-          return code;
+          // Fallback for other expressions you might hit (parenthesized, etc.)
+          else {
+            // You can handle or flatten further, or store them as a single “identifier”:
+            segments.push({
+              kind: "identifier",
+              name: e.getText(),
+            });
+          }
         }
+
+        climb(expr);
+        return segments;
+      }
+  
+      private visitMemberExpression(expr: Expression, context: TranspilerContext, assignment?: boolean, direct?: boolean): string {
+        let code = `/* ${expr.getText()} */\n`;
+        const segments = this.unrollMemberExpression(expr);
+
+        if (segments.length === 0) {
+            addDiagnostic(expr, context, "warning", `No segments found for expression: ${expr.getText()}`);
+            return "set ra 0\n";
+          }
+
+          // Handle the object
+          const obj = segments[0] as SegmentIdentifier;
+          let sym: SymbolDefinition | null = null;
+          if(obj.kind == 'identifier' && ['sprites', 'sectors', 'walls', 'players', 'Names', 'EMoveFlags'].indexOf(obj.name) == -1) {
+            sym = context.symbolTable.get(obj.name);
+            if(!sym) {
+                addDiagnostic(expr, context, "error", `Undefined object: ${expr.getText()}`);
+                return "set ra 0\n";
+            }
+
+            code += `set ri rsp\nsub ri ${sym.offset}\n`;
+            code += `set ri stack[ri]\n`;
+
+            for(let i = 1; i < segments.length; i++) {
+                const seg = segments[i];
+                if(seg.kind == 'index') {
+                    if(sym.type != 'array') {
+                        addDiagnostic(expr, context, "error", `Indexing a non array variable: ${expr.getText()}`);
+                        return "set ra 0\n";
+                    }
+
+                    const localVars = context.localVarCount;
+                    code += `state pushd\n`
+                    code += this.visitExpression(seg.expr, context);
+                    if(localVars != context.localVarCount) {
+                        code += `sub rsp ${localVars - context.localVarCount}\n`;
+                        code += `add rsp 1\n` //Account for the push rd we did back there
+                        context.localVarCount = localVars;
+                    }
+                    code += `state popd\nmul ra ${sym.size / sym.num_elements}\nadd ri ra\n`
+                    continue;
+                }
+
+                if(seg.kind == 'property') {
+                    if(!sym.children) {
+                        addDiagnostic(expr, context, "error", `Object property ${seg.name} is not a object: ${expr.getText()}`);
+                        return "set ra 0\n";
+                    }
+
+                    if(!sym.children[seg.name]) {
+                        addDiagnostic(expr, context, "error", `Property ${seg.name} not found in: ${expr.getText()}`);
+                        return "set ra 0\n";
+                    }
+
+                    sym = sym.children[seg.name];
+
+                    code += `add ri ${sym.offset}\n`;
+                    continue;
+                }
+            }
+
+            if(assignment)
+                code += `setarray stack[ri] ra\n`;
+            else
+                code += `set ra stack[ri]\n`;
+            return code;
+          }
+
+          if(obj.kind == 'identifier' || obj.kind == 'this') {
+            switch(obj.name) {
+                case 'Names':
+                    if(direct)
+                        return Names[(segments[1] as SegmentProperty).name];
+
+                    code += `set ra ${Names[(segments[1] as SegmentProperty).name]}\n`;
+                    return code;
+
+                case 'EMoveFlags':
+                    if(direct)
+                        return Names[(segments[1] as SegmentProperty).name];
+
+                    code += `set ra ${EMoveFlags[(segments[1] as SegmentProperty).name]}\n`;
+                    return code;
+
+                default: //sprites, sectors, walls
+                    if(obj.kind != 'this') {
+                        if(segments[1].kind != 'index') {
+                            addDiagnostic(expr, context, "error", `Missing index for ${obj.name}: ${expr.getText()}`);
+                            return "set ra 0\n";
+                        }
+
+                        code += this.visitExpression(segments[1].expr, context);
+                        code += `set ri ra\n`;
+                    } else {
+                        code += `set ri THISACTOR\n`;
+                        if(context.currentActorPicnum)
+                            obj.name = 'sprites';
+                    }
+
+                    const seg = segments[obj.kind == 'this' ? 1 : 2];
+                    let op = '';
+
+                    if(seg.kind == 'property') {
+                        let nativeVar: CON_NATIVE_VAR[];
+
+                        switch(obj.name) {
+                            case 'sprites':
+                                nativeVar = nativeVars_Sprites;
+                                op = 'a';
+                                break;
+
+                            case 'sectors':
+                                nativeVar = nativeVars_Sectors;
+                                op = 'sector';
+                                break;
+
+                            case 'walls':
+                                nativeVar = nativeVars_Walls;
+                                op = 'wall';
+                                break;
+                        }
+
+                        let nVar = nativeVar.find(e => e.name == seg.name);
+
+                        if(!nVar) {
+                            addDiagnostic(expr, context, "error", `Property ${seg.name} not found in ${obj.name}: ${expr.getText()}`);
+                            return "set ra 0\n";
+                        }
+
+                        let overriden = false;
+
+                        if(nVar.type == CON_NATIVE_FLAGS.OBJECT) {
+                            let v = nVar.object;
+
+                            for(let i = 3; i < segments.length; i++) {
+                                const s = segments[i];
+
+                                if(nVar.var_type == CON_NATIVE_TYPE.array) {
+                                    if(s.kind != 'index') {
+                                        addDiagnostic(expr, context, "error", `Missing index for ${seg.name}: ${expr.getText()}`);
+                                        return "set ra 0\n";
+                                    }
+
+                                    code += this.visitExpression(s.expr, context);
+                                    if(nVar.override_code) {
+                                        code += nVar.code[assignment ? 1 : 0];
+                                        overriden = true;
+                                    }
+
+                                    if(nVar.type == CON_NATIVE_FLAGS.OBJECT) {
+                                        const v = nVar.object.find(e => e.name == (segments[i + 1] as SegmentProperty).name);
+
+                                        if(!v) {
+                                            addDiagnostic(expr, context, "error", `Segment ${(segments[i + 1] as SegmentProperty).name} is not a property of ${seg.name}: ${expr.getText()}`);
+                                            return "set ra 0\n";
+                                        }
+
+                                        nVar = v;
+                                        i++;
+                                    }
+
+                                    continue;
+                                }
+
+                                if(nVar.var_type == CON_NATIVE_TYPE.object) {
+                                    if(s.kind != 'property') {
+                                        addDiagnostic(expr, context, "error", `Segment after ${seg.name} is not a property: ${expr.getText()}`);
+                                        return "set ra 0\n";
+                                    }
+
+                                    const v = nVar.object.find(e => e.name == s.name);
+
+                                    if(!v) {
+                                        addDiagnostic(expr, context, "error", `Segment ${s.name} is not a property of ${seg.name}: ${expr.getText()}`);
+                                        return "set ra 0\n";
+                                    }
+
+                                    if(v.var_type == CON_NATIVE_TYPE.native) {
+                                        if(!overriden)
+                                            code += `${assignment ? 'state pop\nset' : 'get'}${op}[ri].`;
+
+                                        code += `${v.code} ra\n`;
+                                    }
+
+                                    if(v.var_type == CON_NATIVE_TYPE.object)
+                                        nVar = v;
+                                }
+                            }
+                        } else if(nVar.type == CON_NATIVE_FLAGS.VARIABLE) {
+                            if(nVar.var_type == CON_NATIVE_TYPE.native) {
+                                if(!overriden)
+                                    code += `${assignment ? 'state pop\nset' : 'get'}${op}[ri].`;
+
+                                code += `${nVar.code} ra\n`;
+                            } else code += `set ${assignment ? ('state pop\n' + nVar.code + ' ra\n')
+                                : ('ra ' + nVar.code + '\n')}`
+                        }
+                    }
+
+                    return code;
+            }
+          }
         
         addDiagnostic(expr, context, "warning", `Unhandled member expression: ${expr.getText()}`);
         code += `set ra 0\n`;
         return code;
-      }
-      
+      }      
       
   
     private visitUnaryExpression(expr: Expression, context: TranspilerContext): string {
@@ -1211,7 +1513,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         const pic = localCtx.currentActorPicnum || 0;
         const extra = localCtx.currentActorExtra || 0;
         const firstAction = localCtx.currentActorFirstAction || "0";
-        let code = `useractor 0 ${pic} ${extra} ${firstAction} \n`;
+        let code = `\nuseractor 0 ${pic} ${extra} ${firstAction} \n`;
         md.getParameters().forEach((p, i) => {
           localCtx.paramMap[p.getName()] = i;
         });
@@ -1221,22 +1523,36 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
             code += indent(this.visitStatement(st, localCtx), 1) + "\n";
           });
         }
-        code += `set rbp 0 \nset rsp -1 \nenda \n`;
+        code += `  set rbp 0 \n  set rsp -1 \nenda \n\n`;
         return code;
       }
   
       // otherwise => normal state
-      let code = `defstate ${className}_${mName} \nset ra rbp \nstate push \nset rbp rsp \n`;
+      let code = `\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set rbp rsp \n`;
+
       md.getParameters().forEach((p, i) => {
         localCtx.paramMap[p.getName()] = i;
       });
+
+        context.symbolTable.set(mName, {
+            name: `${className}_${mName}`,
+            type: 'function',
+            offset: 0
+        });
+
+        localCtx.symbolTable.set(mName, {
+            name: `${className}_${mName}`,
+            type: 'function',
+            offset: 0
+        });
+
       const body = md.getBody() as any;
       if (body) {
         body.getStatements().forEach(st => {
           code += indent(this.visitStatement(st, localCtx), 1) + "\n";
         });
       }
-      code += `set rsp rbp \nstate pop \nset rbp ra \nends \n`;
+      code += `  set rsp rbp \n  state pop \n  set rbp ra \nends \n\n`;
       return code;
     }
   }
