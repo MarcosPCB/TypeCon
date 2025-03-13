@@ -5,7 +5,8 @@ import Transpiler from './modules/transpiler/services/Transpiler';
 import * as T from '@babel/types';
 import { initCode, initStates } from './modules/transpiler/helper/translation';
 import GDBDebugger from './modules/debugger/services/GDBDebugger';
-import { CONDebugger } from './modules/debugger/debugger';
+//import { CONDebugger } from './modules/debugger/debugger';
+import { TsToConTranspiler } from './modules/transpiler/services/Transpiler2';
 
 let fileName = '';
 let lineDetail = false;
@@ -125,14 +126,35 @@ for(let i = 0; i < process.argv.length; i++) {
 }
 
 if(debug_mode) {
-    CONDebugger(path_or_PID, PID, gdb_log, gdb_err);
+    //CONDebugger(path_or_PID, PID, gdb_log, gdb_err);
 } else {
     if(stack_size < 1024)
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
-    console.log(`Parsing ${fileName}`);
+    const transpiler = new TsToConTranspiler({});
+
+    console.log(`Transpiling ${fileName}...`);
 
     const file = fs.readFileSync(fileName);
+
+    const result = transpiler.transpile(file.toString());
+
+    if (result.diagnostics.length > 0) {
+        console.log("\n=== DIAGNOSTICS ===");
+        for (const diag of result.diagnostics) {
+          console.log(`[${diag.severity}] line ${diag.line}: ${diag.message}`);
+        }
+    } else {
+        console.log("No errors or warnings.");
+    }
+
+    fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, result.conOutput);
+
+    console.log(`Transpiling finished!`);
+
+    //console.log(`Parsing ${fileName}`);
+
+    /*const file = fs.readFileSync(fileName);
 
     const parsed: T.File = Parser.parse(file.toString(), {
         sourceType: 'module',
@@ -184,7 +206,7 @@ if(debug_mode) {
 
         console.log(`Transpiling finished!`);
 
-    }
+    }*/
 
     process.exit(0);
 }
