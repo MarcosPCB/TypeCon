@@ -134,8 +134,8 @@ class displayRest extends CEvent {
     }
 
     public Append(): void {
-        this.RotateSprite(160, 100, 0, 65536, 0, 0, 0, 0, 0, 0, 0, 0);
-        
+        this.RotateSprite(160 >> 16, 100 >> 16, 0, 65536, 0, 0, 0, 0, 0, 0, 0, 0);
+
         const t = sectors[0].ceiling.z
         const a = sectors[sectors[0].extra].walls[0].pos.x
         console.log(t);

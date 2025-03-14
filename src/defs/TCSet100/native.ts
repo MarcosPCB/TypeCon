@@ -58,6 +58,7 @@ export interface CON_NATIVE_FUNCTION {
     return_size?: number,
     arguments: CON_NATIVE_FLAGS[],
     arguments_default?: any[]
+    object_belong?: string[]
 }
 
 export interface CON_NATIVE_VAR {
@@ -398,6 +399,16 @@ state popd
             CON_NATIVE_FLAGS.VARIABLE,
             CON_NATIVE_FLAGS.VARIABLE,
         ]
+    },
+    {
+        name: 'log',
+        code: `al`,
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        object_belong: ['console']
     }
 ]
 

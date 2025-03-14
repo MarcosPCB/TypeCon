@@ -1,26 +1,3 @@
-type TParamType = 'variable' | 'string' | 'constant' | "label";
-
-export interface IFuncTranslation {
-    type: 'object' | 'function' | 'variable' | 'definition';
-    tsObjName?: string;
-    names?: boolean;
-    tsName: string | string[];
-    conName: string;
-    params: TParamType[];
-    state?: boolean;
-}
-
-export const funcTranslator: IFuncTranslation[] = [
-    {
-        type: 'object',
-        tsObjName: 'console',
-        names: true,
-        tsName: ['log', 'error'],
-        conName: 'al',
-        params: ['variable']
-    }
-];
-
 export const initCode = `
 //Used mainly for function parameters
 var r0 0 0

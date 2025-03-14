@@ -329,7 +329,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
      * visitStatement
      *****************************************************************************/
     private visitStatement(stmt: Statement, context: TranspilerContext): string {
-      let code = `/* ${stmt.getText()} */\n`;
+      let code = ''//`/* ${stmt.getText()} */\n`;
       switch (stmt.getKind()) {
         case SyntaxKind.VariableStatement:
           return code + this.visitVariableStatement(stmt as VariableStatement, context);
@@ -421,7 +421,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
      * if => must be (A && B), (A || B), or !(A || B)
      *****************************************************************************/
     private visitIfStatement(is: IfStatement, context: TranspilerContext): string {
-        let code = "";
+        let code = `/*${is.getText()}*/\n`;
         const pattern = this.parseIfCondition(is.getExpression(), context);
         const thenPart = this.visitBlockOrStmt(is.getThenStatement(), context);
         const elsePart = is.getElseStatement() ? this.visitBlockOrStmt(is.getElseStatement()!, context) : "";
@@ -443,15 +443,19 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         }
       
         code += `${pattern.op} rd ra {\n`;
-        code += indent(thenPart, 1) + "\n";
-        code += `} else {\n`;
-        code += indent(elsePart, 1) + "\n";
+        code += indent(thenPart, 1);
+        if(elsePart != '') {
+            code += `} else {\n`;
+            code += indent(elsePart, 1);
+        }
+
         code += `}\n`;
+
         return code;
       }
       
     private visitSwitchStatement(sw: SwitchStatement, context: TranspilerContext) {
-        let code = this.visitExpression(sw.getExpression(), context);
+        let code = `/*${sw.getText()}*/\n` + this.visitExpression(sw.getExpression(), context);
         const cases = sw.getCaseBlock().getClauses();
         code += `switch ra\n`;
         for(let i = 0; i < cases.length; i++) {
@@ -550,7 +554,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
      * Expression
      *****************************************************************************/
     private visitExpression(expr: Expression, context: TranspilerContext): string {
-      let code = `/* ${expr.getText()} */\n`;
+      let code = ''//`/* ${expr.getText()} */\n`;
   
       switch (expr.getKind()) {
         case SyntaxKind.BinaryExpression:
@@ -595,8 +599,14 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           code += `set ri rsp\nsub ri ${off}\nset ra stack[ri]\n`;
           return code;
         }
+
+        if (context.symbolTable.has(name)) {
+            const off = context.symbolTable.get(name)
+            code += `set ri rsp\nsub ri ${off.offset}\nset ra stack[ri]\n`;
+            return code;
+          }
         // fallback => unknown
-        addDiagnostic(expr, context, "warning", `Unknown identifier: ${name}`);
+        addDiagnostic(expr, context, "error", `Unknown identifier: ${name}`);
         code += `set ra 0\n`;
         return code;
       }
@@ -672,6 +682,12 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           break;
         case "xor":
           code += `xor rd ra\nset ra rd\n`;
+          break;
+        case ">>":
+          code += `shiftr rd ra\nset ra rd\n`;
+          break;
+        case "<<":
+          code += `shiftl rd ra\nsetra rd\n`;
           break;
         default:
           addDiagnostic(bin, context, "error", `Unhandled operator "${opText}"`);
@@ -764,9 +780,157 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         let resolvedLiterals: (string | null)[] = [];
       
         // Process each argument based on the expected native flag.
-        const fnNameRaw = call.getExpression().getText();
-        const nativeFn = findNativeFunction(fnNameRaw);
+        const callExp = call.getExpression();
+        let fnNameRaw = '';
+        let fnObj: string | undefined;
+        if(callExp.isKind(SyntaxKind.Identifier))
+            fnNameRaw = call.getExpression().getText();
+        else if(callExp.isKind(SyntaxKind.PropertyAccessExpression)
+            || callExp.isKind(SyntaxKind.ElementAccessExpression)) {
+            const segments = this.unrollMemberExpression(callExp);
+
+            let obj = segments[0];
+
+            if(obj.kind == 'this') {
+                if(segments.length == 2 && segments[1].kind != 'index')
+                    fnNameRaw = segments[1].name;
+                else {
+                    //Assume it's greater than 2
+                    //In this case, we know this is not a native function
+                    //Search in the context for any objects/classes that contain the function
+
+                    obj = segments[1] as SegmentProperty;
+
+                    let o = context.symbolTable.get(obj.name);
+
+                    if(!o || !o.children) {
+                        addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
+                        return '';
+                    }
+
+                    for(let i = 2; i < segments.length; i++) {
+                        if(segments[i].kind == 'index') {
+                            if(o.type != 'array') {
+                                addDiagnostic(call, context, 'error', `Invalid index at non-array ${o.name}: ${fnNameRaw}`);
+                                return '';
+                            }
+
+                            continue;
+                        }
+
+                        obj = segments[i] as SegmentProperty;
+                        if(!o.children[obj.name]) {
+                            addDiagnostic(call, context, 'error', `Invalid property ${obj.name}: ${fnNameRaw}`);
+                            return '';
+                        }
+
+                        o = o.children[obj.name];
+                        if(i != segments.length - 1) {
+                            if(o.type == 'function') {
+                                //Function properties are not yet supported
+                                addDiagnostic(call, context, 'error', `Function properties are not yet supported: ${fnNameRaw}`);
+                                return '';
+                            }
+
+                            if(o.type != 'object' && o.type != 'array') {
+                                addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
+                                return '';
+                            }
+
+                            continue;
+                        }
+
+                        //If got it here, than we found the function
+                        //If not native, assume it's a user function state.
+                        //TO-DO: SETUP THE STACK WITH THE HEAP ELEMENTS OF THE INSTANTIATED CLASS
+                        if(args.length > 0)
+                            code += `state push${args.length > 12 ? 'all' : args.length}\n`;
+                        for (let i = 0; i < args.length; i++) {
+                            code += this.visitExpression(args[i] as Expression, context);
+                            code += `set r${i} ra\n`;
+                            resolvedLiterals.push(null);
+                        }
+
+                        code += `state ${o.name}\nset ra rb\n`;
+                        if(args.length > 0)
+                            code += `state pop${args.length > 12 ? 'all' : args.length}\n`;
+                        return code;
+                    }
+                }
+            } else if(segments[0].kind == 'identifier') {
+                if(segments.length == 2 && segments[1].kind != 'index') {
+                    fnNameRaw = (segments[1] as SegmentProperty).name;
+                    fnObj = segments[0].name;
+                } else {
+                    //Assume it's greater than 2
+                    //In this case, we know this is not a native function
+                    //Search in the context for any objects/classes that contain the function
+
+                    obj = segments[0] as SegmentIdentifier;
+
+                    let o = context.symbolTable.get(obj.name);
+
+                    if(!o || !o.children) {
+                        addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
+                        return '';
+                    }
+
+                    for(let i = 1; i < segments.length; i++) {
+                        if(segments[i].kind == 'index') {
+                            if(o.type != 'array') {
+                                addDiagnostic(call, context, 'error', `Invalid index at non-array ${o.name}: ${fnNameRaw}`);
+                                return '';
+                            }
+
+                            continue;
+                        }
+
+                        obj = segments[i] as SegmentProperty;
+                        if(!o.children[obj.name]) {
+                            addDiagnostic(call, context, 'error', `Invalid property ${obj.name}: ${fnNameRaw}`);
+                            return '';
+                        }
+
+                        o = o.children[obj.name];
+                        if(i != segments.length - 1) {
+                            if(o.type == 'function') {
+                                //Function properties are not yet supported
+                                addDiagnostic(call, context, 'error', `Function properties are not yet supported: ${fnNameRaw}`);
+                                return '';
+                            }
+
+                            if(o.type != 'object' && o.type != 'array') {
+                                addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
+                                return '';
+                            }
+
+                            continue;
+                        }
+
+                        //If got it here, than we found the function
+                        //If not native, assume it's a user function state.
+                        //TO-DO: SETUP THE STACK WITH THE HEAP ELEMENTS OF THE INSTANTIATED CLASS
+                        if(args.length > 0)
+                            code += `state push${args.length > 12 ? 'all' : args.length}\n`;
+                        for (let i = 0; i < args.length; i++) {
+                            code += this.visitExpression(args[i] as Expression, context);
+                            code += `set r${i} ra\n`;
+                            resolvedLiterals.push(null);
+                        }
+
+                        code += `state ${o.name}\nset ra rb\n`;
+                        if(args.length > 0)
+                            code += `state pop${args.length > 12 ? 'all' : args.length}\n`;
+                        return code;
+                    }
+                }
+            }
+        }
+
+        const nativeFn = findNativeFunction(fnNameRaw, fnObj);
         if (nativeFn) {
+          if(args.length > 0)
+            code += `state push${args.length > 12 ? 'all' : args.length}\n`;
           for (let i = 0; i < args.length; i++) {
             const expected = nativeFn.arguments[i] ?? 0;
             // For LABEL and CONSTANT types, resolve to a literal.
@@ -800,6 +964,8 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
             // For complex functions, call the arrow function.
             const fnCode = nativeFn.code(undefined, "\n");
             code += fnCode + "\n";
+            if(args.length > 0)
+                code += `state pop${args.length > 12 ? 'all' : args.length}\n`;
           }
         } else {
           const fnName = fnNameRaw.startsWith("this.") ? fnNameRaw.substring(5) : fnNameRaw;
@@ -810,12 +976,16 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
             return '';
           }
           // If not native, assume it's a user function state.
+          if(args.length > 0)
+            code += `state push${args.length > 12 ? 'all' : args.length}\n`;
           for (let i = 0; i < args.length; i++) {
             code += this.visitExpression(args[i] as Expression, context);
             code += `set r${i} ra\n`;
             resolvedLiterals.push(null);
           }
-          code += `state ${func.name}\n`;
+          code += `state ${func.name}\nset ra rb\n`;
+          if(args.length > 0)
+            code += `state pop${args.length > 12 ? 'all' : args.length}\n`;
         }
         if (nativeFn && nativeFn.returns) {
           code += `set ra rb\n`;
@@ -1284,17 +1454,30 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         localVarCount: 0,
         paramMap: {}
       };
-      let code = `state ${name} {\n`;
+      let code = `/*${fd.getText()}*/\ndefstate ${name}\n set ra rbp \n  state push \n  set rbp rsp \n`;
       fd.getParameters().forEach((p, i) => {
         localCtx.paramMap[p.getName()] = i;
       });
+
+      context.symbolTable.set(name, {
+        name: `${name}`,
+        type: 'function',
+        offset: 0
+    });
+
+    localCtx.symbolTable.set(name, {
+        name: `${name}`,
+        type: 'function',
+        offset: 0
+    });
+
       const body = fd.getBody() as any;
       if (body) {
         body.getStatements().forEach(st => {
           code += indent(this.visitStatement(st, localCtx), 1) + "\n";
         });
       }
-      code += `}\n`;
+      code += `  set rsp rbp \n  state pop \n  set rbp ra \nends \n\n`;
       return code;
     }
   
@@ -1513,7 +1696,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         const pic = localCtx.currentActorPicnum || 0;
         const extra = localCtx.currentActorExtra || 0;
         const firstAction = localCtx.currentActorFirstAction || "0";
-        let code = `\nuseractor 0 ${pic} ${extra} ${firstAction} \n`;
+        let code = `/*${md.getText()}*/\nuseractor 0 ${pic} ${extra} ${firstAction} \n`;
         md.getParameters().forEach((p, i) => {
           localCtx.paramMap[p.getName()] = i;
         });
@@ -1528,7 +1711,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
       }
   
       // otherwise => normal state
-      let code = `\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set rbp rsp \n`;
+      let code = `/*${md.getText()}*/\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set rbp rsp \n`;
 
       md.getParameters().forEach((p, i) => {
         localCtx.paramMap[p.getName()] = i;
