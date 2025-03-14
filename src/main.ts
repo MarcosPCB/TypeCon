@@ -148,7 +148,7 @@ if(debug_mode) {
         console.log("No errors or warnings.");
     }
 
-    fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, result.conOutput);
+    fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, initCode + initStates + result.conOutput);
 
     console.log(`Transpiling finished!`);
 

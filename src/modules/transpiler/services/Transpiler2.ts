@@ -54,7 +54,7 @@ import {
     nativeVars_Walls
   } from "../../../defs/TCSet100/native";
 
-  import { Names } from "../types";
+  import { EventList, Names } from "../types";
   
   // Also ensure you have your global type declarations from "types.ts"
   import "../../../defs/TCSet100/types";
@@ -386,8 +386,8 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         } else {
           // Process non-object initializers as before.
           code += this.visitExpression(init as Expression, context);
-          code += `add rsp 1\nset stack[rsp] ra\n`;
-          context.symbolTable.set(varName, { name: varName, type: "number", offset: context.localVarCount + 1, size: 1 });
+          code += `add rsp 1\nsetarray stack[rsp] ra\n`;
+          context.symbolTable.set(varName, { name: varName, type: "number", offset: context.localVarCount, size: 1 });
           context.localVarCount++;
         }
         return code;
@@ -596,13 +596,13 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         // check local var
         if (name in context.localVarOffset) {
           const off = context.localVarOffset[name];
-          code += `set ri rsp\nsub ri ${off}\nset ra stack[ri]\n`;
+          code += `set ri rbp\nadd ri ${off}\nset ra stack[ri]\n`;
           return code;
         }
 
         if (context.symbolTable.has(name)) {
             const off = context.symbolTable.get(name)
-            code += `set ri rsp\nsub ri ${off.offset}\nset ra stack[ri]\n`;
+            code += `set ri rbp\nadd ri ${off.offset}\nset ra stack[ri]\n`;
             return code;
           }
         // fallback => unknown
@@ -708,9 +708,16 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         }
         if (name in context.localVarOffset) {
           const off = context.localVarOffset[name];
-          code += `set ri rsp\nsub ri ${off}\nset stack[ri] ra\n`;
+          code += `set ri rbp\nsub ri ${off}\nsetarray stack[ri] ra\n`;
           return code;
         }
+
+        const v = context.symbolTable.get(name);
+
+        if(v) {
+          code += `set ri rbp\nadd ri ${v.offset}\nsetarray stack[ri] ra\n`;
+        }
+
         addDiagnostic(left, context, "error", `Assignment to unknown identifier: ${name}`);
         code += `set ra 0\n`;
         return code;
@@ -844,7 +851,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                         //If not native, assume it's a user function state.
                         //TO-DO: SETUP THE STACK WITH THE HEAP ELEMENTS OF THE INSTANTIATED CLASS
                         if(args.length > 0)
-                            code += `state push${args.length > 12 ? 'all' : args.length}\n`;
+                            code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
                         for (let i = 0; i < args.length; i++) {
                             code += this.visitExpression(args[i] as Expression, context);
                             code += `set r${i} ra\n`;
@@ -853,7 +860,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
 
                         code += `state ${o.name}\nset ra rb\n`;
                         if(args.length > 0)
-                            code += `state pop${args.length > 12 ? 'all' : args.length}\n`;
+                            code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
                         return code;
                     }
                 }
@@ -911,7 +918,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                         //If not native, assume it's a user function state.
                         //TO-DO: SETUP THE STACK WITH THE HEAP ELEMENTS OF THE INSTANTIATED CLASS
                         if(args.length > 0)
-                            code += `state push${args.length > 12 ? 'all' : args.length}\n`;
+                            code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
                         for (let i = 0; i < args.length; i++) {
                             code += this.visitExpression(args[i] as Expression, context);
                             code += `set r${i} ra\n`;
@@ -920,7 +927,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
 
                         code += `state ${o.name}\nset ra rb\n`;
                         if(args.length > 0)
-                            code += `state pop${args.length > 12 ? 'all' : args.length}\n`;
+                            code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
                         return code;
                     }
                 }
@@ -929,8 +936,9 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
 
         const nativeFn = findNativeFunction(fnNameRaw, fnObj);
         if (nativeFn) {
+          let argCode = '';
           if(args.length > 0)
-            code += `state push${args.length > 12 ? 'all' : args.length}\n`;
+            code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
           for (let i = 0; i < args.length; i++) {
             const expected = nativeFn.arguments[i] ?? 0;
             // For LABEL and CONSTANT types, resolve to a literal.
@@ -943,6 +951,11 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
               code += this.visitExpression(args[i] as Expression, context);
               code += `set r${i} ra\n`;
               resolvedLiterals.push(null);
+            } else if (expected & CON_NATIVE_FLAGS.FUNCTION) {
+                // For FUNCTION, generate code normally and keep it at argCode
+                argCode += this.visitExpression(args[i] as Expression, context);
+                argCode += `set r${i} ra\n`;
+                resolvedLiterals.push(null);
             } else {
               code += this.visitExpression(args[i] as Expression, context);
               code += `set r${i} ra\n`;
@@ -960,12 +973,14 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
               }
             }
             code += "\n";
+            if(args.length > 0)
+              code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
           } else {
             // For complex functions, call the arrow function.
-            const fnCode = nativeFn.code(undefined, "\n");
+            const fnCode = nativeFn.code(args.length > 0, argCode);
             code += fnCode + "\n";
             if(args.length > 0)
-                code += `state pop${args.length > 12 ? 'all' : args.length}\n`;
+                code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
           }
         } else {
           const fnName = fnNameRaw.startsWith("this.") ? fnNameRaw.substring(5) : fnNameRaw;
@@ -977,7 +992,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           }
           // If not native, assume it's a user function state.
           if(args.length > 0)
-            code += `state push${args.length > 12 ? 'all' : args.length}\n`;
+            code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
           for (let i = 0; i < args.length; i++) {
             code += this.visitExpression(args[i] as Expression, context);
             code += `set r${i} ra\n`;
@@ -985,7 +1000,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           }
           code += `state ${func.name}\nset ra rb\n`;
           if(args.length > 0)
-            code += `state pop${args.length > 12 ? 'all' : args.length}\n`;
+            code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
         }
         if (nativeFn && nativeFn.returns) {
           code += `set ra rb\n`;
@@ -1053,7 +1068,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                     const result = this.getObjectTypeLayout(baseType, context);
                     for (let j = 0; j < count; j++) {
                         for (let k = 0; k < instanceSize; k++) {
-                            code += `set ra 0\nadd rsp 1\nset stack[rsp] ra\n`;
+                            code += `set ra 0\nadd rsp 1\nsetarray stack[rsp] ra\n`;
                             totalSlots++;
                         }
                     }
@@ -1070,7 +1085,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                     // For each element, allocate instanceSize slots.
                     for (let j = 0; j < count; j++) {
                         for (let k = 0; k < instanceSize; k++) {
-                            code += `set ra 0\nadd rsp 1\nset stack[rsp] ra\n`;
+                            code += `set ra 0\nadd rsp 1\nsetarray stack[rsp] ra\n`;
                             totalSlots++;
                         }
                     }
@@ -1098,12 +1113,12 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
               } else {
                 // For a primitive property.
                 code += this.visitExpression(pa.getInitializerOrThrow(), context);
-                code += `add rsp 1\nset stack[rsp] ra\n`;
+                code += `add rsp 1\nsetarray stack[rsp] ra\n`;
                 layout[propName] = { name: propName, type: "number", offset: totalSlots, size: 1 };
               }
             } else {
               // Property not provided: default to 0.
-              code += `set ra 0\nadd rsp 1\nset stack[rsp] ra\n`;
+              code += `set ra 0\nadd rsp 1\nsetarray stack[rsp] ra\n`;
               layout[propName] = { name: propName, type: "number", offset: totalSlots, size: 1 };
             }
           }
@@ -1112,7 +1127,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         }
         
         // The object's base pointer is at: stack[rsp - (totalSlots + 1)]
-        code += `set ri rsp\nsub ri ${totalSlots + 1}\nset ra stack[ri]\n`;
+        //code += `set ri rbp\nadd ri ${totalSlots + 1}\nset ra stack[ri]\n`;
         
         // Optionally freeze the layout to avoid accidental modification.
         const frozenLayout = Object.freeze({ ...layout });
@@ -1127,7 +1142,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         const varName = this.getVarNameForObjectLiteral(objLit);
         if (varName) {
           // Store the layout in the global symbol table.
-          context.symbolTable.set(varName, { name: varName, type: "object", offset: context.localVarCount + result.size + 1, size: result.size, children: result.layout });
+          context.symbolTable.set(varName, { name: varName, type: "object", offset: context.localVarCount, size: result.size, children: result.layout });
         }
         return result.code;
       }      
@@ -1205,7 +1220,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                 return "set ra 0\n";
             }
 
-            code += `set ri rsp\nsub ri ${sym.offset}\n`;
+            code += `set ri rbp\nadd ri ${sym.offset}\n`;
             code += `set ri stack[ri]\n`;
 
             for(let i = 1; i < segments.length; i++) {
@@ -1217,14 +1232,14 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                     }
 
                     const localVars = context.localVarCount;
-                    code += `state pushd\n`
+                    //code += `state pushd\n`
                     code += this.visitExpression(seg.expr, context);
                     if(localVars != context.localVarCount) {
                         code += `sub rsp ${localVars - context.localVarCount}\n`;
                         code += `add rsp 1\n` //Account for the push rd we did back there
                         context.localVarCount = localVars;
                     }
-                    code += `state popd\nmul ra ${sym.size / sym.num_elements}\nadd ri ra\n`
+                    code += `mul ra ${sym.size / sym.num_elements}\nadd ri ra\n`
                     continue;
                 }
 
@@ -1489,7 +1504,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
       let code = `// class ${className}\n`;
   
       const base = cd.getExtends()?.getExpression().getText() || "";
-      const isActor = base === "CActor";
+      const type = base;
       // const isEvent = base === "CEvent"; // demonstration if needed
   
       // We'll create a local context for parsing this class
@@ -1510,11 +1525,11 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
       // visit constructor(s)
       const ctors = cd.getConstructors();
       if (ctors.length > 0) {
-        code += this.visitConstructorDeclaration(ctors[0], localCtx, isActor);
+        code += this.visitConstructorDeclaration(ctors[0], localCtx, type);
       }
 
-      // if isActor => append the actions/moves/ais lines
-      if (isActor) {
+      // if CActor => append the actions/moves/ais lines
+      if (type == 'CActor') {
         for (const a of localCtx.currentActorActions) {
           code += a + "\n";
         }
@@ -1529,7 +1544,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
       // visit methods
       const methods = cd.getInstanceMethods();
       for (const m of methods) {
-        code += this.visitMethodDeclaration(m, className, localCtx, isActor);
+        code += this.visitMethodDeclaration(m, className, localCtx, type);
       }
   
       return code;
@@ -1541,26 +1556,62 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
     private visitConstructorDeclaration(
       ctor: ConstructorDeclaration,
       context: TranspilerContext,
-      isActor: boolean
+      type: string
     ): string {
       let code = `// skipping actual constructor code\n`;
       const body = ctor.getBody() as any;
-      if (body && isActor) {
-        const statements = body.getStatements();
-        for (const st of statements) {
-          // e.g. variable statements => might define IAction, IMove, IAi
-          // expression => maybe super(...)
-          if (st.isKind(SyntaxKind.VariableStatement)) {
-            const vs = st as VariableStatement;
-            const decls = vs.getDeclarationList().getDeclarations();
-            decls.forEach(d => this.parseVarForActionsMovesAi(d, context));
-          } else if (st.isKind(SyntaxKind.ExpressionStatement)) {
-            const es = st as ExpressionStatement;
-            const expr = es.getExpression();
-            if (expr.isKind(SyntaxKind.CallExpression)) {
-              const call = expr as CallExpression;
-              if (call.getExpression().getText() === "super") {
-                this.parseActorSuperCall(call, context);
+      if (body) {
+        if(type == 'CActor') {
+          const statements = body.getStatements();
+          for (const st of statements) {
+            // e.g. variable statements => might define IAction, IMove, IAi
+            // expression => maybe super(...)
+            if (st.isKind(SyntaxKind.VariableStatement)) {
+              const vs = st as VariableStatement;
+              const decls = vs.getDeclarationList().getDeclarations();
+              decls.forEach(d => this.parseVarForActionsMovesAi(d, context));
+            } else if (st.isKind(SyntaxKind.ExpressionStatement)) {
+              const es = st as ExpressionStatement;
+              const expr = es.getExpression();
+              if (expr.isKind(SyntaxKind.CallExpression)) {
+                const call = expr as CallExpression;
+                if (call.getExpression().getText() === "super") {
+                  this.parseActorSuperCall(call, context);
+                }
+              }
+            }
+          }
+        } else if(type == 'CEvent') {
+          const statements = body.getStatements();
+          for (const st of statements) {
+            // e.g. variable statements => might define IAction, IMove, IAi
+            // expression => maybe super(...)
+           if (st.isKind(SyntaxKind.ExpressionStatement)) {
+              const es = st as ExpressionStatement;
+              const expr = es.getExpression();
+              if (expr.isKind(SyntaxKind.CallExpression)) {
+                const call = expr as CallExpression;
+                if (call.getExpression().getText() === "super") {
+                  const arg = call.getArguments();
+
+                  if(arg.length > 1)
+                    addDiagnostic(call, context, 'warning', `Too many arguments in Event Constructor: ${call.getText()}`);
+
+                  if(!arg[0].isKind(SyntaxKind.StringLiteral)) {
+                    addDiagnostic(call, context, 'error', `First argument of Event constructor must be the event name: ${call.getText()}`);
+                    return '';
+                  }
+
+                  const eventName = arg[0].getText().replace(/['"]/g, "");
+
+                  if(!EventList.includes(eventName as TEvents)) {
+                    addDiagnostic(call, context, 'error', `Event ${eventName} is not valid: ${call.getText()}`);
+                    return '';
+                  }
+
+                  context.currentEventName = eventName.toUpperCase();
+                  context.currentActorPicnum = undefined;
+                }
               }
             }
           }
@@ -1602,6 +1653,12 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           }
         }
       });
+      context.symbolTable.set(decl.getName(), {
+        name: actionName,
+        type: 'pointer',
+        offset: 0,
+        size: 1,
+      });
       context.currentActorActions.push(`action ${actionName} ${start} ${length} ${viewType} ${incValue} ${delay}`);
     }
   
@@ -1620,6 +1677,12 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
             case "vertical_vel": vv = parseInt(val.getText(), 10); break;
           }
         }
+      });
+      context.symbolTable.set(decl.getName(), {
+        name: moveName,
+        type: 'pointer',
+        offset: 0,
+        size: 1,
       });
       context.currentActorMoves.push(`move ${moveName} ${hv} ${vv}`);
     }
@@ -1641,6 +1704,12 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
             case "flags": flags = evalMoveFlags(val, context); break;
           }
         }
+      });
+      context.symbolTable.set(decl.getName(), {
+        name: aiName,
+        type: 'pointer',
+        offset: 0,
+        size: 1,
       });
       context.currentActorAis.push(`ai ${aiName} ${actionLabel} ${moveLabel} ${flags}`);
     }
@@ -1671,7 +1740,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
       if (args.length >= 5) {
         // first_action
         const fa = args[4];
-        context.currentActorFirstAction = fa.getText().replace(/['"]/g, "");
+        context.currentActorFirstAction = context.symbolTable.get(fa.getText()).name.replace(/['"]/g, "");
       }
     }
   
@@ -1682,7 +1751,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
       md: MethodDeclaration,
       className: string,
       context: TranspilerContext,
-      isActor: boolean
+      type: string
     ): string {
       const mName = md.getName();
       const localCtx: TranspilerContext = {
@@ -1692,11 +1761,11 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         paramMap: {}
       };
   
-      if (isActor && mName === "Main") {
+      if (type == 'CActor' && mName.toLowerCase() === "main") {
         const pic = localCtx.currentActorPicnum || 0;
         const extra = localCtx.currentActorExtra || 0;
         const firstAction = localCtx.currentActorFirstAction || "0";
-        let code = `/*${md.getText()}*/\nuseractor 0 ${pic} ${extra} ${firstAction} \n`;
+        let code = `/*${md.getText()}*/\nuseractor 0 ${pic} ${extra} ${firstAction} \nfindplayer playerDist\n`;
         md.getParameters().forEach((p, i) => {
           localCtx.paramMap[p.getName()] = i;
         });
@@ -1707,6 +1776,16 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           });
         }
         code += `  set rbp 0 \n  set rsp -1 \nenda \n\n`;
+        return code;
+      } else if(type == 'CEvent' && (mName.toLowerCase() == 'append' || mName.toLowerCase() == 'prepend')) {
+        let code = `/*${md.getText()}*/\n${mName.toLowerCase()}event EVENT_${context.currentEventName}\n`;
+        const body = md.getBody() as any;
+        if (body) {
+          body.getStatements().forEach(st => {
+            code += indent(this.visitStatement(st, localCtx), 1) + "\n";
+          });
+        }
+        code += `  set rbp 0 \n  set rsp -1 \nendevent \n\n`;
         return code;
       }
   

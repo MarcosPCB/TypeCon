@@ -79,7 +79,8 @@ var heapsize 512 0 //heaptables * PAGE_SIZE
 array rstack 16 0
 
 //Stack memory
-array stack `
+array stack 2048
+`
 
 export const initStates = `
 var _HEAPi 0 0
@@ -159,6 +160,19 @@ defstate pushr5
 ends
 
 defstate popr5
+    sub rsp 5
+    copy stack[rsp] rstack[0] 5
+    getarrayseq rstack r0 r1 r2 r3 r4
+ends
+
+defstate pushr12
+    add rsp 1
+    setarrayseq rstack r0 r1 r2 r3 r4
+    copy rstack[0] stack[rsp] 5
+    add rsp 4
+ends
+
+defstate popr12
     sub rsp 5
     copy stack[rsp] rstack[0] 5
     getarrayseq rstack r0 r1 r2 r3 r4

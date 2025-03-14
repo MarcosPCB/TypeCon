@@ -58,7 +58,7 @@ class newEnemy extends CActor {
             flags: EMoveFlags.seekplayer
         }
 
-        super(1685, true, 100, [AIdle, AWalk], AIdle, [MStop, MWalk], [AIIdle, AIWalk]);
+        super(1685, true, 10, [AIdle, AWalk], AIdle, [MStop, MWalk], [AIIdle, AIWalk]);
     }
 
     Events: OnEvent = {
@@ -134,13 +134,12 @@ class displayRest extends CEvent {
     }
 
     public Append(): void {
-        this.RotateSprite(160 >> 16, 100 >> 16, 0, 65536, 0, 0, 0, 0, 0, 0, 0, 0);
+        this.RotateSprite(160, 100, 65536, 0, 0, 0, 0, 0, 0, 0, 1024, 768);
 
         const t = sectors[0].ceiling.z
         const a = sectors[sectors[0].extra].walls[0].pos.x
         console.log(t);
         console.log(a);
-        sectors[sectors[0].extra].walls[0].pos.x = 1;
 
         const obj: test = {
             name: 2,
