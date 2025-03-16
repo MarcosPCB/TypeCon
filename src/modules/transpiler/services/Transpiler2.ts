@@ -38,7 +38,8 @@ import {
     PropertySignature,
     PropertyAssignment,
     SwitchStatement,
-    NumericLiteral
+    NumericLiteral,
+    ObjectLiteralElementLike
   } from "ts-morph";
   
   // Import your native data
@@ -102,6 +103,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
     offset: number;        // Delta from the object's base pointer.
     size?: number;         // How many slots this symbol occupies.
     num_elements?: number;
+    heap?: boolean,
     children?: { [key: string]: SymbolDefinition }; // For nested objects.
   }
   
@@ -363,7 +365,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
      * variable statements => local var
      *****************************************************************************/
     private visitVariableStatement(node: VariableStatement, context: TranspilerContext): string {
-      let code = "";
+      let code = `/*${node.getText()}*/`;
       const decls = node.getDeclarationList().getDeclarations();
       for (const d of decls) {
         code += this.visitVariableDeclaration(d, context);
@@ -603,6 +605,8 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         if (context.symbolTable.has(name)) {
             const off = context.symbolTable.get(name)
             code += `set ri rbp\nadd ri ${off.offset}\nset ra stack[ri]\n`;
+            if(off.heap)
+              code += `set rf 1\n`;
             return code;
           }
         // fallback => unknown
@@ -939,7 +943,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           let argCode = '';
           if(args.length > 0)
             code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
-          for (let i = 0; i < args.length; i++) {
+          for (let i = 0, j = 0; i < args.length; i++, j++) {
             const expected = nativeFn.arguments[i] ?? 0;
             // For LABEL and CONSTANT types, resolve to a literal.
             if (expected & (CON_NATIVE_FLAGS.LABEL | CON_NATIVE_FLAGS.CONSTANT)) {
@@ -949,16 +953,23 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
             } else if (expected & CON_NATIVE_FLAGS.VARIABLE) {
               // For VARIABLE, generate code normally.
               code += this.visitExpression(args[i] as Expression, context);
-              code += `set r${i} ra\n`;
+              code += `set r${j} ra\n`;
               resolvedLiterals.push(null);
             } else if (expected & CON_NATIVE_FLAGS.FUNCTION) {
                 // For FUNCTION, generate code normally and keep it at argCode
                 argCode += this.visitExpression(args[i] as Expression, context);
-                argCode += `set r${i} ra\n`;
+                argCode += `set r${j} ra\n`;
+                resolvedLiterals.push(null);
+            } else if (expected & (CON_NATIVE_FLAGS.OBJECT | CON_NATIVE_FLAGS.ARRAY)) {
+                // For OBJECT and ARRAY, the next register sets what type of address we are dealing with
+                code += this.visitExpression(args[i] as Expression, context);
+                code += `set r${j} ra\n`;
+                j++;
+                code += `set r${j} 0\nife rf 1\n set r${j} 1\n`
                 resolvedLiterals.push(null);
             } else {
               code += this.visitExpression(args[i] as Expression, context);
-              code += `set r${i} ra\n`;
+              code += `set r${j} ra\n`;
               resolvedLiterals.push(null);
             }
           }
@@ -1123,7 +1134,53 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
             }
           }
         } else {
-          addDiagnostic(objLit, context, "warning", `No type alias found for object literal; assuming empty object.`);
+          //addDiagnostic(objLit, context, "warning", `No type alias found for object literal; assuming empty object.`);
+          const props = objLit.getProperties();
+
+          for(const p of props) {
+            totalSlots++;
+            if(p.isKind(SyntaxKind.PropertyAssignment)) {
+              const init = p.getInitializerOrThrow();
+              const propName = p.getName().replace(/['"]/g, "");
+              if (init.isKind(SyntaxKind.ArrayLiteralExpression)) {
+                const initText = init.getText();
+                const count = this.getArraySize(initText);
+                //const instanceSize = this.getObjectSize(baseType, context);
+                // For each element, allocate instanceSize slots.
+                for (let j = 0; j < count; j++) {
+                  code += `set ra 0\nadd rsp 1\nsetarray stack[rsp] ra\n`;
+                  totalSlots++;
+                }
+                layout[propName] = { 
+                    name: propName, 
+                    type: "array", 
+                    offset: totalSlots - (count), 
+                    size: count, 
+                    num_elements: count,
+                };
+              } else if (init.isKind(SyntaxKind.ObjectLiteralExpression)) {
+                // For a nested object property.
+                const result = this.processObjectLiteral(init, context);
+                code += result.code;
+                const nestedSize = result.size;
+                layout[p.getName()] = { 
+                  name: propName, 
+                  type: "object", 
+                  offset: totalSlots, 
+                  size: nestedSize, 
+                  children: { ...result.layout }  // clone children as plain object
+                };
+                totalSlots += nestedSize - 1; // already counted one slot for the property
+              } else {
+                // For a primitive property.
+                code += this.visitExpression(init, context);
+                code += `add rsp 1\nsetarray stack[rsp] ra\n`;
+                layout[propName] = { name: propName, type: "number", offset: totalSlots, size: 1 };
+              }
+            } else
+              addDiagnostic(objLit, context, "error", `No property assignmetn found during object declaration: ${objLit.getText()}`);
+          }
+
         }
         
         // The object's base pointer is at: stack[rsp - (totalSlots + 1)]
@@ -1144,7 +1201,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           // Store the layout in the global symbol table.
           context.symbolTable.set(varName, { name: varName, type: "object", offset: context.localVarCount, size: result.size, children: result.layout });
         }
-        return result.code;
+        return result.code + `set rf 0\n`;
       }      
 
       private unrollMemberExpression(expr: Expression): MemberSegment[] {

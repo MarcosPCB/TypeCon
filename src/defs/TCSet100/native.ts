@@ -23,6 +23,7 @@ export enum CON_NATIVE_FLAGS {
     PROJECTILE = 128,
     OBJECT = 256,
     ARRAY = 512,
+    HEAP_POINTER = 1024
 }
 
 export enum EMoveFlags {
@@ -398,6 +399,65 @@ state popd
             CON_NATIVE_FLAGS.VARIABLE,
             CON_NATIVE_FLAGS.VARIABLE,
             CON_NATIVE_FLAGS.VARIABLE,
+        ]
+    },
+    {
+        name: 'DrawSprite',
+        returns: false,
+        return_type: null,
+        code: (args, fn) => {
+            return `
+state push
+state pushb
+state pushc
+
+set ri r0
+add ri 2
+ife r1 0 {
+  set r0 stack[ri]
+  add ri 1
+  set ra stack[ri]
+  add ri 1
+  set rc stack[ri]
+  add ri 1
+  set r1 stack[ri]
+} else {
+  set r0 heap[ri]
+  add ri 1
+  set ra heap[ri]
+  add ri 1
+  set rc heap[ri]
+  add ri 1
+  set r1 heap[ri]
+}
+
+set ri r3
+add ri 2
+ife r4 0 {
+  set r4 stack[ri]
+  add ri 1
+  set r3 stack[ri]
+  add ri 1
+  set rb stack[ri]
+} else {
+  set r4 heap[ri]
+  add ri 1
+  set r3 heap[ri]
+  add ri 1
+  set rb stack[ri]
+}
+
+rotatesprite r0 ra rc r1 r2 r4 r3 rb 0 0 xdim ydim
+
+state popc
+state popb
+state pop
+`;
+        },
+        arguments: [
+            CON_NATIVE_FLAGS.OBJECT,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.OBJECT
         ]
     },
     {

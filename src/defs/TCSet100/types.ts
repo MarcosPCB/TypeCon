@@ -226,7 +226,7 @@ declare global {
         constructor(event: TEvents)
 
         public RotateSprite(x: number, y: number, scale: number, ang: number, picnum: number, shade: number, pal: number, orientation: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
-        public DrawSprite(pos: pos2, picnum: number, style: style, x0y0: vec2, x1y1: vec2): CON_NATIVE<void>;
+        public DrawSprite(pos: pos2, picnum: number, style: style): CON_NATIVE<void>;
         public ScreenSound(sound: number): CON_NATIVE<void>;
 
         protected Append(): void | number;
