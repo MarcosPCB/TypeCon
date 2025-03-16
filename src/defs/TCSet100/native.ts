@@ -412,7 +412,7 @@ state pushb
 state pushc
 
 set ri r0
-add ri 2
+add ri 1
 ife r1 0 {
   set r0 stack[ri]
   add ri 1
@@ -432,7 +432,7 @@ ife r1 0 {
 }
 
 set ri r3
-add ri 2
+add ri 1
 ife r4 0 {
   set r4 stack[ri]
   add ri 1
@@ -444,7 +444,7 @@ ife r4 0 {
   add ri 1
   set r3 heap[ri]
   add ri 1
-  set rb stack[ri]
+  set rb heap[ri]
 }
 
 rotatesprite r0 ra rc r1 r2 r4 r3 rb 0 0 xdim ydim

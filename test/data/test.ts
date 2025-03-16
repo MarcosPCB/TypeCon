@@ -134,11 +134,11 @@ class displayRest extends CEvent {
     }
 
     public Append(): void {
-        this.RotateSprite(160, 100, 65536, 0, 0, 0, 0, 0, 0, 0, 1024, 768);
+        //this.RotateSprite(160, 100, 65536, 0, 0, 0, 0, 0, 0, 0, 1024, 768);
         const p: pos2 = {
             xy: {
                 x: 160,
-                y: 150
+                y: 100
             },
             scale: 65536,
             ang: 0

@@ -382,8 +382,9 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           code += this.visitObjectLiteral(init as ObjectLiteralExpression, context);
           context.localVarCount++;
           // Store in symbol table that varName is an object.
-          const aliasName = this.getTypeAliasNameForObjectLiteral(init as ObjectLiteralExpression);
-          const size = aliasName ? this.getObjectSize(aliasName, context) : 0;
+          //const aliasName = this.getTypeAliasNameForObjectLiteral(init as ObjectLiteralExpression);
+          //const size = aliasName ? this.getObjectSize(aliasName, context) : 0;
+
           //context.symbolTable.set(varName, { name: varName, type: "object", offset: 0, size: size });
         } else {
           // Process non-object initializers as before.
@@ -854,8 +855,10 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                         //If got it here, than we found the function
                         //If not native, assume it's a user function state.
                         //TO-DO: SETUP THE STACK WITH THE HEAP ELEMENTS OF THE INSTANTIATED CLASS
-                        if(args.length > 0)
+                        if(args.length > 0) {
                             code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
+                            context.localVarCount += args.length;
+                        }
                         for (let i = 0; i < args.length; i++) {
                             code += this.visitExpression(args[i] as Expression, context);
                             code += `set r${i} ra\n`;
@@ -863,8 +866,10 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                         }
 
                         code += `state ${o.name}\nset ra rb\n`;
-                        if(args.length > 0)
+                        if(args.length > 0) {
                             code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
+                            context.localVarCount -= args.length;
+                        }
                         return code;
                     }
                 }
@@ -921,8 +926,10 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                         //If got it here, than we found the function
                         //If not native, assume it's a user function state.
                         //TO-DO: SETUP THE STACK WITH THE HEAP ELEMENTS OF THE INSTANTIATED CLASS
-                        if(args.length > 0)
+                        if(args.length > 0) {
                             code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
+                            context.localVarCount += args.length;
+                        }
                         for (let i = 0; i < args.length; i++) {
                             code += this.visitExpression(args[i] as Expression, context);
                             code += `set r${i} ra\n`;
@@ -930,8 +937,10 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                         }
 
                         code += `state ${o.name}\nset ra rb\n`;
-                        if(args.length > 0)
+                        if(args.length > 0) {
                             code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
+                            context.localVarCount -= args.length;
+                        }
                         return code;
                     }
                 }
@@ -941,8 +950,17 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         const nativeFn = findNativeFunction(fnNameRaw, fnObj);
         if (nativeFn) {
           let argCode = '';
-          if(args.length > 0)
-            code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
+          let argsLen = 0;
+
+          if(args.length > 0) {
+            nativeFn.arguments.forEach(e => {
+              argsLen++;
+              if(e == CON_NATIVE_FLAGS.OBJECT || e == CON_NATIVE_FLAGS.ARRAY)
+                argsLen++;
+            });
+            code += `state pushr${argsLen > 12 ? 'all' : argsLen}\n`;
+            context.localVarCount += argsLen;
+          }
           for (let i = 0, j = 0; i < args.length; i++, j++) {
             const expected = nativeFn.arguments[i] ?? 0;
             // For LABEL and CONSTANT types, resolve to a literal.
@@ -984,14 +1002,18 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
               }
             }
             code += "\n";
-            if(args.length > 0)
-              code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
+            if(args.length > 0) {
+              code += `state popr${argsLen > 12 ? 'all' : argsLen}\n`;
+              context.localVarCount -= argsLen;
+            }
           } else {
             // For complex functions, call the arrow function.
             const fnCode = nativeFn.code(args.length > 0, argCode);
             code += fnCode + "\n";
-            if(args.length > 0)
-                code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
+            if(args.length > 0) {
+                code += `state popr${argsLen > 12 ? 'all' : argsLen}\n`;
+                context.localVarCount -= argsLen;
+            }
           }
         } else {
           const fnName = fnNameRaw.startsWith("this.") ? fnNameRaw.substring(5) : fnNameRaw;
@@ -1002,16 +1024,20 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
             return '';
           }
           // If not native, assume it's a user function state.
-          if(args.length > 0)
+          if(args.length > 0) {
             code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
+            context.localVarCount += args.length;
+          }
           for (let i = 0; i < args.length; i++) {
             code += this.visitExpression(args[i] as Expression, context);
             code += `set r${i} ra\n`;
             resolvedLiterals.push(null);
           }
           code += `state ${func.name}\nset ra rb\n`;
-          if(args.length > 0)
+          if(args.length > 0) {
             code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
+            context.localVarCount -= args.length;
+          }
         }
         if (nativeFn && nativeFn.returns) {
           code += `set ra rb\n`;
@@ -1201,7 +1227,8 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           // Store the layout in the global symbol table.
           context.symbolTable.set(varName, { name: varName, type: "object", offset: context.localVarCount, size: result.size, children: result.layout });
         }
-        return result.code + `set rf 0\n`;
+        context.localVarCount += result.size + 1;
+        return result.code + `set ra rbp\nadd ra ${context.localVarCount - result.size - 1}\nset rf 0\n`;
       }      
 
       private unrollMemberExpression(expr: Expression): MemberSegment[] {

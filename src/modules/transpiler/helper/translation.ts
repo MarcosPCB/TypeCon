@@ -17,7 +17,7 @@ var r12 0 0
 //Accumulator
 var ra 0 0
 
-//Backup/return
+//Base/return
 var rb 0 0
 
 //Counter
