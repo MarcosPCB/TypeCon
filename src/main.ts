@@ -3,7 +3,7 @@ import Parser = require('@babel/parser');
 import path = require('path');
 import Transpiler from './modules/transpiler/services/Transpiler';
 import * as T from '@babel/types';
-import { initCode, initStates } from './modules/transpiler/helper/translation';
+import { CONInit } from './modules/transpiler/helper/translation';
 import GDBDebugger from './modules/debugger/services/GDBDebugger';
 //import { CONDebugger } from './modules/debugger/debugger';
 import { TsToConTranspiler } from './modules/transpiler/services/Transpiler2';
@@ -148,7 +148,9 @@ if(debug_mode) {
         console.log("No errors or warnings.");
     }
 
-    fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, initCode + initStates + result.conOutput);
+    const initSys = new CONInit(stack_size);
+
+    fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, initSys.BuildFullCodeFile(result.conOutput));
 
     console.log(`Transpiling finished!`);
 

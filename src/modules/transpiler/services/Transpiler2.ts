@@ -389,7 +389,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         } else {
           // Process non-object initializers as before.
           code += this.visitExpression(init as Expression, context);
-          code += `add rsp 1\nsetarray stack[rsp] ra\n`;
+          code += `add rsp 1\nsetarray flat[rsp] ra\n`;
           context.symbolTable.set(varName, { name: varName, type: "number", offset: context.localVarCount, size: 1 });
           context.localVarCount++;
         }
@@ -599,13 +599,13 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         // check local var
         if (name in context.localVarOffset) {
           const off = context.localVarOffset[name];
-          code += `set ri rbp\nadd ri ${off}\nset ra stack[ri]\n`;
+          code += `set ri rbp\nadd ri ${off}\nset ra flat[ri]\n`;
           return code;
         }
 
         if (context.symbolTable.has(name)) {
             const off = context.symbolTable.get(name)
-            code += `set ri rbp\nadd ri ${off.offset}\nset ra stack[ri]\n`;
+            code += `set ri rbp\nadd ri ${off.offset}\nset ra flat[ri]\n`;
             if(off.heap)
               code += `set rf 1\n`;
             return code;
@@ -713,14 +713,14 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         }
         if (name in context.localVarOffset) {
           const off = context.localVarOffset[name];
-          code += `set ri rbp\nsub ri ${off}\nsetarray stack[ri] ra\n`;
+          code += `set ri rbp\nsub ri ${off}\nsetarray flat[ri] ra\n`;
           return code;
         }
 
         const v = context.symbolTable.get(name);
 
         if(v) {
-          code += `set ri rbp\nadd ri ${v.offset}\nsetarray stack[ri] ra\n`;
+          code += `set ri rbp\nadd ri ${v.offset}\nsetarray flat[ri] ra\n`;
         }
 
         addDiagnostic(left, context, "error", `Assignment to unknown identifier: ${name}`);
@@ -1070,8 +1070,8 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         let code = `/* Object literal: ${objLit.getText()} */\n`;
         
         // Reserve one slot for the object's base pointer.
-        code += `add rsp 1\nset ri rsp\nadd ri 1\nsetarray stack[rsp] ri\n`;
-        // The object's base pointer is now stored at stack[rsp].
+        code += `add rsp 1\nset ri rsp\nadd ri 1\nsetarray flat[rsp] ri\n`;
+        // The object's base pointer is now stored at flat[rsp].
         
         // Build the layout as a plain object.
         let layout: { [key: string]: SymbolDefinition } = {};
@@ -1105,7 +1105,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                     const result = this.getObjectTypeLayout(baseType, context);
                     for (let j = 0; j < count; j++) {
                         for (let k = 0; k < instanceSize; k++) {
-                            code += `set ra 0\nadd rsp 1\nsetarray stack[rsp] ra\n`;
+                            code += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
                             totalSlots++;
                         }
                     }
@@ -1122,7 +1122,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                     // For each element, allocate instanceSize slots.
                     for (let j = 0; j < count; j++) {
                         for (let k = 0; k < instanceSize; k++) {
-                            code += `set ra 0\nadd rsp 1\nsetarray stack[rsp] ra\n`;
+                            code += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
                             totalSlots++;
                         }
                     }
@@ -1150,12 +1150,12 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
               } else {
                 // For a primitive property.
                 code += this.visitExpression(pa.getInitializerOrThrow(), context);
-                code += `add rsp 1\nsetarray stack[rsp] ra\n`;
+                code += `add rsp 1\nsetarray flat[rsp] ra\n`;
                 layout[propName] = { name: propName, type: "number", offset: totalSlots, size: 1 };
               }
             } else {
               // Property not provided: default to 0.
-              code += `set ra 0\nadd rsp 1\nsetarray stack[rsp] ra\n`;
+              code += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
               layout[propName] = { name: propName, type: "number", offset: totalSlots, size: 1 };
             }
           }
@@ -1174,7 +1174,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                 //const instanceSize = this.getObjectSize(baseType, context);
                 // For each element, allocate instanceSize slots.
                 for (let j = 0; j < count; j++) {
-                  code += `set ra 0\nadd rsp 1\nsetarray stack[rsp] ra\n`;
+                  code += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
                   totalSlots++;
                 }
                 layout[propName] = { 
@@ -1200,7 +1200,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
               } else {
                 // For a primitive property.
                 code += this.visitExpression(init, context);
-                code += `add rsp 1\nsetarray stack[rsp] ra\n`;
+                code += `add rsp 1\nsetarray flat[rsp] ra\n`;
                 layout[propName] = { name: propName, type: "number", offset: totalSlots, size: 1 };
               }
             } else
@@ -1209,8 +1209,8 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
 
         }
         
-        // The object's base pointer is at: stack[rsp - (totalSlots + 1)]
-        //code += `set ri rbp\nadd ri ${totalSlots + 1}\nset ra stack[ri]\n`;
+        // The object's base pointer is at: flat[rsp - (totalSlots + 1)]
+        //code += `set ri rbp\nadd ri ${totalSlots + 1}\nset ra flat[ri]\n`;
         
         // Optionally freeze the layout to avoid accidental modification.
         const frozenLayout = Object.freeze({ ...layout });
@@ -1305,7 +1305,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
             }
 
             code += `set ri rbp\nadd ri ${sym.offset}\n`;
-            code += `set ri stack[ri]\n`;
+            code += `set ri flat[ri]\n`;
 
             for(let i = 1; i < segments.length; i++) {
                 const seg = segments[i];
@@ -1346,9 +1346,9 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
             }
 
             if(assignment)
-                code += `setarray stack[ri] ra\n`;
+                code += `setarray flat[ri] ra\n`;
             else
-                code += `set ra stack[ri]\n`;
+                code += `set ra flat[ri]\n`;
             return code;
           }
 

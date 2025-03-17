@@ -413,39 +413,24 @@ state pushc
 
 set ri r0
 add ri 1
-ife r1 0 {
-  set r0 stack[ri]
-  add ri 1
-  set ra stack[ri]
-  add ri 1
-  set rc stack[ri]
-  add ri 1
-  set r1 stack[ri]
-} else {
-  set r0 heap[ri]
-  add ri 1
-  set ra heap[ri]
-  add ri 1
-  set rc heap[ri]
-  add ri 1
-  set r1 heap[ri]
-}
+
+set r0 flat[ri]
+add ri 1
+set ra flat[ri]
+add ri 1
+set rc flat[ri]
+add ri 1
+set r1 flat[ri]
 
 set ri r3
 add ri 1
-ife r4 0 {
-  set r4 stack[ri]
-  add ri 1
-  set r3 stack[ri]
-  add ri 1
-  set rb stack[ri]
-} else {
-  set r4 heap[ri]
-  add ri 1
-  set r3 heap[ri]
-  add ri 1
-  set rb heap[ri]
-}
+
+set r4 flat[ri]
+add ri 1
+set r3 flat[ri]
+add ri 1
+set rb flat[ri]
+
 
 rotatesprite r0 ra rc r1 r2 r4 r3 rb 0 0 xdim ydim
 

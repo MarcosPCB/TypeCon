@@ -1,4 +1,14 @@
-export const initCode = `
+export class CONInit {
+    public readonly heapSize: number;
+    private initCode: string;
+    private initStates: string;
+
+    constructor(public readonly stackSize = 1024,
+        public readonly heapPageSize = 8,
+        public readonly heapNumPages = 64) {
+            this.heapSize = heapNumPages * heapPageSize;
+
+            this.initCode = `
 //Used mainly for function parameters
 var r0 0 0
 var r1 0 0
@@ -38,10 +48,8 @@ var ri 0 0
 */
 var rf 0 0
 
-/* FUTURE IMPLEMENTATION ONLY
 //Segmentation register
-var rds 0 0 //determines which part of the heap can be accessed
-*/
+var rds ${stackSize} 0 //determines the start of the heap memory
 
 //Base pointer and Stack pointer
 var rbp 0 0
@@ -58,31 +66,27 @@ var playerDist 0 2
 */
 
 //Internal size of the heap pages - for every X entries, 1 page, this way we can optimize the free and allocation systems
-define PAGE_SIZE 8
-
-//this is the heap array, 512 entries because PAGE_SIZE * 64 is 512, 64 is the default number of pages available
-array heap 512 0
+define PAGE_SIZE ${heapPageSize}
 
 //This is where we store if a page is free or not.
-array allocTable 64 0
+array allocTable ${heapNumPages} 0
 
 //Holds the starting addresses of the a allocated pages.
-array lookupHeap 64 0
+array lookupHeap ${heapNumPages} 0
 
 //The current number of pages available
-var heaptables 64 0
+var heaptables ${heapNumPages} 0
 
 //The current heap memory size
-var heapsize 512 0 //heaptables * PAGE_SIZE
+var heapsize ${this.heapSize} 0 //heaptables * PAGE_SIZE
 
 //For pushing the r0-12 registers
 array rstack 16 0
 
-//Stack memory
-array stack 2048
-`
-
-export const initStates = `
+//TypeCON flat memory (stack + heap)
+array flat ${stackSize + this.heapSize}
+`;
+            this.initStates = `
 var _HEAPi 0 0
 var _HEAPj 0 0
 var _HEAPk 0 0
@@ -93,128 +97,128 @@ var _HEAP_pointer -1 0
 defstate pushrall
     add rsp 1
     setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
-    copy rstack[0] stack[rsp] 13
+    copy rstack[0] flat[rsp] 13
     add rsp 12
 ends
 
 defstate poprall
     sub rsp 13
-    copy stack[rsp] rstack[0] 13
+    copy flat[rsp] rstack[0] 13
     getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
 ends
 
 defstate pushr1
     add rsp 1
-    setarray stack[rsp] r0
+    setarray flat[rsp] r0
 ends
 
 defstate popr1
-    set r0 stack[rsp]
+    set r0 flat[rsp]
     sub rsp 1
 ends
 
 defstate pushr2
     add rsp 1
     setarrayseq rstack r0 r1
-    copy rstack[0] stack[rsp] 2
+    copy rstack[0] flat[rsp] 2
     add rsp 1
 ends
 
 defstate popr2
     sub rsp 2
-    copy stack[rsp] rstack[0] 2
+    copy flat[rsp] rstack[0] 2
     getarrayseq rstack r0 r1
 ends
 
 defstate pushr3
     add rsp 1
     setarrayseq rstack r0 r1 r2
-    copy rstack[0] stack[rsp] 3
+    copy rstack[0] flat[rsp] 3
     add rsp 2
 ends
 
 defstate popr3
     sub rsp 3
-    copy stack[rsp] rstack[0] 3
+    copy flat[rsp] rstack[0] 3
     getarrayseq rstack r0 r1 r2
 ends
 
 defstate pushr4
     add rsp 1
     setarrayseq rstack r0 r1 r2 r3
-    copy rstack[0] stack[rsp] 4
+    copy rstack[0] flat[rsp] 4
     add rsp 3
 ends
 
 defstate popr4
     sub rsp 4
-    copy stack[rsp] rstack[0] 4
+    copy flat[rsp] rstack[0] 4
     getarrayseq rstack r0 r1 r2 r3
 ends
 
 defstate pushr5
     add rsp 1
     setarrayseq rstack r0 r1 r2 r3 r4
-    copy rstack[0] stack[rsp] 5
+    copy rstack[0] flat[rsp] 5
     add rsp 4
 ends
 
 defstate popr5
     sub rsp 5
-    copy stack[rsp] rstack[0] 5
+    copy flat[rsp] rstack[0] 5
     getarrayseq rstack r0 r1 r2 r3 r4
 ends
 
 defstate pushr12
     add rsp 1
     setarrayseq rstack r0 r1 r2 r3 r4
-    copy rstack[0] stack[rsp] 5
+    copy rstack[0] flat[rsp] 5
     add rsp 4
 ends
 
 defstate popr12
     sub rsp 5
-    copy stack[rsp] rstack[0] 5
+    copy flat[rsp] rstack[0] 5
     getarrayseq rstack r0 r1 r2 r3 r4
 ends
 
 defstate push
     add rsp 1
-    setarray stack[rsp] ra
+    setarray flat[rsp] ra
 ends
 
 defstate pop
-    set ra stack[rsp]
+    set ra flat[rsp]
     sub rsp 1
 ends
 
 defstate pushb
     add rsp 1
-    setarray stack[rsp] rb
+    setarray flat[rsp] rb
 ends
 
 defstate popb
-    set rb stack[rsp]
+    set rb flat[rsp]
     sub rsp 1
 ends
 
 defstate pushc
     add rsp 1
-    setarray stack[rsp] rc
+    setarray flat[rsp] rc
 ends
 
 defstate popc
-    set rc stack[rsp]
+    set rc flat[rsp]
     sub rsp 1
 ends
 
 defstate pushd
     add rsp 1
-    setarray stack[rsp] rd
+    setarray flat[rsp] rd
 ends
 
 defstate popd
-    set rd stack[rsp]
+    set rd flat[rsp]
     sub rsp 1
 ends
 
@@ -240,7 +244,9 @@ defstate _GetFreePages
         mul _HEAPi _HEAP_request
         set _HEAP_pointer heapsize
         add heapsize _HEAPi
-        resizearray heap heapsize
+        add heapsize ${stackSize}
+        resizearray flat heapsize
+        sub heapsize ${stackSize}
         resizearray lookupHeap heaptables
         resizearray allocTable heaptables
     }
@@ -269,10 +275,18 @@ defstate alloc
     }
 
     set rb _HEAP_pointer
+    add rb ${stackSize}
 ends
 
 defstate free
     set _HEAP_pointer r0
+    sub _HEAP_pointer ${stackSize}
+    ifl _HEAP_pointer 0 {
+        qputs 9999 ERROR: TRIED TO FREE MEMORY BELOW HEAP
+        //We gotta break or crash or we might have a memory leakage
+        debug 9999
+        exit
+    }
     set _HEAPj _HEAP_pointer
     div _HEAPj PAGE_SIZE
     set _HEAPi _HEAPj
@@ -311,6 +325,7 @@ defstate realloc
     }
 
     set rb _HEAP_pointer
+    add rb ${stackSize}
 
     set _HEAP_pointer r1
     set _HEAPi _HEAP_pointer
@@ -326,7 +341,7 @@ defstate realloc
     //mul _HEAPi PAGE_SIZE
     //mul _HEAPk PAGE_SIZE
     //sub _HEAPk _HEAPi
-    copy heap[_HEAPi] heap[rb] _HEAPj
+    copy flat[_HEAPi] flat[rb] _HEAPj
 
     state free
 ends
@@ -348,10 +363,10 @@ defstate _CheckAndFreePage
     set _HEAPl rsp
     add _HEAPl 1
     for _HEAPj range _HEAPl {
-        ifle stack[_HEAPj] _HEAPi
+        ifle flat[_HEAPj] _HEAPi
             set rb 1
 
-        ifge stack[_HEAPj] _HEAPk 
+        ifge flat[_HEAPj] _HEAPk 
             set rd 1
         
         //Free the pages
@@ -390,5 +405,14 @@ defstate _CheckAndFreePage
     state popb
     state pop
 ends
-
 `
+        }
+
+    BuildFullCodeFile(code: string) {
+        return this.initCode + this.initStates + code;
+    }
+
+    BuildInitFile() {
+        return this.initCode + this.initStates;
+    }
+}
