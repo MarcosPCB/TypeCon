@@ -1661,6 +1661,52 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           code += ai + "\n";
         }
       }
+
+      // visit properties
+      const properties = cd.getProperties();
+
+      for(const p of properties) {
+        if(p.getTypeNode().getText() == 'OnEvent') {
+          const init = p.getInitializerOrThrow();
+
+          if(init.isKind(SyntaxKind.ObjectLiteralExpression)) {
+            const events = init.getProperties();
+
+            for(const e of events) {
+              if(!e.isKind(SyntaxKind.MethodDeclaration)) {
+                addDiagnostic(e, context, 'error', `OnEvent property must only contain functions: ${p.getText()}`);
+                return '';
+              }
+
+              const eFnName = e.getName();
+
+              if(!EventList.includes(eFnName as TEvents)) {
+                addDiagnostic(e, context, 'error', `Invalid event ${e.getName()}: ${p.getText()}`);
+                return '';
+              }
+
+              const evntLocalCtx: TranspilerContext = {
+                ...localCtx,
+                localVarOffset: {},
+                localVarCount: 0,
+                paramMap: {}
+              };
+
+              code += `\n/*${e.getText()}*/\nappendevent EVENT_${eFnName.toUpperCase()}\nset ra rbp \n  state push \n  set rbp rsp \n  ifactor ${localCtx.currentActorPicnum} {\n`;
+              const body = e.getBody() as any;
+              if(body) {
+                const stmts = body.getStatements() as Statement[];
+
+                stmts.forEach(s => {
+                  code += this.visitStatement(s, evntLocalCtx);
+                });
+              }
+
+              code += `  }\n  set rsp rbp \n  state pop \n  set rbp ra \nendevent \n\n`;
+            }
+          }
+        }
+      }
   
       // visit methods
       const methods = cd.getInstanceMethods();
@@ -1899,14 +1945,14 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         code += `  set rbp 0 \n  set rsp -1 \nenda \n\n`;
         return code;
       } else if(type == 'CEvent' && (mName.toLowerCase() == 'append' || mName.toLowerCase() == 'prepend')) {
-        let code = `/*${md.getText()}*/\n${mName.toLowerCase()}event EVENT_${context.currentEventName}\n`;
+        let code = `/*${md.getText()}*/\n${mName.toLowerCase()}event EVENT_${context.currentEventName}\n  set ra rbp \n  state push \n  set rbp rsp \n`;
         const body = md.getBody() as any;
         if (body) {
           body.getStatements().forEach(st => {
             code += indent(this.visitStatement(st, localCtx), 1) + "\n";
           });
         }
-        code += `  set rbp 0 \n  set rsp -1 \nendevent \n\n`;
+        code += `  set rsp rbp \n  state pop \n  set rbp ra \nendevent \n\n`;
         return code;
       }
   
