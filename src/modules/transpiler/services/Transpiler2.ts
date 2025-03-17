@@ -52,7 +52,8 @@ import {
     nativeVars_Sprites,
     CON_NATIVE_VAR,
     nativeVars_Sectors,
-    nativeVars_Walls
+    nativeVars_Walls,
+    nativeVarsList
   } from "../../../defs/TCSet100/native";
 
   import { EventList, Names } from "../types";
@@ -104,6 +105,10 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
     size?: number;         // How many slots this symbol occupies.
     num_elements?: number;
     heap?: boolean,
+    native_pointer?: 'sprites' | 'sectors' | 'walls' | 'players' | 'projectiles',
+    //This is only used IF we do something like 'const s = sprites[2]', 
+    //otherwise, the compiler treats like a pointer to the complete array structure: 'const s = sprites'
+    native_pointer_index?: boolean,
     children?: { [key: string]: SymbolDefinition }; // For nested objects.
   }
   
@@ -119,6 +124,8 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
   export interface TranspilerContext {
     localVarOffset: Record<string, number>;
     localVarCount: number;
+    localVarNativePointer: 'sprites' | 'sectors' | 'walls' | 'players' | 'projectiles' | undefined, //Only true if you're passing a native pointer to a local variable
+    localVarNativePointerIndexed: boolean,
     paramMap: Record<string, number>;
   
     diagnostics: TranspileDiagnostic[];
@@ -196,6 +203,8 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
       const context: TranspilerContext = {
         localVarOffset: {},
         localVarCount: 0,
+        localVarNativePointer: undefined,
+        localVarNativePointerIndexed: false,
         paramMap: {},
         diagnostics: [],
         options: this.options,
@@ -390,7 +399,11 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           // Process non-object initializers as before.
           code += this.visitExpression(init as Expression, context);
           code += `add rsp 1\nsetarray flat[rsp] ra\n`;
-          context.symbolTable.set(varName, { name: varName, type: "number", offset: context.localVarCount, size: 1 });
+          context.symbolTable.set(varName, { name: varName, type: "number", offset: context.localVarCount, size: 1,
+            native_pointer: context.localVarNativePointer,
+            native_pointer_index: context.localVarNativePointerIndexed});
+          context.localVarNativePointer = undefined;
+          context.localVarNativePointerIndexed = false;
           context.localVarCount++;
         }
         return code;
@@ -596,6 +609,12 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
           code += `set ra r${i}\n`;
           return code;
         }
+
+        if(nativeVarsList.includes(name)) {
+          context.localVarNativePointer = name as any;
+          return code;
+        }
+
         // check local var
         if (name in context.localVarOffset) {
           const off = context.localVarOffset[name];
@@ -1304,52 +1323,54 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
                 return "set ra 0\n";
             }
 
-            code += `set ri rbp\nadd ri ${sym.offset}\n`;
-            code += `set ri flat[ri]\n`;
+            if(!sym.native_pointer) {
+              code += `set ri rbp\nadd ri ${sym.offset}\n`;
+              code += `set ri flat[ri]\n`;
 
-            for(let i = 1; i < segments.length; i++) {
-                const seg = segments[i];
-                if(seg.kind == 'index') {
-                    if(sym.type != 'array') {
-                        addDiagnostic(expr, context, "error", `Indexing a non array variable: ${expr.getText()}`);
-                        return "set ra 0\n";
-                    }
+              for(let i = 1; i < segments.length; i++) {
+                  const seg = segments[i];
+                  if(seg.kind == 'index') {
+                      if(sym.type != 'array') {
+                          addDiagnostic(expr, context, "error", `Indexing a non array variable: ${expr.getText()}`);
+                          return "set ra 0\n";
+                      }
 
-                    const localVars = context.localVarCount;
-                    //code += `state pushd\n`
-                    code += this.visitExpression(seg.expr, context);
-                    if(localVars != context.localVarCount) {
-                        code += `sub rsp ${localVars - context.localVarCount}\n`;
-                        code += `add rsp 1\n` //Account for the push rd we did back there
-                        context.localVarCount = localVars;
-                    }
-                    code += `mul ra ${sym.size / sym.num_elements}\nadd ri ra\n`
-                    continue;
-                }
+                      const localVars = context.localVarCount;
+                      //code += `state pushd\n`
+                      code += this.visitExpression(seg.expr, context);
+                      if(localVars != context.localVarCount) {
+                          code += `sub rsp ${localVars - context.localVarCount}\n`;
+                          code += `add rsp 1\n` //Account for the push rd we did back there
+                          context.localVarCount = localVars;
+                      }
+                      code += `mul ra ${sym.size / sym.num_elements}\nadd ri ra\n`
+                      continue;
+                  }
 
-                if(seg.kind == 'property') {
-                    if(!sym.children) {
-                        addDiagnostic(expr, context, "error", `Object property ${seg.name} is not a object: ${expr.getText()}`);
-                        return "set ra 0\n";
-                    }
+                  if(seg.kind == 'property') {
+                      if(!sym.children) {
+                          addDiagnostic(expr, context, "error", `Object property ${seg.name} is not a object: ${expr.getText()}`);
+                          return "set ra 0\n";
+                      }
 
-                    if(!sym.children[seg.name]) {
-                        addDiagnostic(expr, context, "error", `Property ${seg.name} not found in: ${expr.getText()}`);
-                        return "set ra 0\n";
-                    }
+                      if(!sym.children[seg.name]) {
+                          addDiagnostic(expr, context, "error", `Property ${seg.name} not found in: ${expr.getText()}`);
+                          return "set ra 0\n";
+                      }
 
-                    sym = sym.children[seg.name];
+                      sym = sym.children[seg.name];
 
-                    code += `add ri ${sym.offset}\n`;
-                    continue;
-                }
+                      code += `add ri ${sym.offset}\n`;
+                      continue;
+                  }
+              }
+
+              if(assignment)
+                  code += `setarray flat[ri] ra\n`;
+              else
+                  code += `set ra flat[ri]\n`;
+              return code;
             }
-
-            if(assignment)
-                code += `setarray flat[ri] ra\n`;
-            else
-                code += `set ra flat[ri]\n`;
-            return code;
           }
 
           if(obj.kind == 'identifier' || obj.kind == 'this') {
@@ -1370,21 +1391,37 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
 
                 default: //sprites, sectors, walls
                     if(obj.kind != 'this') {
-                        if(segments[1].kind != 'index') {
+                        if(segments[1].kind != 'index' && (sym && !sym.native_pointer_index)) {
                             addDiagnostic(expr, context, "error", `Missing index for ${obj.name}: ${expr.getText()}`);
                             return "set ra 0\n";
                         }
-
-                        code += this.visitExpression(segments[1].expr, context);
-                        code += `set ri ra\n`;
+                        if(segments[1].kind == 'index') {
+                          code += this.visitExpression(segments[1].expr, context);
+                          code += `set ri ra\n`;
+                        }
                     } else {
                         code += `set ri THISACTOR\n`;
                         if(context.currentActorPicnum)
                             obj.name = 'sprites';
                     }
 
-                    const seg = segments[obj.kind == 'this' ? 1 : 2];
+                    //Go no further, it just wants the reference
+                    if(segments.length == 2 && segments[1].kind == 'index') {
+                      context.localVarNativePointer = obj.name as any;
+                      context.localVarNativePointerIndexed = true,
+                      code += `set ra ri\n`;
+                      return code;
+                    }
+
+                    const seg = segments[obj.kind == 'this' || (sym && sym.native_pointer_index) ? 1 : 2];
                     let op = '';
+
+                    if(sym && sym.native_pointer) {
+                      obj.name = sym.native_pointer;
+
+                      if(sym.native_pointer_index)
+                        code += `set ri rbp\nadd ri ${sym.offset}\nset ri flat[ri]\n`;
+                    }
 
                     if(seg.kind == 'property') {
                         let nativeVar: CON_NATIVE_VAR[];

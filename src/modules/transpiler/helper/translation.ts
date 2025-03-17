@@ -285,7 +285,7 @@ defstate free
         qputs 9999 ERROR: TRIED TO FREE MEMORY BELOW HEAP
         //We gotta break or crash or we might have a memory leakage
         debug 9999
-        exit
+        return
     }
     set _HEAPj _HEAP_pointer
     div _HEAPj PAGE_SIZE

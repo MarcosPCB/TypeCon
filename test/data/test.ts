@@ -68,6 +68,15 @@ class newEnemy extends CActor {
     }
 
     Idle() {
+        const s = sprites;
+        const s1 = sprites[0];
+
+        s[0].ang = 56;
+        console.log(sprites[0].ang);
+
+        s1.ang = 57;
+        console.log(sprites[0].ang);
+
         if(this.CanSee()) {
             if(this.CanShootTarget()) {
                 if(this.playerDist < 4096) {

@@ -652,6 +652,9 @@ export const nativeVars_Sectors: CON_NATIVE_VAR[] = [
     }
 ]
 
+export const nativeVarsList = ['sprites', 'sectors', 'walls', 'projectiles',
+    'players', 'tiledata', 'tsprites', 'paldata', 'userdef'];
+
 export type pointer = void;
 
 export function Label<pointer>(name: string): pointer {
