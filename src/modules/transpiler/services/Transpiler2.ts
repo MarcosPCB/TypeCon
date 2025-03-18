@@ -8,6 +8,9 @@
  *   - local variable => delta-based stack usage
  ****************************************************************************/
 
+import fs from 'fs';
+import path from 'path';
+
 import {
     Project,
     Node,
@@ -39,7 +42,9 @@ import {
     PropertyAssignment,
     SwitchStatement,
     NumericLiteral,
-    ObjectLiteralElementLike
+    ObjectLiteralElementLike,
+    ImportDeclaration,
+    ModuleDeclaration
   } from "ts-morph";
   
   // Import your native data
@@ -61,6 +66,7 @@ import {
   // Also ensure you have your global type declarations from "types.ts"
   import "../../../defs/TCSet100/types";
 import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../helper/helpers";
+import { compiledFiles, ICompiledFile } from "../helper/translation";
   
   // We can define the local structures for diagnostics, context, etc.
   // This is a demonstration. Refine it as needed.
@@ -149,6 +155,8 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
 
     // New symbol table for object layouts (global or per–scope)
     symbolTable: Map<string, SymbolDefinition>;
+
+    currentFile: ICompiledFile;
   }
   
   interface TranspileResult {
@@ -184,7 +192,7 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
   }
   
   /******************************************************************************
-   * MAIN TRANSPILER CLASS
+   * MAIN COMPILER CLASS
    *****************************************************************************/
   export class TsToConTranspiler {
     private project: Project;
@@ -195,12 +203,12 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
       this.project = new Project({ useInMemoryFileSystem: true });
     }
   
-    public transpile(sourceCode: string): TranspileResult {
-      const sf = this.project.createSourceFile("temp.ts", sourceCode, {
+    public transpile(sourceCode: string, file: string, prvContext?: TranspilerContext): TranspileResult {
+      const sf = this.project.createSourceFile(`temp_${Buffer.from(file).toString('base64url')}.ts`, sourceCode, {
         overwrite: true
       });
   
-      const context: TranspilerContext = {
+      const context: TranspilerContext = prvContext ? prvContext : {
         localVarOffset: {},
         localVarCount: 0,
         localVarNativePointer: undefined,
@@ -218,20 +226,81 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
         currentActorAis: [],
         currentEventName: undefined,
         typeAliases: new Map(),
-        symbolTable: new Map()
+        symbolTable: new Map(),
+        currentFile: undefined
       };
   
       const outputLines: string[] = [];
+
+      if(compiledFiles.get(Buffer.from(file).toString('base64url')))
+        return null;
+
+      compiledFiles.set(Buffer.from(file).toString('base64url'), {
+        path: file,
+        code: '',
+        declaration: false,
+        context,
+        compiling: false
+      })
+
+      context.currentFile = compiledFiles.get(Buffer.from(file).toString('base64url'));
+
+      const imports = sf.getImportDeclarations();
+
+      if(imports.length > 0) {
+        for(const i of imports) {
+          const fName = i.getModuleSpecifierValue();
+
+          const cFile = path.basename(file);
+
+          let fullPath = path.resolve(file.slice(0, file.length - cFile.length), fName);
+          if(path.extname(fullPath) == '') {
+            fullPath += '.ts';
+          }
+
+          if(compiledFiles.has(Buffer.from(fullPath).toString('base64url')))
+            continue;
+
+          try {
+            const prvFile = context.currentFile;
+            console.log(`Including ${fullPath}...`);
+            const sCode = fs.readFileSync(fullPath);
+            this.transpile(sCode.toString(), fullPath, context);
+            context.currentFile = prvFile;
+          } catch(err) {
+            console.log(`Unable to include file: ${fullPath}`);
+            console.log(err);
+          }
+        }
+      }
   
       sf.getStatements().forEach(st => {
-        if (st.isKind(SyntaxKind.FunctionDeclaration)) {
+        if (st.isKind(SyntaxKind.FunctionDeclaration) && context.currentFile.declaration) {
           outputLines.push(this.visitFunctionDeclaration(st as FunctionDeclaration, context));
-        } else if (st.isKind(SyntaxKind.ClassDeclaration)) {
+        } else if (st.isKind(SyntaxKind.ClassDeclaration) && context.currentFile.declaration) {
           outputLines.push(this.visitClassDeclaration(st as ClassDeclaration, context));
         } else {
           outputLines.push(this.visitStatement(st, context));
         }
       });
+
+      const modules = sf.getModules();
+
+      if(modules.length > 0) {
+        if(modules.findIndex(e => e.getName() == 'nocompile') != -1)
+          outputLines.length = 0;
+        else context.currentFile.code = outputLines.join('\n');
+      }
+
+      console.log(file + ':');
+      if (context.diagnostics.length > 0) {
+        console.log("\n=== DIAGNOSTICS ===");
+        for (const diag of context.diagnostics) {
+          console.log(`[${diag.severity}] line ${diag.line}: ${diag.message}`);
+        }
+      } else {
+          console.log("No errors or warnings.");
+      }
   
       return {
         conOutput: outputLines.join("\n"),
@@ -343,18 +412,33 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
       let code = ''//`/* ${stmt.getText()} */\n`;
       switch (stmt.getKind()) {
         case SyntaxKind.VariableStatement:
+          if(context.currentFile.declaration)
+            return code;
+
           return code + this.visitVariableStatement(stmt as VariableStatement, context);
   
         case SyntaxKind.ExpressionStatement:
+          if(context.currentFile.declaration)
+            return code;
+
           return code + this.visitExpressionStatement(stmt as ExpressionStatement, context);
   
         case SyntaxKind.ReturnStatement:
+          if(context.currentFile.declaration)
+            return code;
+
           return code + this.visitReturnStatement(stmt as ReturnStatement, context);
   
         case SyntaxKind.IfStatement:
+          if(context.currentFile.declaration)
+            return code;
+
           return code + this.visitIfStatement(stmt as IfStatement, context);
 
         case SyntaxKind.SwitchStatement:
+            if(context.currentFile.declaration)
+              return code;
+
             return code + this.visitSwitchStatement(stmt as SwitchStatement, context);
 
         case SyntaxKind.TypeAliasDeclaration:
@@ -363,6 +447,20 @@ import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../help
 
         case SyntaxKind.BreakStatement:
             return code + `break\n`;
+
+        case SyntaxKind.ModuleDeclaration:
+            context.currentFile.declaration = true;
+            const stmts = (stmt as ModuleDeclaration).getStatements();
+
+            stmts.forEach(st => {
+              if (!st.isKind(SyntaxKind.FunctionDeclaration) && !st.isKind(SyntaxKind.ClassDeclaration))
+                this.visitStatement(st, context);
+            });
+            context.currentFile.declaration = false;
+            return code;
+
+        case SyntaxKind.ImportDeclaration:
+            return code;
   
         default:
           addDiagnostic(stmt, context, "warning", `Unhandled statement kind: ${stmt.getKindName()}`);

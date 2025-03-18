@@ -1,5 +1,7 @@
 import { CON_NATIVE, CON_NATIVE_POINTER } from "./native";
 
+namespace nocompile {}
+
 declare global {
     export enum Names {
         APLAYER = 1405,

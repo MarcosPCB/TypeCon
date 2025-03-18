@@ -32,10 +32,7 @@ let gdb_err = false;
 */
 let compile_options = 0;
 
-console.log(`TypeCON Transpiler BETA Version 0.01 \nBy ItsMarcos - Use '-help' to get the list of commands \n`)
-
-if(!fs.existsSync('./obj'))
-    fs.mkdirSync('./obj');
+console.log(`TypeCON Compiler BETA Version 0.01 \nBy ItsMarcos - Use '-help' to get the list of commands \n`)
 
 if(!fs.existsSync('./compiled'))
     fs.mkdirSync('./compiled');
@@ -133,26 +130,17 @@ if(debug_mode) {
 
     const transpiler = new TsToConTranspiler({});
 
-    console.log(`Transpiling ${fileName}...`);
+    console.log(`Compiling ${fileName}...`);
 
     const file = fs.readFileSync(fileName);
 
-    const result = transpiler.transpile(file.toString());
-
-    if (result.diagnostics.length > 0) {
-        console.log("\n=== DIAGNOSTICS ===");
-        for (const diag of result.diagnostics) {
-          console.log(`[${diag.severity}] line ${diag.line}: ${diag.message}`);
-        }
-    } else {
-        console.log("No errors or warnings.");
-    }
+    const result = transpiler.transpile(file.toString(), fileName);
 
     const initSys = new CONInit(stack_size);
 
     fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, initSys.BuildFullCodeFile(result.conOutput));
 
-    console.log(`Transpiling finished!`);
+    console.log(`Compilation finished!`);
 
     //console.log(`Parsing ${fileName}`);
 

@@ -1,3 +1,15 @@
+import { TranspilerContext } from "../services/Transpiler2";
+
+export interface ICompiledFile {
+    path: string,
+    code: string,
+    declaration: boolean,
+    context: TranspilerContext,
+    compiling: boolean
+}
+
+export const compiledFiles: Map<string, ICompiledFile> = new Map();
+
 export class CONInit {
     public readonly heapSize: number;
     private initCode: string;
