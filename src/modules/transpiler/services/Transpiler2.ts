@@ -47,7 +47,8 @@ import {
     ModuleDeclaration,
     InterfaceDeclaration,
     EnumDeclaration,
-    EnumMember
+    EnumMember,
+    StringLiteral
   } from "ts-morph";
   
   // Import your native data
@@ -105,6 +106,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
   
   interface TranspilerOptions {
     debug?: boolean;
+    lineDetail?: boolean;
   }
 
   interface SymbolDefinition {
@@ -315,7 +317,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
         if(modules.findIndex(e => e.getName() == 'nocompile') != -1)
           outputLines.length = 0;
         else context.currentFile.code = outputLines.join('\n');
-      }
+      } else context.currentFile.code = outputLines.join('\n');
 
       if (context.diagnostics.length > 0) {
         console.log("\n=== DIAGNOSTICS ===");
@@ -552,7 +554,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
      * variable statements => local var
      *****************************************************************************/
     private visitVariableStatement(node: VariableStatement, context: TranspilerContext): string {
-      let code = `/*${node.getText()}*/`;
+      let code = this.options.lineDetail ? `/*${node.getText()}*/` : '';
       const decls = node.getDeclarationList().getDeclarations();
       for (const d of decls) {
         code += this.visitVariableDeclaration(d, context);
@@ -615,7 +617,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
      * if => must be (A && B), (A || B), or !(A || B)
      *****************************************************************************/
     private visitIfStatement(is: IfStatement, context: TranspilerContext): string {
-        let code = `/*${is.getText()}*/\n`;
+        let code = this.options.lineDetail ? `/*${is.getText()}*/\n` : '';
         const pattern = this.parseIfCondition(is.getExpression(), context);
         const thenPart = this.visitBlockOrStmt(is.getThenStatement(), context);
         const elsePart = is.getElseStatement() ? this.visitBlockOrStmt(is.getElseStatement()!, context) : "";
@@ -649,7 +651,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
       }
       
     private visitSwitchStatement(sw: SwitchStatement, context: TranspilerContext) {
-        let code = `/*${sw.getText()}*/\n` + this.visitExpression(sw.getExpression(), context);
+        let code = (this.options.lineDetail ? `/*${sw.getText()}*/\n` : '') + this.visitExpression(sw.getExpression(), context);
         const cases = sw.getCaseBlock().getClauses();
         code += `switch ra\n`;
         for(let i = 0; i < cases.length; i++) {
@@ -661,7 +663,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
                 if(clause.isKind(SyntaxKind.CallExpression) && clause.getExpression().getText() == 'Label') {
                     const innerArgs = (clause as CallExpression).getArguments();
                     if (innerArgs.length > 0) {
-                        code += `case ${innerArgs[0].getText().replace(/['"]/g, "")}:\n`;
+                        code += `case ${innerArgs[0].getText().replace(/[`'"]/g, "")}:\n`;
                       } else {
                         addDiagnostic(clause, context, "error", "Label() called without an argument");
                         return code;
@@ -818,7 +820,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
         return code;
       }
       if (expr.isKind(SyntaxKind.StringLiteral)) {
-        code += `set ra ${expr.getText().replace(/['"]/g, "")}\n`;
+        code += `set ra ${expr.getText().replace(/[`'"]/g, "")}\n`;
         return code;
       }
       if (expr.isKind(SyntaxKind.TrueKeyword)) {
@@ -840,7 +842,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
       const right = bin.getRight();
       const opText = bin.getOperatorToken().getText();
   
-      let code = `// binary: ${left.getText()} ${opText} ${right.getText()}\n`;
+      let code = this.options.lineDetail ? `// binary: ${left.getText()} ${opText} ${right.getText()}\n` : '';
   
       const forbidden = ["<", ">", "<=", ">=", "==", "!=", "&&", "||"];
       if (forbidden.includes(opText)) {
@@ -943,7 +945,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
           if (arg.isKind(SyntaxKind.CallExpression) && arg.getExpression().getText() === "Label") {
             const innerArgs = (arg as CallExpression).getArguments();
             if (innerArgs.length > 0) {
-              return innerArgs[0].getText().replace(/['"]/g, "");
+              return innerArgs[0].getText().replace(/[`'"]/g, "");
             } else {
               addDiagnostic(arg, context, "error", "Label() called without an argument");
               return "";
@@ -951,7 +953,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
           }
           // If it's a string literal, return its unquoted text.
           if (arg.isKind(SyntaxKind.StringLiteral)) {
-            return arg.getText().replace(/['"]/g, "");
+            return arg.getText().replace(/[`'"]/g, "");
           }
           addDiagnostic(arg, context, "error", "Expected a label literal for a native LABEL argument");
           return "";
@@ -968,7 +970,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
           if (arg.isKind(SyntaxKind.CallExpression) && arg.getExpression().getText() === "Label") {
             const innerArgs = (arg as CallExpression).getArguments();
             if (innerArgs.length > 0) {
-              return innerArgs[0].getText().replace(/['"]/g, "");
+              return innerArgs[0].getText().replace(/[`'"]/g, "");
             } else {
               addDiagnostic(arg, context, "error", "Label() called without an argument");
               return "";
@@ -984,7 +986,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
       
   
       private visitCallExpression(call: CallExpression, context: TranspilerContext): string {
-        let code = `/* ${call.getText()} */\n`;
+        let code = this.options.lineDetail ? `/* ${call.getText()} */\n` : '';
         const args = call.getArguments();
         let resolvedLiterals: (string | null)[] = [];
       
@@ -1144,6 +1146,21 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
             }
         }
 
+        if(fnNameRaw == 'CON' && !fnObj) {
+          code += `//HAND-WRITTEN CODE
+state push
+state pushd
+state pushc
+${(args[0] as StringLiteral).getText().replace(/[`'"]/g, "")}
+set rb ra
+state popc
+state popd
+state pop
+//END OF HAND-WRITTEN CODE
+`
+          return code;
+        }
+
         const nativeFn = findNativeFunction(fnNameRaw, fnObj);
         if (nativeFn) {
           let argCode = '';
@@ -1264,7 +1281,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
       }      
 
       private processObjectLiteral(objLit: ObjectLiteralExpression, context: TranspilerContext): { code: string, layout: { [key: string]: SymbolDefinition }, size: number } {
-        let code = `/* Object literal: ${objLit.getText()} */\n`;
+        let code = this.options.lineDetail ? `/* Object literal: ${objLit.getText()} */\n` : '';
         
         // Reserve one slot for the object's base pointer.
         code += `add rsp 1\nset ri rsp\nadd ri 1\nsetarray flat[rsp] ri\n`;
@@ -1284,7 +1301,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
             // Find the property assignment in the object literal by comparing names (ignoring quotes).
             const prop = objLit.getProperties().find(p => {
               if (p.isKind(SyntaxKind.PropertyAssignment)) {
-                return (p as any).getName().replace(/['"]/g, "") === propName;
+                return (p as any).getName().replace(/[`'"]/g, "") === propName;
               }
               return false;
             });
@@ -1364,7 +1381,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
             totalSlots++;
             if(p.isKind(SyntaxKind.PropertyAssignment)) {
               const init = p.getInitializerOrThrow();
-              const propName = p.getName().replace(/['"]/g, "");
+              const propName = p.getName().replace(/[`'"]/g, "");
               if (init.isKind(SyntaxKind.ArrayLiteralExpression)) {
                 const initText = init.getText();
                 const count = this.getArraySize(initText);
@@ -1483,7 +1500,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
       }
   
       private visitMemberExpression(expr: Expression, context: TranspilerContext, assignment?: boolean, direct?: boolean): string {
-        let code = `/* ${expr.getText()} */\n`;
+        let code = this.options.lineDetail ? `/* ${expr.getText()} */\n` : '';
         const segments = this.unrollMemberExpression(expr);
 
         if (segments.length === 0) {
@@ -1722,7 +1739,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
       
   
     private visitUnaryExpression(expr: Expression, context: TranspilerContext): string {
-      let code = `// unary: ${expr.getText()}\n`;
+      let code = this.options.lineDetail ? `// unary: ${expr.getText()}\n` : '';
       if (expr.isKind(SyntaxKind.PrefixUnaryExpression)) {
         const pre = expr as PrefixUnaryExpression;
         code += this.visitExpression(pre.getOperand(), context);
@@ -1781,7 +1798,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
         localVarCount: 0,
         paramMap: {}
       };
-      let code = `/*${fd.getText()}*/\ndefstate ${name}\n set ra rbp \n  state push \n  set rbp rsp \n`;
+      let code = `${this.options.lineDetail ? `/*${fd.getText()}*/` : ''}\ndefstate ${name}\n set ra rbp \n  state push \n  set rbp rsp \n`;
       fd.getParameters().forEach((p, i) => {
         localCtx.paramMap[p.getName()] = i;
       });
@@ -1813,7 +1830,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
      ****************************************************************************/
     private visitClassDeclaration(cd: ClassDeclaration, context: TranspilerContext): string {
       const className = cd.getName() || "AnonClass";
-      let code = `// class ${className}\n`;
+      let code = this.options.lineDetail ? `// class ${className}\n` : '';
   
       const base = cd.getExtends()?.getExpression().getText() || "";
       const type = base;
@@ -1883,7 +1900,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
                 paramMap: {}
               };
 
-              code += `\n/*${e.getText()}*/\nappendevent EVENT_${eFnName.toUpperCase()}\nset ra rbp \n  state push \n  set rbp rsp \n  ifactor ${localCtx.currentActorPicnum} {\n`;
+              code += `${this.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp \n  state push \n  set rbp rsp \n  ifactor ${localCtx.currentActorPicnum} {\n`;
               const body = e.getBody() as any;
               if(body) {
                 const stmts = body.getStatements() as Statement[];
@@ -1916,7 +1933,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
       context: TranspilerContext,
       type: string
     ): string {
-      let code = `// skipping actual constructor code\n`;
+      let code = this.options.lineDetail ? `// skipping actual constructor code\n` : '';
       const body = ctor.getBody() as any;
       if (body) {
         if(type == 'CActor') {
@@ -1960,7 +1977,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
                     return '';
                   }
 
-                  const eventName = arg[0].getText().replace(/['"]/g, "");
+                  const eventName = arg[0].getText().replace(/[`'"]/g, "");
 
                   if(!EventList.includes(eventName as TEvents)) {
                     addDiagnostic(call, context, 'error', `Event ${eventName} is not valid: ${call.getText()}`);
@@ -2002,7 +2019,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
           const key = p.getName();
           const val = p.getInitializerOrThrow();
           switch (key) {
-            case "name":        actionName = val.getText().replace(/['"]/g, ""); break;
+            case "name":        actionName = val.getText().replace(/[`'"]/g, ""); break;
             case "start":       start = parseInt(val.getText(), 10); break;
             case "length":      length = parseInt(val.getText(), 10); break;
             case "viewType":    viewType = parseInt(val.getText(), 10); break;
@@ -2030,7 +2047,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
           const key = p.getName();
           const val = p.getInitializerOrThrow();
           switch (key) {
-            case "name": moveName = val.getText().replace(/['"]/g, ""); break;
+            case "name": moveName = val.getText().replace(/[`'"]/g, ""); break;
             case "horizontal_vel": hv = parseInt(val.getText(), 10); break;
             case "vertical_vel": vv = parseInt(val.getText(), 10); break;
           }
@@ -2056,9 +2073,9 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
           const key = p.getName();
           const val = p.getInitializerOrThrow();
           switch (key) {
-            case "name": aiName = val.getText().replace(/['"]/g, ""); break;
-            case "action": actionLabel = val.getText().replace(/['"]/g, ""); break;
-            case "move": moveLabel = val.getText().replace(/['"]/g, ""); break;
+            case "name": aiName = val.getText().replace(/[`'"]/g, ""); break;
+            case "action": actionLabel = val.getText().replace(/[`'"]/g, ""); break;
+            case "move": moveLabel = val.getText().replace(/[`'"]/g, ""); break;
             case "flags": flags = evalMoveFlags(val, context); break;
           }
         }
@@ -2098,7 +2115,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
       if (args.length >= 5) {
         // first_action
         const fa = args[4];
-        context.currentActorFirstAction = context.symbolTable.get(fa.getText()).name.replace(/['"]/g, "");
+        context.currentActorFirstAction = context.symbolTable.get(fa.getText()).name.replace(/[`'"]/g, "");
       }
     }
   
@@ -2124,7 +2141,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
         const extra = localCtx.currentActorExtra || 0;
         const firstAction = localCtx.currentActorFirstAction || "0";
         const enemy = localCtx.currentActorIsEnemy ? 1 : 0;
-        let code = `/*${md.getText()}*/\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \nfindplayer playerDist\n`;
+        let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \nfindplayer playerDist\n`;
         md.getParameters().forEach((p, i) => {
           localCtx.paramMap[p.getName()] = i;
         });
@@ -2137,7 +2154,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
         code += `  set rbp 0 \n  set rsp -1 \nenda \n\n`;
         return code;
       } else if(type == 'CEvent' && (mName.toLowerCase() == 'append' || mName.toLowerCase() == 'prepend')) {
-        let code = `/*${md.getText()}*/\n${mName.toLowerCase()}event EVENT_${context.currentEventName}\n  set ra rbp \n  state push \n  set rbp rsp \n`;
+        let code = `${this.options.lineDetail ? `/*${md.getText()}*/`: ''}\n${mName.toLowerCase() == 'append' ? 'append' : 'on'}event EVENT_${context.currentEventName}\n  set ra rbp \n  state push \n  set rbp rsp \n`;
         const body = md.getBody() as any;
         if (body) {
           body.getStatements().forEach(st => {
@@ -2149,7 +2166,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
       }
   
       // otherwise => normal state
-      let code = `/*${md.getText()}*/\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set rbp rsp \n`;
+      let code = `${this.options.lineDetail ? `/*${md.getText()}*/`: ''}\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set rbp rsp \n`;
 
       md.getParameters().forEach((p, i) => {
         localCtx.paramMap[p.getName()] = i;

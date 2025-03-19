@@ -143,7 +143,7 @@ class displayRest extends CEvent {
     }
 
     public Append(): void {
-        //this.RotateSprite(160, 100, 65536, 0, 0, 0, 0, 0, 0, 0, 1024, 768);
+        this.RotateSprite(160, 100, 65536, 0, 0, 0, 0, 0, 0, 0, 1024, 768);
         const p: pos2 = {
             xy: {
                 x: 160,
@@ -171,5 +171,9 @@ class displayRest extends CEvent {
         }
 
         const y = obj.low[1].ball;
+
+        CON(`
+qputs 9999 FUCK ME
+quote 9999`);
     }
 }

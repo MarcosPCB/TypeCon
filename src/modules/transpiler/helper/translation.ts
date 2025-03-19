@@ -181,17 +181,95 @@ defstate popr5
     getarrayseq rstack r0 r1 r2 r3 r4
 ends
 
+defstate pushr6
+    add rsp 1
+    setarrayseq rstack r0 r1 r2 r3 r4 r5
+    copy rstack[0] flat[rsp] 6
+    add rsp 5
+ends
+
+defstate popr6
+    sub rsp 6
+    copy flat[rsp] rstack[0] 6
+    getarrayseq rstack r0 r1 r2 r3 r4 r5
+ends
+
+defstate pushr7
+    add rsp 1
+    setarrayseq rstack r0 r1 r2 r3 r4 r5 r6
+    copy rstack[0] flat[rsp] 7
+    add rsp 6
+ends
+
+defstate popr7
+    sub rsp 7
+    copy flat[rsp] rstack[0] 7
+    getarrayseq rstack r0 r1 r2 r3 r4 r5 r6
+ends
+
+defstate pushr8
+    add rsp 1
+    setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7
+    copy rstack[0] flat[rsp] 8
+    add rsp 7
+ends
+
+defstate popr8
+    sub rsp 8
+    copy flat[rsp] rstack[0] 8
+    getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7
+ends
+
+defstate pushr9
+    add rsp 1
+    setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8
+    copy rstack[0] flat[rsp] 9
+    add rsp 8
+ends
+
+defstate popr9
+    sub rsp 9
+    copy flat[rsp] rstack[0] 9
+    getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8
+ends
+
+defstate pushr10
+    add rsp 1
+    setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9
+    copy rstack[0] flat[rsp] 10
+    add rsp 9
+ends
+
+defstate popr10
+    sub rsp 10
+    copy flat[rsp] rstack[0] 10
+    getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9
+ends
+
+defstate pushr11
+    add rsp 1
+    setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10
+    copy rstack[0] flat[rsp] 11
+    add rsp 10
+ends
+
+defstate popr11
+    sub rsp 11
+    copy flat[rsp] rstack[0] 11
+    getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10
+ends
+
 defstate pushr12
     add rsp 1
-    setarrayseq rstack r0 r1 r2 r3 r4
-    copy rstack[0] flat[rsp] 5
-    add rsp 4
+    setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11
+    copy rstack[0] flat[rsp] 12
+    add rsp 11
 ends
 
 defstate popr12
-    sub rsp 5
-    copy flat[rsp] rstack[0] 5
-    getarrayseq rstack r0 r1 r2 r3 r4
+    sub rsp 12
+    copy flat[rsp] rstack[0] 12
+    getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11
 ends
 
 defstate push
