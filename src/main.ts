@@ -1,7 +1,5 @@
 import fs from 'fs';
-import Parser = require('@babel/parser');
 import path = require('path');
-import Transpiler from './modules/transpiler/services/Transpiler';
 import { compiledFiles, CONInit } from './modules/transpiler/helper/translation';
 import GDBDebugger from './modules/debugger/services/GDBDebugger';
 //import { CONDebugger } from './modules/debugger/debugger';
@@ -32,7 +30,8 @@ let gdb_err = false;
 */
 let compile_options = 0;
 
-console.log(`TypeCON Compiler BETA Version 0.01 \nBy ItsMarcos - Use '-help' to get the list of commands \n`)
+console.log(`\n\x1b[36mTypeCON Compiler \x1b[93mBETA\x1b[0m \x1b[92mVersion 0.01\x1b[0m\x1b[94m
+By ItsMarcos\x1b[0m - Use \x1b[95m'-help'\x1b[0m to get the list of commands`)
 
 if(!fs.existsSync('./compiled'))
     fs.mkdirSync('./compiled');
@@ -121,17 +120,17 @@ for(let i = 0; i < process.argv.length; i++) {
     if(a == '-help') {
         console.log(`
 Usage:
-    -c: for the file path to be compiled
-    -cl: for a list of files to be compiled
-    -o: for the output file name
-    -of: for the output folder path 
-    -ld: to write the TS lines inside the CON code 
-    -ss: to define the stack size 
-    -hl: Don't insert the header code (init code and states) inside the output CON 
-    -h: Create the header file 
-    -l: Create the header and the init files with the following list of CON files (separated by "")
-    -di: Default inclusion (GAME.CON) 
-    -ei: Init file is EDUKE.CON`)
+    \x1b[31m-c\x1b[0m:  for the file path to be compiled
+    \x1b[32m-cl\x1b[0m: for a list of files to be compiled
+    \x1b[33m-o\x1b[0m:  for the output file name
+    \x1b[34m-of\x1b[0m: for the output folder path 
+    \x1b[35m-ld\x1b[0m: to write the TS lines inside the CON code 
+    \x1b[36m-ss\x1b[0m: to define the stack size 
+    \x1b[91m-hl\x1b[0m: Don't insert the header code (init code and states) inside the output CON 
+    \x1b[92m-h\x1b[0m: Create the header file 
+    \x1b[93m-l\x1b[0m: Create the header and the init files with the following list of CON files (separated by "")
+    \x1b[94m-di\x1b[0m: Default inclusion (GAME.CON) 
+    \x1b[95m-ei\x1b[0m: Init file is EDUKE.CON`)
         process.exit(0);
     }
 }
