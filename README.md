@@ -1,8 +1,8 @@
-# TypeScript to Build Engine CON Transpiler
+# TypeScript to Build Engine CON Compiler
 
 *This is a very early-stage development tool.*
 
-Welcome to the TypeScript to Build Engine CON Transpiler! This tool leverages the power of TypeScript to simplify the process of creating or modifying Duke Nukem 3D mods and developing games with the Build Engine. By writing TypeScript code, you can produce CON files that adhere to the Build Engine's scripting language requirements.
+Welcome to the TypeScript to Build Engine CON Compiler! This tool leverages the power of TypeScript to simplify the process of creating or modifying Duke Nukem 3D mods and developing games with the Build Engine. By writing TypeScript code, you can produce CON files that adhere to the Build Engine's scripting language requirements.
 
 ---
 
@@ -14,22 +14,36 @@ Welcome to the TypeScript to Build Engine CON Transpiler! This tool leverages th
 
 ---
 
-
 ## Usage
 
-The transpiler is a command-line tool with customizable parameters:
+The compiler is a command-line tool with customizable parameters:
+
+### Banner
+
+```
+TypeCON Compiler BETA Version 0.01 
+By ItsMarcos - Use '-help' to get the list of commands 
+```
 
 #### Currently Available Commands
 - **`yarn run dev`**: Transpile the current test data.
-- **`yarn run parse`**: Parse the test data.
-- **`yarn run debug`**: Properly debug the code.
+- **`yarn run debug`**: Properly debug the compiler.
 
 ### Parameters
 
-- **`-c`**: Specify the TypeScript file to transpile (required).
-- **`-p`**: Parse the file without transpiling.
-- **`-ld`**: Display detailed information about the lines of code.
-- **`-ss`**: Set the stack size (default: `1024`).
+Usage:
+
+- **`-c`**: For the file path to be compiled.
+- **`-cl`**: For a list of files to be compiled.
+- **`-o`**: For the output file name.
+- **`-of`**: For the output folder path.
+- **`-ld`**: To write the TS lines inside the CON code.
+- **`-ss`**: To define the stack size.
+- **`-hl`**: Don't insert the header code (init code and states) inside the output CON.
+- **`-h`**: Create the header file.
+- **`-l`**: Create the header and the init files with the following list of CON files (separated by "").
+- **`-di`**: Default inclusion (GAME.CON).
+- **`-ei`**: Init file is EDUKE.CON.
 
 ---
 
