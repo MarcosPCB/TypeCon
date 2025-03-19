@@ -1,4 +1,4 @@
-namespace nocompile {}
+namespace noread {}
 
 //Type for native functions
 export type CON_NATIVE<Type> = Type;

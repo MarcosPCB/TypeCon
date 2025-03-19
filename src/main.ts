@@ -130,8 +130,6 @@ if(debug_mode) {
 
     const transpiler = new TsToConTranspiler({});
 
-    console.log(`Compiling ${fileName}...`);
-
     const file = fs.readFileSync(fileName);
 
     const result = transpiler.transpile(file.toString(), fileName);

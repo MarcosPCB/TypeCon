@@ -44,7 +44,10 @@ import {
     NumericLiteral,
     ObjectLiteralElementLike,
     ImportDeclaration,
-    ModuleDeclaration
+    ModuleDeclaration,
+    InterfaceDeclaration,
+    EnumDeclaration,
+    EnumMember
   } from "ts-morph";
   
   // Import your native data
@@ -121,6 +124,12 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
   interface TypeAliasDefinition {
     name: string;
     members: Record<string, string>; // property name -> type (as a string)
+    literal?: string;
+  }
+
+  interface EnumDefinition {
+    name: string,
+    members: Record<string, number>
   }
 
   /** 
@@ -152,6 +161,8 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
 
     // New field to store type aliases:
     typeAliases: Map<string, TypeAliasDefinition>;
+
+    enums: Map<string, EnumDefinition>;
 
     // New symbol table for object layouts (global or per–scope)
     symbolTable: Map<string, SymbolDefinition>;
@@ -226,6 +237,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
         currentActorAis: [],
         currentEventName: undefined,
         typeAliases: new Map(),
+        enums: new Map(),
         symbolTable: new Map(),
         currentFile: undefined
       };
@@ -263,28 +275,41 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
 
           try {
             const prvFile = context.currentFile;
-            console.log(`Including ${fullPath}...`);
             const sCode = fs.readFileSync(fullPath);
             this.transpile(sCode.toString(), fullPath, context);
             context.currentFile = prvFile;
+            context.diagnostics.length = 0;
           } catch(err) {
-            console.log(`Unable to include file: ${fullPath}`);
+            console.log(`\nUnable to include file: ${fullPath}`);
             console.log(err);
           }
         }
       }
+
+      if(prvContext)
+        console.log(`Including ${file}...`);
+
+      const modules = sf.getModules();
+
+      if(modules.length > 0) {
+        if(modules.findIndex(e => e.getName() == 'noread') != -1) {
+          console.log(`Ignoring...\n`);
+          return null;
+        } else if(modules.findIndex(e => e.getName() == 'nocompile') != -1) {
+          console.log(`Building symbols only...`);
+          context.currentFile.declaration = true;
+        }
+      } else console.log(`Compiling ${file}...`);
   
       sf.getStatements().forEach(st => {
-        if (st.isKind(SyntaxKind.FunctionDeclaration) && context.currentFile.declaration) {
+        if (st.isKind(SyntaxKind.FunctionDeclaration) && !context.currentFile.declaration) {
           outputLines.push(this.visitFunctionDeclaration(st as FunctionDeclaration, context));
-        } else if (st.isKind(SyntaxKind.ClassDeclaration) && context.currentFile.declaration) {
+        } else if (st.isKind(SyntaxKind.ClassDeclaration) && !context.currentFile.declaration) {
           outputLines.push(this.visitClassDeclaration(st as ClassDeclaration, context));
         } else {
           outputLines.push(this.visitStatement(st, context));
         }
       });
-
-      const modules = sf.getModules();
 
       if(modules.length > 0) {
         if(modules.findIndex(e => e.getName() == 'nocompile') != -1)
@@ -292,14 +317,14 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
         else context.currentFile.code = outputLines.join('\n');
       }
 
-      console.log(file + ':');
       if (context.diagnostics.length > 0) {
         console.log("\n=== DIAGNOSTICS ===");
         for (const diag of context.diagnostics) {
           console.log(`[${diag.severity}] line ${diag.line}: ${diag.message}`);
         }
+        console.log('\n');
       } else {
-          console.log("No errors or warnings.");
+          console.log("No errors or warnings.\n");
       }
   
       return {
@@ -311,19 +336,65 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
     private storeTypeAlias(ta: TypeAliasDeclaration, context: TranspilerContext): void {
         const aliasName = ta.getName();
         const typeNode = ta.getTypeNode();
-        if (!typeNode || typeNode.getKind() !== SyntaxKind.TypeLiteral) {
+
+        if (!typeNode || !typeNode.isKind(SyntaxKind.TypeLiteral)) {
+          if(typeNode) {
+            if(['OnEvent', 'constant', 'TLabel', 'CON_NATIVE', 'CON_NATIVE_POINTER'].includes(aliasName))
+              return;
+
+            if(typeNode.getKind() == SyntaxKind.NumberKeyword
+            || typeNode.getKind() == SyntaxKind.StringKeyword 
+            || typeNode.getKind() == SyntaxKind.StringLiteral
+            || typeNode.getKind() == SyntaxKind.UnionType)
+              return;
+          }
           addDiagnostic(ta, context, "warning", `Type alias ${aliasName} is not a literal type.`);
           return;
         }
-        const typeLiteral = typeNode as TypeLiteralNode;
+
+        if(typeNode.isKind(SyntaxKind.TypeLiteral)) {
+          const typeLiteral = typeNode as TypeLiteralNode;
+          const members: Record<string, string> = {};
+          typeLiteral.getMembers().forEach((member, i) => {
+            if (member.getKind() === SyntaxKind.PropertySignature) {
+              const prop = member as PropertySignature;
+              members[prop.getName()] = prop.getType().getText();
+            }
+          });
+          context.typeAliases.set(aliasName, { name: aliasName, members });
+        }
+
+        if(typeNode.isKind(SyntaxKind.NumberKeyword))
+          context.typeAliases.set(aliasName, { name: aliasName, literal: 'number', members: {} });
+
+        if(typeNode.isKind(SyntaxKind.StringKeyword | SyntaxKind.UnionType))
+          context.typeAliases.set(aliasName, { name: aliasName, literal: 'string', members: {} });
+      }
+
+      private storeInterface(id: InterfaceDeclaration, context: TranspilerContext): void {
+        const aliasName = id.getName();
+
         const members: Record<string, string> = {};
-        typeLiteral.getMembers().forEach((member, i) => {
+        id.getMembers().forEach((member, i) => {
           if (member.getKind() === SyntaxKind.PropertySignature) {
             const prop = member as PropertySignature;
             members[prop.getName()] = prop.getType().getText();
           }
         });
         context.typeAliases.set(aliasName, { name: aliasName, members });
+      }
+
+      private storeEnum(ed: EnumDeclaration, context: TranspilerContext): void {
+        const name = ed.getName();
+
+        const members: Record<string, number> = {};
+        ed.getMembers().forEach((member, i) => {
+          if (member.getKind() === SyntaxKind.EnumMember) {
+            const prop = member as EnumMember;
+            members[prop.getName()] = prop.getValue() as number;
+          }
+        });
+        context.enums.set(name, { name: name, members });
       }
 
       private getObjectSize(typeName: string, context: TranspilerContext): number {
@@ -445,10 +516,19 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
             this.storeTypeAlias(stmt as TypeAliasDeclaration, context);
             break;
 
+        case SyntaxKind.InterfaceDeclaration:
+          this.storeInterface(stmt as InterfaceDeclaration, context);
+          break;
+
+        case SyntaxKind.EnumDeclaration:
+          this.storeEnum(stmt as EnumDeclaration, context);
+          break;
+
         case SyntaxKind.BreakStatement:
             return code + `break\n`;
 
         case SyntaxKind.ModuleDeclaration:
+            const b = context.currentFile.declaration;
             context.currentFile.declaration = true;
             const stmts = (stmt as ModuleDeclaration).getStatements();
 
@@ -456,7 +536,7 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
               if (!st.isKind(SyntaxKind.FunctionDeclaration) && !st.isKind(SyntaxKind.ClassDeclaration))
                 this.visitStatement(st, context);
             });
-            context.currentFile.declaration = false;
+            context.currentFile.declaration = b;
             return code;
 
         case SyntaxKind.ImportDeclaration:
@@ -1342,10 +1422,10 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
         const varName = this.getVarNameForObjectLiteral(objLit);
         if (varName) {
           // Store the layout in the global symbol table.
-          context.symbolTable.set(varName, { name: varName, type: "object", offset: context.localVarCount, size: result.size, children: result.layout });
+          context.symbolTable.set(varName, { name: varName, type: "object", offset: context.localVarCount + 1, size: result.size, children: result.layout });
         }
         context.localVarCount += result.size + 1;
-        return result.code + `set ra rbp\nadd ra ${context.localVarCount - result.size - 1}\nset rf 0\n`;
+        return result.code + `set ra rbp\nadd ra ${context.localVarCount - result.size}\nset rf 0\n`;
       }      
 
       private unrollMemberExpression(expr: Expression): MemberSegment[] {
@@ -1487,8 +1567,21 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
                     code += `set ra ${EMoveFlags[(segments[1] as SegmentProperty).name]}\n`;
                     return code;
 
-                default: //sprites, sectors, walls
+                default: //sprites, sectors, walls or other enums
                     if(obj.kind != 'this') {
+                        //Check if it's a enum
+
+                        const e = context.enums.get(obj.name);
+
+                        if(e) {
+                          const seg = segments[1] as SegmentProperty
+                          if(direct)
+                            return String(e.members[seg.name]);
+
+                          code += `set ra ${e.members[seg.name]}\n`;
+                          return code;
+                        }
+
                         if(segments[1].kind != 'index' && (sym && !sym.native_pointer_index)) {
                             addDiagnostic(expr, context, "error", `Missing index for ${obj.name}: ${expr.getText()}`);
                             return "set ra 0\n";
@@ -2030,7 +2123,8 @@ import { compiledFiles, ICompiledFile } from "../helper/translation";
         const pic = localCtx.currentActorPicnum || 0;
         const extra = localCtx.currentActorExtra || 0;
         const firstAction = localCtx.currentActorFirstAction || "0";
-        let code = `/*${md.getText()}*/\nuseractor 0 ${pic} ${extra} ${firstAction} \nfindplayer playerDist\n`;
+        const enemy = localCtx.currentActorIsEnemy ? 1 : 0;
+        let code = `/*${md.getText()}*/\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \nfindplayer playerDist\n`;
         md.getParameters().forEach((p, i) => {
           localCtx.paramMap[p.getName()] = i;
         });
