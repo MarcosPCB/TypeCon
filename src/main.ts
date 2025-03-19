@@ -2,10 +2,10 @@ import fs from 'fs';
 import Parser = require('@babel/parser');
 import path = require('path');
 import Transpiler from './modules/transpiler/services/Transpiler';
-import * as T from '@babel/types';
-import { initCode, initStates } from './modules/transpiler/helper/translation';
+import { compiledFiles, CONInit } from './modules/transpiler/helper/translation';
 import GDBDebugger from './modules/debugger/services/GDBDebugger';
-import { CONDebugger } from './modules/debugger/debugger';
+//import { CONDebugger } from './modules/debugger/debugger';
+import { TsToConTranspiler } from './modules/transpiler/services/Transpiler2';
 
 let fileName = '';
 let lineDetail = false;
@@ -14,6 +14,7 @@ let stack_size = 1024;
 let output_folder = './compiled';
 let output_file = '';
 let linkList: string[] = [];
+let files: string[] = [];
 let link = false;
 let default_inclusion = false;
 let eduke_init = false;
@@ -31,10 +32,7 @@ let gdb_err = false;
 */
 let compile_options = 0;
 
-console.log(`TypeCON Transpiler BETA Version 0.01 \nBy ItsMarcos - Use '-help' to get the list of commands \n`)
-
-if(!fs.existsSync('./obj'))
-    fs.mkdirSync('./obj');
+console.log(`TypeCON Compiler BETA Version 0.01 \nBy ItsMarcos - Use '-help' to get the list of commands \n`)
 
 if(!fs.existsSync('./compiled'))
     fs.mkdirSync('./compiled');
@@ -84,14 +82,6 @@ for(let i = 0; i < process.argv.length; i++) {
     if(a == '-hl')
         compile_options |= 1;
 
-    if(a == '-nh') {
-        if(compile_options & 4) {
-            console.log(`ERROR: you can't use -nh with -h parameters together`);
-            process.exit(1);
-        }
-        compile_options |= 2 + 1;
-    }
-
     if(a == '-h') {
         if(compile_options & 2) {
             console.log(`ERROR: you can't use -h with -nh parameters together`);
@@ -110,6 +100,16 @@ for(let i = 0; i < process.argv.length; i++) {
         }
     }
 
+    if(a == '-cl') {
+        link = true;
+        for(let j = i + 1; j < process.argv.length; j++) {
+            const arg = process.argv[j];
+            if(arg.charAt(0) == '"' && arg.charAt(-1) == '"')
+                files.push(arg);
+            else break;
+        }
+    }
+
     if(a == '-di')
         default_inclusion = true;
 
@@ -119,72 +119,108 @@ for(let i = 0; i < process.argv.length; i++) {
     }
 
     if(a == '-help') {
-        console.log(`Usage: \n\t-c: for the file path to be transpiled \n\t-o: for the output file name \n\t-of: for the output folder path \n\t-p: for parse only \n\t-ld: to write the TS lines inside the CON code \n\t-ss: to define the stack size \n\t-hl: Don't insert the header code (init code and states) inside the transpiled CON \n\t-nh: Don't create the header file \n\t-h: Create the header file \n\t-l create the header and create the init file with the following list of CON files (separated by "") \n\t-di: Default inclusion (GAME.CON) \n\t-ei: Init file is EDUKE.CON`)
+        console.log(`
+Usage:
+    -c: for the file path to be compiled
+    -cl: for a list of files to be compiled
+    -o: for the output file name
+    -of: for the output folder path 
+    -ld: to write the TS lines inside the CON code 
+    -ss: to define the stack size 
+    -hl: Don't insert the header code (init code and states) inside the output CON 
+    -h: Create the header file 
+    -l: Create the header and the init files with the following list of CON files (separated by "")
+    -di: Default inclusion (GAME.CON) 
+    -ei: Init file is EDUKE.CON`)
         process.exit(0);
     }
 }
 
 if(debug_mode) {
-    CONDebugger(path_or_PID, PID, gdb_log, gdb_err);
+    //CONDebugger(path_or_PID, PID, gdb_log, gdb_err);
 } else {
     if(stack_size < 1024)
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
-    console.log(`Parsing ${fileName}`);
+    const transpiler = new TsToConTranspiler({lineDetail});
 
-    const file = fs.readFileSync(fileName);
+    let code = '';
 
-    const parsed: T.File = Parser.parse(file.toString(), {
-        sourceType: 'module',
-        plugins: [ 'typescript' ],
-        tokens: false,
-        });
+    const initSys = new CONInit(stack_size);
 
-    fs.writeFileSync(`obj/${path.basename(fileName)}.AST`, JSON.stringify(parsed, null, "\t"));
+    if(fileName != '') {
+        const file = fs.readFileSync(fileName);
 
-    if(!parse_only) {
-        debugger;
-        console.log(`Transpiling...`);
-        let code = Transpiler(parsed, lineDetail, stack_size, file.toString(), compile_options);
+        const result = transpiler.transpile(file.toString(), fileName);
 
-        if(default_inclusion && !(compile_options & 1) && !(compile_options & 2) && !(compile_options & 4) && !link)
-            code = `include GAME.CON \n` + code;
+        for(let i = compiledFiles.size - 1; i >= 0; i--) {
+            const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
+            code += f.code;
+        }
 
-        console.log(`Saving to ${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`);
-        if(code) {
+        if(compile_options & 4) {
+            CreateInit([`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`]);
+            console.log(`Writing header file: ${output_folder}/header.con`);
+            fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
+
+            console.log(`Writing ${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`);
+            fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, code);
+        } else {
+            if(default_inclusion)
+                code = `include GAME.CON\n\n` + initSys.BuildFullCodeFile(code);
+            else {
+                if(!(compile_options & 1))
+                    code = initSys.BuildFullCodeFile(code);
+            }
+
+            console.log(`Writing ${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`);
             fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, code);
         }
-
-        if(code && ((compile_options & 4) || link)) {
-            if(compile_options & 4)
-                console.log(`Creating header and init files...`);
-
-            if(link)
-                console.log('Linking files into the init file...');
-
-            let header = initCode
-
-            if(!stack_size) header += '1024 0 \n \n' + initStates;
-            else header += stack_size + ' 0 \n \n' + initStates;
-            fs.writeFileSync(`${output_folder}/header.con`, header);
-
-            if(compile_options & 4)
-                fs.writeFileSync(`${output_folder}/${init_file}`,
-                `${default_inclusion ? 'include GAME.CON \n' : ''}include header.con \ninclude ${!output_file.length ? path.basename(fileName) : output_file}.con`);
-            else if(link) {
-                let init = `${default_inclusion ? 'include GAME.CON \n' : ''}include header.con \n`;
-                init += linkList.map(e => {
-                    return `include ${e}`;
-                }).join(' \n');
-
-                fs.writeFileSync(`${output_folder}/${init_file}`, init);
-                console.log('Link completed!');
-            }
-        }
-
-        console.log(`Transpiling finished!`);
-
     }
 
+    if(files.length > 0) {
+        for(const f of files) {
+            const file = fs.readFileSync(f);
+
+            transpiler.transpile(file.toString(), f);
+        }
+
+        compiledFiles.forEach(c => {
+            console.log(`Writing ${output_folder}/${path.basename(c.path)}.con`);
+            fs.writeFileSync(`${output_folder}/${path.basename(c.path)}.con`, c.code);
+
+            if(compile_options & 4)
+                linkList.push(`${output_folder}/${path.basename(c.path)}.con`);
+        });
+
+        if(compile_options & 4)
+            link = true;
+    }
+
+    if(link) {
+        console.log(`Linking...`);
+        CreateInit(linkList);
+        console.log(`Writing header file: ${output_folder}/header.con`);
+        fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
+    }
+
+    console.log(`Compilation finished!`);
+
     process.exit(0);
+}
+
+function CreateInit(outputFiles: string[]) {
+    let code = '';
+
+    console.log(`Writing init file: ${init_file}`);
+
+    if(default_inclusion)
+        code = `include GAME.CON\n\n`;
+
+    code = `include header.con\n`;
+
+    for(const o of outputFiles)
+        code += `include ${o}.con\n`
+
+    fs.writeFileSync(`${output_folder}/${init_file}`, code);
 }

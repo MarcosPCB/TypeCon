@@ -58,7 +58,7 @@ class newEnemy extends CActor {
             flags: EMoveFlags.seekplayer
         }
 
-        super(1685, true, 100, [AIdle, AWalk], AIdle, [MStop, MWalk], [AIIdle, AIWalk]);
+        super(1685, true, 10, [AIdle, AWalk], AIdle, [MStop, MWalk], [AIIdle, AIWalk]);
     }
 
     Events: OnEvent = {
@@ -68,6 +68,15 @@ class newEnemy extends CActor {
     }
 
     Idle() {
+        const s = sprites;
+        const s1 = sprites[0];
+
+        s[0].ang = 56;
+        console.log(sprites[0].ang);
+
+        s1.ang = 57;
+        console.log(sprites[0].ang);
+
         if(this.CanSee()) {
             if(this.CanShootTarget()) {
                 if(this.playerDist < 4096) {
@@ -134,12 +143,26 @@ class displayRest extends CEvent {
     }
 
     public Append(): void {
-        this.RotateSprite(160, 100, 0, 65536, 0, 0, 0, 0, 0, 0, 0, 0);
+        this.RotateSprite(160, 100, 65536, 0, 0, 0, 0, 0, 0, 0, 1024, 768);
+        const p: pos2 = {
+            xy: {
+                x: 160,
+                y: 100
+            },
+            scale: 65536,
+            ang: 0
+        }
+
+        this.DrawSprite(p, 1685, {
+            shade: 0,
+            pal: 21,
+            orientation: 8
+        });
+
         const t = sectors[0].ceiling.z
         const a = sectors[sectors[0].extra].walls[0].pos.x
         console.log(t);
         console.log(a);
-        sectors[sectors[0].extra].walls[0].pos.x = 1;
 
         const obj: test = {
             name: 2,
@@ -148,9 +171,9 @@ class displayRest extends CEvent {
         }
 
         const y = obj.low[1].ball;
-    }
-}
 
-declare global {
-    export const NewEnemy: newEnemy;
+        CON(`
+qputs 9999 FUCK ME
+quote 9999`);
+    }
 }

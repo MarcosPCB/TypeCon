@@ -1,4 +1,4 @@
-import { IActor } from "../../modules/transpiler/types";
+namespace noread {}
 
 //Type for native functions
 export type CON_NATIVE<Type> = Type;
@@ -23,6 +23,7 @@ export enum CON_NATIVE_FLAGS {
     PROJECTILE = 128,
     OBJECT = 256,
     ARRAY = 512,
+    HEAP_POINTER = 1024
 }
 
 export enum EMoveFlags {
@@ -58,6 +59,7 @@ export interface CON_NATIVE_FUNCTION {
     return_size?: number,
     arguments: CON_NATIVE_FLAGS[],
     arguments_default?: any[]
+    object_belong?: string[]
 }
 
 export interface CON_NATIVE_VAR {
@@ -323,7 +325,7 @@ state popd
     {
         name: 'Shoot',
         code: (args?: boolean, fn?: string) => {
-            return `state push \nset rd RETURN \nife r2 0 eshoot r0 \nelse { \nife r4 1 { \neshoot r0 \ngeta[RETURN].zvel ra \nadd ra r3 \nseta[RETURN].zvel ra \n } else ezshoot r3 r0\n }\n${fn}set rb RETURN\nset RETURN rd `;
+            return `set rd RETURN \nife r2 0 eshoot r0 \nelse { \nife r4 1 { \neshoot r0 \ngeta[RETURN].zvel ra \nadd ra r3 \nseta[RETURN].zvel ra \n } else ezshoot r3 r0\n }\n${fn}set rb RETURN\nset RETURN rd `;
         },
         returns: true,
         return_type: 'variable',
@@ -398,6 +400,60 @@ state popd
             CON_NATIVE_FLAGS.VARIABLE,
             CON_NATIVE_FLAGS.VARIABLE,
         ]
+    },
+    {
+        name: 'DrawSprite',
+        returns: false,
+        return_type: null,
+        code: (args, fn) => {
+            return `
+state push
+state pushb
+state pushc
+
+set ri r0
+add ri 1
+
+set r0 flat[ri]
+add ri 1
+set ra flat[ri]
+add ri 1
+set rc flat[ri]
+add ri 1
+set r1 flat[ri]
+
+set ri r3
+add ri 1
+
+set r4 flat[ri]
+add ri 1
+set r3 flat[ri]
+add ri 1
+set rb flat[ri]
+
+
+rotatesprite r0 ra rc r1 r2 r4 r3 rb 0 0 xdim ydim
+
+state popc
+state popb
+state pop
+`;
+        },
+        arguments: [
+            CON_NATIVE_FLAGS.OBJECT,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.OBJECT
+        ]
+    },
+    {
+        name: 'log',
+        code: `al`,
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        object_belong: ['console']
     }
 ]
 
@@ -587,14 +643,17 @@ export const nativeVars_Sectors: CON_NATIVE_VAR[] = [
     {
         name: 'walls',
         var_type: CON_NATIVE_TYPE.array,
-        type: CON_NATIVE_FLAGS.ARRAY,
+        type: CON_NATIVE_FLAGS.OBJECT,
         readonly: true,
         init: 0,
-        code: ['getsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \nset ri ra \nstate popc \nstate pop \ngetwall[ri]', 'getsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \nset ri ra \nstate popc \nstate pop \nsetwall[ri]'],
+        code: ['getsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \nset ri ra \nstate popc \ngetwall[ri].', 'getsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \nset ri ra \nstate popc \nstate pop\nsetwall[ri].'],
         object: nativeVars_Walls,
         override_code: true,
     }
 ]
+
+export const nativeVarsList = ['sprites', 'sectors', 'walls', 'projectiles',
+    'players', 'tiledata', 'tsprites', 'paldata', 'userdef'];
 
 export type pointer = void;
 
