@@ -1,8 +1,11 @@
-import { CON_NATIVE, CON_NATIVE_POINTER } from "./native";
+import { CON_NATIVE, CON_NATIVE_POINTER } from "./native"
+
+//@typecon
 
 namespace nocompile {}
 
 declare global {
+    //Type for native functions
     export enum Names {
         APLAYER = 1405,
         BLOOD = 1620,
@@ -47,7 +50,8 @@ declare global {
 
     export interface pointer {}
     export function Label(name: string): pointer;
-    export type constant = number;
+  
+    export type constant = number & { __brandConstant?: never };
 
     //Interface for declaring actions
     export interface IAction {
@@ -115,7 +119,7 @@ declare global {
     export function Delete(buffer: any): void;
     export function Free(buffer: any): void;
 
-    export function CON(native_code: string);
+    export function CON(native_code: string): void;
 
     export class CActor {
         public picnum: CON_NATIVE<number>;
@@ -141,9 +145,9 @@ declare global {
         protected index: number;
 
         constructor(
-            picnum: number,
+            picnum: constant,
             isEnemy: boolean,
-            extra?: number,
+            extra?: constant,
             actions?: IAction[],
             first_action?: IAction,
             moves?: IMove[],

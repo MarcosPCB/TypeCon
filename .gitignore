@@ -8,3 +8,6 @@ test/eduke32
 *.cache
 texturecache
 *.index
+dist
+include
+compiled

@@ -1,0 +1,11 @@
+{
+    "compilerOptions": {
+      "plugins": [
+        { "name": "typecon_plugin" }
+      ],
+      "strict": true
+    },
+    "include": ["data/**/*.ts"],
+    "exclude": ["node_modules"]
+  }
+  

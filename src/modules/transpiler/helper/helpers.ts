@@ -13,7 +13,7 @@ import {
   import { TranspilerContext, addDiagnostic } from '../services/Transpiler2'
   // The line above is hypothetical; adapt to your actual imports.
   
-  import { CON_NATIVE_FUNCTION, CON_NATIVE_VAR, EMoveFlags, nativeFunctions, nativeVars_Sprites } from "../../../defs/TCSet100/native"; 
+  import { CON_NATIVE_FUNCTION, CON_NATIVE_VAR, EMoveFlags, nativeFunctions, nativeVars_Sprites } from "../../../sets/TCSet100/native"; 
   // Or wherever EMoveFlags is declared
   
   /**

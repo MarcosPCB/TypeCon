@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import fs from 'fs';
 import path = require('path');
 import { compiledFiles, CONInit } from './modules/transpiler/helper/translation';
@@ -9,7 +11,7 @@ let fileName = '';
 let lineDetail = false;
 let parse_only = false;
 let stack_size = 1024;
-let output_folder = './compiled';
+let output_folder = 'compiled';
 let output_file = '';
 let linkList: string[] = [];
 let files: string[] = [];
@@ -27,14 +29,15 @@ let gdb_err = false;
     1 - don't put header in the CONs
     2 - don't create header file
     4 - create header file once
+    8 - output all to one file
 */
 let compile_options = 0;
 
 console.log(`\n\x1b[36mTypeCON Compiler \x1b[93mBETA\x1b[0m \x1b[92mVersion 0.01\x1b[0m\x1b[94m
 By ItsMarcos\x1b[0m - Use \x1b[95m'-help'\x1b[0m to get the list of commands`)
 
-if(!fs.existsSync('./compiled'))
-    fs.mkdirSync('./compiled');
+if(!fs.existsSync('compiled'))
+    fs.mkdirSync('compiled');
 
 for(let i = 0; i < process.argv.length; i++) {
     const a = process.argv[i];
@@ -89,6 +92,20 @@ for(let i = 0; i < process.argv.length; i++) {
         compile_options |= 4 + 1;
     }
 
+    if(a == '-1f') {
+        if(compile_options & 4) {
+            console.log(`ERROR: you can't use -1f with -h parameter`)
+            process.exit(1);
+        }
+
+        if(!output_file.length) {
+            console.log(`ERROR: you must provide a name for the output file when using -1f`)
+            process.exit(1);
+        }
+
+        compile_options |= 8;
+    }
+
     if(a == '-l') {
         link = true;
         for(let j = i + 1; j < process.argv.length; j++) {
@@ -129,6 +146,7 @@ Usage:
     \x1b[91m-hl\x1b[0m: Don't insert the header code (init code and states) inside the output CON 
     \x1b[92m-h\x1b[0m: Create the header file 
     \x1b[93m-l\x1b[0m: Create the header and the init files with the following list of CON files (separated by "")
+    \x1b[96m-1f\x1b[0m: Compile all the code into one file (must be used with -o)
     \x1b[94m-di\x1b[0m: Default inclusion (GAME.CON) 
     \x1b[95m-ei\x1b[0m: Init file is EDUKE.CON`)
         process.exit(0);
@@ -157,13 +175,15 @@ if(debug_mode) {
             code += f.code;
         }
 
+        fileName = GetOutputName(fileName);
+
         if(compile_options & 4) {
-            CreateInit([`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`]);
+            CreateInit([`${output_folder}/${fileName}.con`]);
             console.log(`Writing header file: ${output_folder}/header.con`);
             fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
 
-            console.log(`Writing ${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`);
-            fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, code);
+            console.log(`Writing ${output_folder}/${fileName}.con`);
+            fs.writeFileSync(`${output_folder}/${fileName}.con`, code);
         } else {
             if(default_inclusion)
                 code = `include GAME.CON\n\n` + initSys.BuildFullCodeFile(code);
@@ -172,8 +192,8 @@ if(debug_mode) {
                     code = initSys.BuildFullCodeFile(code);
             }
 
-            console.log(`Writing ${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`);
-            fs.writeFileSync(`${output_folder}/${!output_file.length ? path.basename(fileName) : output_file}.con`, code);
+            console.log(`Writing ${output_folder}/${fileName}.con`);
+            fs.writeFileSync(`${output_folder}/${fileName}.con`, code);
         }
     }
 
@@ -184,16 +204,31 @@ if(debug_mode) {
             transpiler.transpile(file.toString(), f);
         }
 
-        compiledFiles.forEach(c => {
-            console.log(`Writing ${output_folder}/${path.basename(c.path)}.con`);
-            fs.writeFileSync(`${output_folder}/${path.basename(c.path)}.con`, c.code);
+        if(compile_options & 8) {
+            console.log(`Compiling into one file...`);
+            for(let i = compiledFiles.size - 1; i >= 0; i--) {
+                const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
+                code += f.code;
+            }
+
+            if(!(compile_options & 1))
+                code = initSys.BuildFullCodeFile(code);
+
+            console.log(`Writing ${output_folder}/${output_file}.con`);
+            fs.writeFileSync(`${output_folder}/${output_file}.con`, code);
+        } else {
+            compiledFiles.forEach(c => {
+                const name = GetOutputName(c.path);
+                console.log(`Writing ${output_folder}/${name}.con`);
+                fs.writeFileSync(`${output_folder}/${name}.con`, c.code);
+
+                if(compile_options & 4)
+                    linkList.push(`${output_folder}/${name}.con`);
+            });
 
             if(compile_options & 4)
-                linkList.push(`${output_folder}/${path.basename(c.path)}.con`);
-        });
-
-        if(compile_options & 4)
-            link = true;
+                link = true;
+        }
     }
 
     if(link) {
@@ -222,4 +257,18 @@ function CreateInit(outputFiles: string[]) {
         code += `include ${o}.con\n`
 
     fs.writeFileSync(`${output_folder}/${init_file}`, code);
+}
+
+function GetOutputName(filename: string) {
+    if(output_file.length > 0)
+        return output_file;
+
+    //Remove extension
+    const ext = path.extname(filename);
+    const final = path.basename(filename);
+
+    if(ext != '')
+        return final.slice(0, final.length - ext.length);
+
+    return final;
 }

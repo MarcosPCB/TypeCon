@@ -1,4 +1,4 @@
-import { rejects } from "assert";
+//@ts-nocheck
 import { spawn, ChildProcessWithoutNullStreams, execSync } from "child_process";
 import ffi from 'ffi-napi';
 import path from "path";

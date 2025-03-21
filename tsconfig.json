@@ -66,7 +66,10 @@
     },
     "exclude": [
       "node_modules",
-      "**/*.test.ts"
+      "test",
+      "compiled",
+      "src/modules/debugger/**/*.ts",
+      "src/modules/debugger/*.ts",
     ],
     "include": [
       "src/**/*.ts"

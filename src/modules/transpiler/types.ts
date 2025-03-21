@@ -1,13 +1,4 @@
-import * as T from '@babel/types';
-import '../../defs/TCSet100/types';
-import { CON_NATIVE_FLAGS } from '../../defs/TCSet100/native';
-
-export interface IError {
-    type: 'error' | 'warning';
-    node: string;
-    location: T.SourceLocation;
-    message: string;
-}
+import { CON_NATIVE_FLAGS } from '../../sets/TCSet100/native';
 
 export enum EBlock {
     ACTOR,
@@ -89,18 +80,6 @@ export interface IType {
     object?: TObjectType[]
 }
 
-export interface IActor {
-    name: string,
-    enemy: boolean,
-    picnum: number,
-    extra: number,
-    first_action?: IAction,
-    actions?: IAction[],
-    moves?: IMove[],
-    ais?: IAi[]
-    export_name: string
-}
-
 export type TClassType = 'CActor' | 'CEvent';
 
 export interface ILabel {
@@ -114,6 +93,10 @@ export enum Names {
     FIRELASER = 1625,
     JIBS6 = 2286
 }
+
+export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound';
+export type TEventDE = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd';
+export type TEvents = TEventPAE | TEventDE;
 
 export const EventList: TEvents[] = [
     'DisplayRest',

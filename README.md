@@ -42,6 +42,7 @@ Usage:
 - **`-hl`**: Don't insert the header code (init code and states) inside the output CON.
 - **`-h`**: Create the header file.
 - **`-l`**: Create the header and the init files with the following list of CON files (separated by "").
+- **`-1f`**: Compiles all files into one (must be used with -o)
 - **`-di`**: Default inclusion (GAME.CON).
 - **`-ei`**: Init file is EDUKE.CON.
 
