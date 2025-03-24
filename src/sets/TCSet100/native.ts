@@ -2,6 +2,7 @@ namespace noread {}
 
 //Type for native functions
 export type CON_NATIVE<Type> = Type;
+export type CON_NATIVE_GAMEVAR<Type> = Type;
 
 export class CON_NATIVE_POINTER { }
 
@@ -244,6 +245,41 @@ state popd
         arguments: []
     },
     {
+        name: 'IsInWater',
+        code: 'set rb 1 \nifinwater set rb 0 ',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'IsOnWater',
+        code: 'set rb 1 \nifonwater set rb 0 ',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'IsOutside',
+        code: 'set rb 1 \nifoutside set rb 0 ',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'IsInSpace',
+        code: 'set rb 1 \nifinspace set rb 0 ',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'IsInOuterSpace',
+        code: 'set rb 1 \nifinouterspace set rb 0 ',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
         name: 'GetLastPal',
         code: 'getlastpal ',
         returns: false,
@@ -446,6 +482,34 @@ state pop
         ]
     },
     {
+        name: 'ScreenText',
+        code: `screentext `,
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+        ]
+    },
+    {
         name: 'log',
         code: `al`,
         returns: false,
@@ -454,6 +518,24 @@ state pop
             CON_NATIVE_FLAGS.VARIABLE
         ],
         object_belong: ['console']
+    },
+    {
+        name: 'IsPlayerState',
+        code: `ifp`,
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.CONSTANT
+        ]
+    },
+    {
+        name: 'Quote',
+        code: `setp[].fta 99\nsetp[].ftq`,
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.STRING
+        ]
     }
 ]
 

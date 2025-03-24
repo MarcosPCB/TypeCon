@@ -11,6 +11,13 @@ if (!projectRoot) {
   process.exit(0);
 }
 
+// If these are the same, it often means the user is installing *within* your package repo,
+// not installing your package in a *different* project.
+if (packageRoot === projectRoot) {
+  console.log("Detected installation in the package's own folder. Skipping postinstall...");
+  process.exit(0); 
+}
+
 // We want to copy 'include/' from our package
 const sourceFolder = path.join(packageRoot, "include");
 

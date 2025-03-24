@@ -1,4 +1,4 @@
-import { CON_NATIVE, CON_NATIVE_POINTER } from "./native"
+import { CON_NATIVE, CON_NATIVE_GAMEVAR, CON_NATIVE_POINTER } from "./native"
 
 //@typecon
 
@@ -12,6 +12,27 @@ declare global {
         FIRELASER = 1625,
         JIBS6 = 2286
     }
+
+    export enum PlayerStates {
+        pstanding = 1,
+        pwalking = 2,
+        prunning = 4,
+        pducking = 8,
+        pfalling = 16,
+        pjumping = 32,
+        phigher = 64,
+        pwalkingback = 128,
+        prunningback = 256,
+        pkicking = 512,
+        pshrunk = 1024,
+        pjetpack = 2048,
+        ponsteroids = 4096,
+        ponground = 8192,
+        palive = 16384,
+        pdead = 32768,
+        pfacing = 65536,
+    }
+      
 
     export type vec2 = {
         x: number,
@@ -120,7 +141,23 @@ declare global {
     export function Free(buffer: any): void;
 
     export function CON(native_code: string): void;
+    export function CONUnsafe(native_code: string): void;
 
+    //Global functions
+    export function IsPlayerState(state: constant): CON_NATIVE<boolean>;
+    export function Quote(quote: string): CON_NATIVE<void>;
+
+    //Global readonly variables
+    export const xDim: CON_NATIVE_GAMEVAR<'xdim'>;
+    export const yDim: CON_NATIVE_GAMEVAR<'ydim'>;
+    export const weaponXOff: CON_NATIVE_GAMEVAR<'weapon_xoffset'>;
+    export const weaponCount: CON_NATIVE_GAMEVAR<'weaponcount'>;
+    export const totalClock: CON_NATIVE_GAMEVAR<'totalclock'>;
+    export const gunPos: CON_NATIVE_GAMEVAR<'gun_pos'>;
+    export const lookingArc: CON_NATIVE_GAMEVAR<'looking_arc'>;
+    export const thisActor: CON_NATIVE_GAMEVAR<'THISACTOR'>;
+
+    //Actor class
     export class CActor {
         public picnum: CON_NATIVE<number>;
         public isEnemy: boolean;
@@ -174,6 +211,8 @@ declare global {
         protected Flash(): CON_NATIVE<void>
         protected RespawnHitag(): CON_NATIVE<void>
         protected Operate(flags: EOperateFlags, lotag?: number, player_id?: number, sector?: number, sprite?: number): CON_NATIVE<void>
+        protected Sound(sound_id: number, global: boolean): CON_NATIVE<void>
+
 
         //Conditionals
         protected IsAwayFromWall(): CON_NATIVE<boolean>
@@ -236,6 +275,7 @@ declare global {
         public RotateSprite(x: number, y: number, scale: number, ang: number, picnum: number, shade: number, pal: number, orientation: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
         public DrawSprite(pos: pos2, picnum: number, style: style): CON_NATIVE<void>;
         public ScreenSound(sound: number): CON_NATIVE<void>;
+        public ScreenText(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: number, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
 
         protected Append(): void | number;
         protected Prepend(): void | number;

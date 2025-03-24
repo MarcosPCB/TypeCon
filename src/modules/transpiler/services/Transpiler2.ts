@@ -57,7 +57,7 @@ import {
 import { EventList, Names, TEvents } from "../types";
 
 import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../helper/helpers";
-import { compiledFiles, ICompiledFile } from "../helper/translation";
+import { compiledFiles, ECompileOptions, ICompiledFile } from "../helper/translation";
 
 
 type DiagnosticSeverity = "error" | "warning";
@@ -96,7 +96,7 @@ interface TranspilerOptions {
 
 interface SymbolDefinition {
   name: string;
-  type: "number" | "string" | "object" | "array" | "pointer" | 'function';
+  type: "number" | "string" | "object" | "array" | "pointer" | 'function' | 'native';
   offset: number;        // Delta from the object's base pointer.
   size?: number;         // How many slots this symbol occupies.
   num_elements?: number;
@@ -106,6 +106,7 @@ interface SymbolDefinition {
   //otherwise, the compiler treats like a pointer to the complete array structure: 'const s = sprites'
   native_pointer_index?: boolean,
   children?: { [key: string]: SymbolDefinition }; // For nested objects.
+  CON_code?: string,
 }
 
 interface TypeAliasDefinition {
@@ -269,7 +270,7 @@ export class TsToConTranspiler {
       code: '',
       declaration: false,
       context,
-      compiling: false
+      options: ECompileOptions.none
     })
 
     context.currentFile = compiledFiles.get(Buffer.from(file).toString('base64url'));
@@ -282,11 +283,6 @@ export class TsToConTranspiler {
 
         const cFile = path.basename(file);
 
-        /*let fullPath = path.resolve(file.slice(0, file.length - cFile.length), fName);
-        if (path.extname(fullPath) == '') {
-          fullPath += '.ts';
-        }*/
-
         const resolved = resolveImport(file, fName);
         if (!resolved) {
           console.log(`\nUnable to include file: ${fName}`);
@@ -297,6 +293,7 @@ export class TsToConTranspiler {
           continue;
 
         try {
+          //context.currentFile.dependency.push(Buffer.from(resolved).toString('base64url'));
           const prvFile = context.currentFile;
           const sCode = fs.readFileSync(resolved);
           this.transpile(sCode.toString(), resolved, context);
@@ -316,18 +313,26 @@ export class TsToConTranspiler {
 
     if (modules.length > 0) {
       if (modules.findIndex(e => e.getName() == 'noread') != -1) {
+        context.currentFile.options = ECompileOptions.no_read;
         console.log(`Ignoring...\n`);
         return null;
-      } else if (modules.findIndex(e => e.getName() == 'nocompile') != -1) {
-        console.log(`Building symbols only...`);
-        context.currentFile.declaration = true;
+      } else { 
+        if (modules.findIndex(e => e.getName() == 'nocompile') != -1) {
+          console.log(`Building symbols only...`);
+          context.currentFile.options |= ECompileOptions.no_compile;
+        } 
+        
+        if(modules.findIndex(e => e.getName() == 'statedecl') != -1) {
+          console.log(`Reading functions as states...`);
+          context.currentFile.options |= ECompileOptions.state_decl;
+        }
       }
     } else console.log(`Compiling ${file}...`);
 
     sf.getStatements().forEach(st => {
-      if (st.isKind(SyntaxKind.FunctionDeclaration) && !context.currentFile.declaration) {
+      if (st.isKind(SyntaxKind.FunctionDeclaration)) {
         outputLines.push(this.visitFunctionDeclaration(st as FunctionDeclaration, context));
-      } else if (st.isKind(SyntaxKind.ClassDeclaration) && !context.currentFile.declaration) {
+      } else if (st.isKind(SyntaxKind.ClassDeclaration) && !(context.currentFile.options & ECompileOptions.no_compile)) {
         outputLines.push(this.visitClassDeclaration(st as ClassDeclaration, context));
       } else {
         outputLines.push(this.visitStatement(st, context));
@@ -506,31 +511,31 @@ export class TsToConTranspiler {
     let code = ''//`/* ${stmt.getText()} */\n`;
     switch (stmt.getKind()) {
       case SyntaxKind.VariableStatement:
-        if (context.currentFile.declaration)
+        if (context.currentFile.options & ECompileOptions.no_compile)
           return code;
 
         return code + this.visitVariableStatement(stmt as VariableStatement, context);
 
       case SyntaxKind.ExpressionStatement:
-        if (context.currentFile.declaration)
+        if (context.currentFile.options & ECompileOptions.no_compile)
           return code;
 
         return code + this.visitExpressionStatement(stmt as ExpressionStatement, context);
 
       case SyntaxKind.ReturnStatement:
-        if (context.currentFile.declaration)
+        if (context.currentFile.options & ECompileOptions.no_compile)
           return code;
 
         return code + this.visitReturnStatement(stmt as ReturnStatement, context);
 
       case SyntaxKind.IfStatement:
-        if (context.currentFile.declaration)
+        if (context.currentFile.options & ECompileOptions.no_compile)
           return code;
 
         return code + this.visitIfStatement(stmt as IfStatement, context);
 
       case SyntaxKind.SwitchStatement:
-        if (context.currentFile.declaration)
+        if (context.currentFile.options & ECompileOptions.no_compile)
           return code;
 
         return code + this.visitSwitchStatement(stmt as SwitchStatement, context);
@@ -551,19 +556,22 @@ export class TsToConTranspiler {
         return code + `break\n`;
 
       case SyntaxKind.ModuleDeclaration:
-        const b = context.currentFile.declaration;
-        context.currentFile.declaration = true;
+        const b = context.currentFile.options;
+        context.currentFile.options |= ECompileOptions.no_compile;
         const stmts = (stmt as ModuleDeclaration).getStatements();
 
         stmts.forEach(st => {
-          if (!st.isKind(SyntaxKind.FunctionDeclaration) && !st.isKind(SyntaxKind.ClassDeclaration))
+          if (!st.isKind(SyntaxKind.ClassDeclaration))
             this.visitStatement(st, context);
         });
-        context.currentFile.declaration = b;
+        context.currentFile.options = b;
         return code;
 
       case SyntaxKind.ImportDeclaration:
         return code;
+
+      case SyntaxKind.FunctionDeclaration:
+        return code + this.visitFunctionDeclaration(stmt as FunctionDeclaration, context);
 
       default:
         addDiagnostic(stmt, context, "warning", `Unhandled statement kind: ${stmt.getKindName()}`);
@@ -587,6 +595,15 @@ export class TsToConTranspiler {
     const varName = decl.getName();
     let code = "";
 
+    const type = decl.getType();
+
+    if(type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_NATIVE_GAMEVAR') {
+      context.symbolTable.set(varName, {
+        name: varName, type: "native", offset: 0, size: 1, CON_code: type.getAliasTypeArguments()[0].getText().replace(/[`'"]/g, "")
+      });
+      return code;
+    } 
+
     const init = decl.getInitializer();
     if (init && init.isKind(SyntaxKind.ObjectLiteralExpression)) {
       code += this.visitObjectLiteral(init as ObjectLiteralExpression, context);
@@ -601,7 +618,7 @@ export class TsToConTranspiler {
       code += this.visitExpression(init as Expression, context);
       code += `add rsp 1\nsetarray flat[rsp] ra\n`;
       context.symbolTable.set(varName, {
-        name: varName, type: "number", offset: context.localVarCount, size: 1,
+        name: varName, type: init.isKind(SyntaxKind.StringLiteral) ? 'string' : "number", offset: context.localVarCount, size: 1,
         native_pointer: context.localVarNativePointer,
         native_pointer_index: context.localVarNativePointerIndexed
       });
@@ -827,6 +844,9 @@ export class TsToConTranspiler {
 
       if (context.symbolTable.has(name)) {
         const off = context.symbolTable.get(name)
+        if(off.type == 'native')
+          return code + `set ra ${off.CON_code}\n`;
+
         code += `set ri rbp\nadd ri ${off.offset}\nset ra flat[ri]\n`;
         if (off.heap)
           code += `set rf 1\n`;
@@ -843,7 +863,12 @@ export class TsToConTranspiler {
       return code;
     }
     if (expr.isKind(SyntaxKind.StringLiteral)) {
-      code += `set ra ${expr.getText().replace(/[`'"]/g, "")}\n`;
+      let text = expr.getText().replace(/[`'"]/g, "");
+      if(text.length > 128) {
+        addDiagnostic(expr, context, 'warning', `String length greater than 128, truncating...`);
+        text = text.slice(0, 128);
+      }
+      code += `add rssp 1\nqputs 1023 ${expr.getText().replace(/[`'"]/g, "")}\nqstrcpy rssp 1023\nset ra rssp\n`
       return code;
     }
     if (expr.isKind(SyntaxKind.TrueKeyword)) {
@@ -942,7 +967,14 @@ export class TsToConTranspiler {
       const v = context.symbolTable.get(name);
 
       if (v) {
+        if(v.type == 'native')
+          return code + `set ${v.CON_code} ra\n`;
+
+        if(v.type == 'string')
+          return code + `set ri rsbp\nadd ri ${v.offset}\nqstrcpy ri ra\n`;
+
         code += `set ri rbp\nadd ri ${v.offset}\nsetarray flat[ri] ra\n`;
+        return code;
       }
 
       addDiagnostic(left, context, "error", `Assignment to unknown identifier: ${name}`);
@@ -1184,6 +1216,15 @@ state pop
       return code;
     }
 
+    if (fnNameRaw == 'CONUnsafe' && !fnObj) {
+      code += `//HAND-WRITTEN UNSAFE CODE
+${(args[0] as StringLiteral).getText().replace(/[`'"]/g, "")}
+set rb ra
+//END OF HAND-WRITTEN UNSAFE CODE
+`
+      return code;
+    }
+
     const nativeFn = findNativeFunction(fnNameRaw, fnObj);
     if (nativeFn) {
       let argCode = '';
@@ -1205,6 +1246,10 @@ state pop
           const literal = this.resolveNativeArgument(args[i] as Expression, expected, context);
           resolvedLiterals.push(literal);
           // We do not emit register loads for these.
+        } else if (expected & CON_NATIVE_FLAGS.STRING) {
+          code += this.visitExpression(args[i] as Expression, context);
+          code += `set r${j} ra\n`;
+          resolvedLiterals.push(null);
         } else if (expected & CON_NATIVE_FLAGS.VARIABLE) {
           // For VARIABLE, generate code normally.
           code += this.visitExpression(args[i] as Expression, context);
@@ -1260,7 +1305,7 @@ state pop
         addDiagnostic(call, context, 'error', `Invalid function ${fnNameRaw}`);
         return '';
       }
-      // If not native, assume it's a user function state.
+      // If not native, assume it's a user function state
       if (args.length > 0) {
         code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
         context.localVarCount += args.length;
@@ -1270,7 +1315,8 @@ state pop
         code += `set r${i} ra\n`;
         resolvedLiterals.push(null);
       }
-      code += `state ${func.name}\nset ra rb\n`;
+
+      code += `state ${func.CON_code ? func.CON_code : func.name}\nset ra rb\n`;
       if (args.length > 0) {
         code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
         context.localVarCount -= args.length;
@@ -1821,7 +1867,7 @@ state pop
       localVarCount: 0,
       paramMap: {}
     };
-    let code = `${this.options.lineDetail ? `/*${fd.getText()}*/` : ''}\ndefstate ${name}\n set ra rbp \n  state push \n  set rbp rsp \n`;
+    let code = `${this.options.lineDetail ? `/*${fd.getText()}*/` : ''}\ndefstate ${name}\n  set ra rbp \n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n`;
     fd.getParameters().forEach((p, i) => {
       localCtx.paramMap[p.getName()] = i;
     });
@@ -1838,13 +1884,25 @@ state pop
       offset: 0
     });
 
+    if(context.currentFile.options & ECompileOptions.state_decl) {
+      const t = fd.getReturnType();
+      if(t.getAliasSymbol().getName() == 'CON_NATIVE') {
+        const args = t.getAliasTypeArguments();
+
+        if(args.length > 0) {
+          localCtx.symbolTable.get(name).CON_code = args[0].getText().replace(/[`'"]/g, "");
+          context.symbolTable.get(name).CON_code = args[0].getText().replace(/[`'"]/g, "");
+        }
+      }
+    }
+
     const body = fd.getBody() as any;
     if (body) {
       body.getStatements().forEach(st => {
         code += indent(this.visitStatement(st, localCtx), 1) + "\n";
       });
     }
-    code += `  set rsp rbp \n  state pop \n  set rbp ra \nends \n\n`;
+    code += `  set rsp rbp \n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
     return code;
   }
 
@@ -1923,7 +1981,7 @@ state pop
               paramMap: {}
             };
 
-            code += `${this.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp \n  state push \n  set rbp rsp \n  ifactor ${localCtx.currentActorPicnum} {\n`;
+            code += `${this.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  ifactor ${localCtx.currentActorPicnum} {\n`;
             const body = e.getBody() as any;
             if (body) {
               const stmts = body.getStatements() as Statement[];
@@ -1933,7 +1991,7 @@ state pop
               });
             }
 
-            code += `  }\n  set rsp rbp \n  state pop \n  set rbp ra \nendevent \n\n`;
+            code += `  }\n  set rsp rbp \n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nendevent \n\n`;
           }
         }
       }
@@ -2164,7 +2222,7 @@ state pop
       const extra = localCtx.currentActorExtra || 0;
       const firstAction = localCtx.currentActorFirstAction || "0";
       const enemy = localCtx.currentActorIsEnemy ? 1 : 0;
-      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \nfindplayer playerDist\n`;
+      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n`;
       md.getParameters().forEach((p, i) => {
         localCtx.paramMap[p.getName()] = i;
       });
@@ -2174,22 +2232,22 @@ state pop
           code += indent(this.visitStatement(st, localCtx), 1) + "\n";
         });
       }
-      code += `  set rbp 0 \n  set rsp -1 \nenda \n\n`;
+      code += `  set rsp rbp \n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nenda \n\n`;
       return code;
     } else if (type == 'CEvent' && (mName.toLowerCase() == 'append' || mName.toLowerCase() == 'prepend')) {
-      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\n${mName.toLowerCase() == 'append' ? 'append' : 'on'}event EVENT_${context.currentEventName}\n  set ra rbp \n  state push \n  set rbp rsp \n`;
+      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\n${mName.toLowerCase() == 'append' ? 'append' : 'on'}event EVENT_${context.currentEventName}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n`;
       const body = md.getBody() as any;
       if (body) {
         body.getStatements().forEach(st => {
           code += indent(this.visitStatement(st, localCtx), 1) + "\n";
         });
       }
-      code += `  set rsp rbp \n  state pop \n  set rbp ra \nendevent \n\n`;
+      code += `  set rsp rbp \n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nendevent \n\n`;
       return code;
     }
 
     // otherwise => normal state
-    let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set rbp rsp \n`;
+    let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n`;
 
     md.getParameters().forEach((p, i) => {
       localCtx.paramMap[p.getName()] = i;
@@ -2213,7 +2271,7 @@ state pop
         code += indent(this.visitStatement(st, localCtx), 1) + "\n";
       });
     }
-    code += `  set rsp rbp \n  state pop \n  set rbp ra \nends \n\n`;
+    code += `  set rsp rbp \n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
     return code;
   }
 }

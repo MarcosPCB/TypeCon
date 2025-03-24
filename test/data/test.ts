@@ -1,4 +1,5 @@
-import '../../include/TCSet100/types';
+import '../../src/sets/TCSet100/types';
+import '../../src/sets/TCSet100/DN3D_game';
 
 type wow = {
     name: number,
@@ -72,10 +73,10 @@ class newEnemy extends CActor {
         const s1 = sprites[0];
 
         s[0].ang = 56;
-        console.log(sprites[0].ang);
+        //console.log(sprites[0].ang);
 
         s1.ang = 57;
-        console.log(sprites[0].ang);
+        //console.log(sprites[0].ang);
 
         if(this.CanSee()) {
             if(this.CanShootTarget()) {
@@ -124,15 +125,18 @@ class newEnemy extends CActor {
                 break;
         }
 
-        console.log(2);
-
         if(this.HitByWeapon()) {
             this.Spawn(Names.BLOOD);
 
             this.Guts(Names.JIBS6, 2);
 
-            if(this.IsDead())
+            const text = 'This is a test';
+            Quote(text);
+
+            if(this.IsDead()) {
+                TroopBodyJibs();
                 this.KillIt();
+            }
         }
     }
 }
@@ -161,8 +165,8 @@ class displayRest extends CEvent {
 
         const t = sectors[0].ceiling.z
         const a = sectors[sectors[0].extra].walls[0].pos.x
-        console.log(t);
-        console.log(a);
+        //console.log(t);
+        //console.log(a);
 
         const obj: test = {
             name: 2,
@@ -171,9 +175,5 @@ class displayRest extends CEvent {
         }
 
         const y = obj.low[1].ball;
-
-        CON(`
-qputs 9999 FUCK ME
-quote 9999`);
     }
 }

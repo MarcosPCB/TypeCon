@@ -1,11 +1,20 @@
 import { TranspilerContext } from "../services/Transpiler2";
 
+export enum ECompileOptions {
+    none = 0,
+    no_read = 1,
+    no_compile = 2,
+    state_decl = 4
+}
+
 export interface ICompiledFile {
     path: string,
     code: string,
     declaration: boolean,
     context: TranspilerContext,
-    compiling: boolean
+    options: ECompileOptions,
+    dependents?: string[],
+    dependency?: string[]
 }
 
 export const compiledFiles: Map<string, ICompiledFile> = new Map();
@@ -19,6 +28,10 @@ export class CONInit {
         public readonly heapPageSize = 8,
         public readonly heapNumPages = 64) {
             this.heapSize = heapNumPages * heapPageSize;
+
+            let quoteInit = '';
+            for(let i = 1023; i < stackSize + 1023; i++)
+                quoteInit += `string ${i} reserved\n`; 
 
             this.initCode = `
 //Used mainly for function parameters
@@ -35,6 +48,17 @@ var r9 0 0
 var r10 0 0
 var r11 0 0
 var r12 0 0
+var r13 0 0
+var r14 0 0
+var r15 0 0
+var r16 0 0
+var r17 0 0
+var r18 0 0
+var r19 0 0
+var r20 0 0
+var r21 0 0
+var r22 0 0
+var r23 0 0
 
 //Accumulator
 var ra 0 0
@@ -67,6 +91,13 @@ var rds ${stackSize} 0 //determines the start of the heap memory
 var rbp 0 0
 var rsp -1 0
 
+//Base pointer ans Stack pointer fro string memory
+define STRINGSTACK 1024 //This is where the stack begins - 1023 is used as temporary holder of the string
+var rsbp 1024 0
+var rssp 1023 0
+
+${quoteInit}
+
 //Internal per-actor vars
 var playerDist 0 2
 
@@ -93,7 +124,7 @@ var heaptables ${heapNumPages} 0
 var heapsize ${this.heapSize} 0 //heaptables * PAGE_SIZE
 
 //For pushing the r0-12 registers
-array rstack 16 0
+array rstack 24 0
 
 //TypeCON flat memory (stack + heap)
 array flat ${stackSize + this.heapSize}
@@ -108,15 +139,15 @@ var _HEAP_pointer -1 0
 
 defstate pushrall
     add rsp 1
-    setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
-    copy rstack[0] flat[rsp] 13
-    add rsp 12
+    setarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 
+    copy rstack[0] flat[rsp] 24
+    add rsp 23
 ends
 
 defstate poprall
-    sub rsp 13
-    copy flat[rsp] rstack[0] 13
-    getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12
+    sub rsp 24
+    copy flat[rsp] rstack[0] 24
+    getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 
 ends
 
 defstate pushr1
