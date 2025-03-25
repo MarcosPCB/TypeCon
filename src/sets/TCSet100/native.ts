@@ -231,6 +231,13 @@ state popd
         arguments: []
     },
     {
+        name: 'WhichWeaponHit',
+        code: 'set rb 0 \nife sprite[].htpicnum ra\n  set rb 1 ',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
         name: 'Squished',
         code: 'set rb 0 \nifsquished set rb 1 ',
         returns: true,
@@ -339,7 +346,7 @@ state popd
     },
     {
         name: 'RespawnHitag',
-        code: 'respawnhitag ',
+        code: 'respawnhitag',
         returns: false,
         return_type: null,
         arguments: []
@@ -535,6 +542,15 @@ state pop
         return_type: null,
         arguments: [
             CON_NATIVE_FLAGS.STRING
+        ]
+    },
+    {
+        name: 'Pal',
+        code: `ifn sprite[].picnum 1405\n  seta[].httempang sprite[].pal\nseta[].pal`,
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
         ]
     }
 ]

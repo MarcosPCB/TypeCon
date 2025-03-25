@@ -157,12 +157,6 @@ class displayRest extends CEvent {
             ang: 0
         }
 
-        this.DrawSprite(p, 1685, {
-            shade: 0,
-            pal: 21,
-            orientation: 8
-        });
-
         const t = sectors[0].ceiling.z
         const a = sectors[sectors[0].extra].walls[0].pos.x
         //console.log(t);
