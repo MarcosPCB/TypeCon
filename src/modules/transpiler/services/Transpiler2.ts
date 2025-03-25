@@ -156,6 +156,8 @@ export interface TranspilerContext {
   symbolTable: Map<string, SymbolDefinition>;
 
   currentFile: ICompiledFile;
+
+  stringExpr: boolean;
 }
 
 interface TranspileResult {
@@ -257,7 +259,8 @@ export class TsToConTranspiler {
       typeAliases: new Map(),
       enums: new Map(),
       symbolTable: new Map(),
-      currentFile: undefined
+      currentFile: undefined,
+      stringExpr: false
     };
 
     const outputLines: string[] = [];
@@ -583,7 +586,7 @@ export class TsToConTranspiler {
    * variable statements => local var
    *****************************************************************************/
   private visitVariableStatement(node: VariableStatement, context: TranspilerContext): string {
-    let code = this.options.lineDetail ? `/*${node.getText()}*/` : '';
+    let code = this.options.lineDetail ? `/*${node.getText()}*/\n` : '';
     const decls = node.getDeclarationList().getDeclarations();
     for (const d of decls) {
       code += this.visitVariableDeclaration(d, context);
@@ -821,6 +824,8 @@ export class TsToConTranspiler {
   private visitLeafOrLiteral(expr: Expression, context: TranspilerContext): string {
     let code = "";
 
+    context.stringExpr = false;
+
     if (expr.isKind(SyntaxKind.Identifier)) {
       const name = expr.getText();
       // check param
@@ -835,12 +840,12 @@ export class TsToConTranspiler {
         return code;
       }
 
-      // check local var
+      /*// check local var
       if (name in context.localVarOffset) {
         const off = context.localVarOffset[name];
         code += `set ri rbp\nadd ri ${off}\nset ra flat[ri]\n`;
         return code;
-      }
+      }*/
 
       if (context.symbolTable.has(name)) {
         const off = context.symbolTable.get(name)
@@ -869,6 +874,7 @@ export class TsToConTranspiler {
         text = text.slice(0, 128);
       }
       code += `add rssp 1\nqputs 1023 ${expr.getText().replace(/[`'"]/g, "")}\nqstrcpy rssp 1023\nset ra rssp\n`
+      context.stringExpr = true;
       return code;
     }
     if (expr.isKind(SyntaxKind.TrueKeyword)) {
@@ -892,12 +898,12 @@ export class TsToConTranspiler {
 
     let code = this.options.lineDetail ? `// binary: ${left.getText()} ${opText} ${right.getText()}\n` : '';
 
-    const forbidden = ["<", ">", "<=", ">=", "==", "!=", "&&", "||"];
+    /*const forbidden = ["<", ">", "<=", ">=", "==", "!=", "&&", "||"];
     if (forbidden.includes(opText)) {
       addDiagnostic(bin, context, "error", `Operator "${opText}" not allowed in normal expressions`);
       code += `set ra 0\n`;
       return code;
-    }
+    }*/
 
     if (opText === "=") {
       // assignment
@@ -907,12 +913,27 @@ export class TsToConTranspiler {
     }
 
     code += this.visitExpression(left, context);
+    const isString = context.stringExpr;
+
+    if(isString && opText != '+') {
+      addDiagnostic(bin, context, "error", `Unhandled operator for string expression "${opText}"`);
+        code += `set ra 0\n`;
+    }
+
     code += `set rd ra\n`;
     code += this.visitExpression(right, context);
 
+    if(!context.stringExpr)
+      code += `qputs 1022 %d\nqsprintf 1023 1022 ra\nset ra 1022\n`;
+
+    context.stringExpr = isString;
+
     switch (opText) {
       case "+":
-        code += `add rd ra\nset ra rd\n`;
+        if(isString)
+          code += `qstrcat rd ra\n`;
+        else
+          code += `add rd ra\nset ra rd\n`;
         break;
       case "-":
         code += `sub rd ra\nset ra rd\n`;
@@ -926,20 +947,44 @@ export class TsToConTranspiler {
       case "%":
         code += `mod rd ra\nset ra rd\n`;
         break;
-      case "and":
+      case "&":
         code += `and rd ra\nset ra rd\n`;
         break;
-      case "or":
+      case "|":
         code += `or rd ra\nset ra rd\n`;
         break;
-      case "xor":
+      case "^":
         code += `xor rd ra\nset ra rd\n`;
         break;
       case ">>":
         code += `shiftr rd ra\nset ra rd\n`;
         break;
       case "<<":
-        code += `shiftl rd ra\nsetra rd\n`;
+        code += `shiftl rd ra\nset ra rd\n`;
+        break;
+      case "<":
+        code += `set rb 0\nifl rd ra\n  set rb 1\nset ra rb\n`;
+        break;
+      case "<=":
+        code += `set rb 0\nifle rd ra\n  set rb 1\nset ra rb\n`;
+        break;
+      case ">":
+        code += `set rb 0\nifg rd ra\n  set rb 1\nset ra rb\n`;
+        break;
+      case ">=":
+        code += `set rb 0\nifge rd ra\n  set rb 1\nset ra rb\n`;
+        break;
+      case "==":
+        code += `set rb 0\nife rd ra\n  set rb 1\nset ra rb\n`;
+        break;
+      case "!=":
+        code += `set rb 0\nifn rd ra\n  set rb 1\nset ra rb\n`;
+        break;
+      case "&&":
+        code += `set rb 0\nifand rd ra\n  set rb 1\nset ra rb\n`;
+        break;
+      case "||":
+        code += `set rb 0\nifeither rd ra\n  set rb 1\nset ra rb\n`;
         break;
       default:
         addDiagnostic(bin, context, "error", `Unhandled operator "${opText}"`);

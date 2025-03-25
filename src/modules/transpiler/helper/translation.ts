@@ -81,6 +81,7 @@ var ri 0 0
     2 - stack array return
     4 - stack object return
     8 - NULL return
+    16 - string address
 */
 var rf 0 0
 
@@ -92,7 +93,7 @@ var rbp 0 0
 var rsp -1 0
 
 //Base pointer ans Stack pointer fro string memory
-define STRINGSTACK 1024 //This is where the stack begins - 1023 is used as temporary holder of the string
+define STRINGSTACK 1024 //This is where the stack begins - 1023 and 1022 are used as temporary holders for string operations
 var rsbp 1024 0
 var rssp 1023 0
 
