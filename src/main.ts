@@ -10,6 +10,7 @@ import * as readline from 'readline';
 import inquirer from 'inquirer';
 const fsExtra = require("fs-extra");
 import { spawnSync } from 'child_process';
+const packConfig = require('../package.json');
 
 let fileName = '';
 let lineDetail = false;
@@ -181,13 +182,11 @@ async function Setup() {
 */
 let compile_options = 0;
 
-console.log(`\n\x1b[36mTypeCON Compiler \x1b[93mBETA\x1b[0m \x1b[92mVersion 0.01\x1b[0m\x1b[94m
-By ItsMarcos\x1b[0m - Use \x1b[95m'-help'\x1b[0m to get the list of commands`)
+console.log(`\n\x1b[36mTypeCON Compiler \x1b[93mBETA\x1b[0m \x1b[92mVersion ${packConfig.version}\x1b[0m\x1b[94m
+By ItsMarcos\x1b[0m - Use \x1b[95m'--help or -?'\x1b[0m to get the list of commands`)
 
 if(!fs.existsSync('compiled'))
     fs.mkdirSync('compiled');
-
-console.log(process.argv);
 
 for(let i = 0; i < process.argv.length; i++) {
     const a = process.argv[i];

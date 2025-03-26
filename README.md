@@ -21,30 +21,32 @@ The compiler is a command-line tool with customizable parameters:
 ### Banner
 
 ```
-TypeCON Compiler BETA Version 0.01 
-By ItsMarcos - Use '-help' to get the list of commands 
+TypeCON Compiler BETA Version 0.5.0 
+By ItsMarcos - Use '--help or -?' to get the list of commands 
 ```
 
 #### Currently Available Commands
-- **`yarn run dev`**: Transpile the current test data.
-- **`yarn run debug`**: Properly debug the compiler.
+- **`yarn tcc`**: CLI - use --help or -? to check out the options available
 
 ### Parameters
 
 Usage:
+**First time Setup**
+- **`setup`**: Creates the project's basic setup including folders, include files, templates and the basic TypeScript configuration
 
-- **`-c`**: For the file path to be compiled.
-- **`-cl`**: For a list of files to be compiled.
-- **`-o`**: For the output file name.
-- **`-of`**: For the output folder path.
-- **`-ld`**: To write the TS lines inside the CON code.
-- **`-ss`**: To define the stack size.
-- **`-hl`**: Don't insert the header code (init code and states) inside the output CON.
-- **`-h`**: Create the header file.
-- **`-l`**: Create the header and the init files with the following list of CON files (separated by "").
-- **`-1f`**: Compiles all files into one (must be used with -o)
-- **`-di`**: Default inclusion (GAME.CON).
-- **`-ei`**: Init file is EDUKE.CON.
+**Compile options**
+- **`--input or -i`**: For the file path to be compiled.
+- **`--input_list or -il`**: For a list of files to be compiled.
+- **`--output or -o`**: For the output file name.
+- **`--output_folder or -of`**: For the output folder path.
+- **`--detail_lines or -dl`**: To write the TS lines inside the CON code.
+- **`--stack_size or -ss`**: To define the stack size.
+- **`--headerless or -hl`**: Don't insert the header code (init code and states) inside the output CON.
+- **`--header or -h`**: Create the header file.
+- **`--link or -l`**: Create the header and the init files with the following list of CON files (separated by "").
+- **`--one_file or -1f`**: Compiles all files into one (must be used with -o)
+- **`--default_inclusion or -di`**: Default inclusion (GAME.CON).
+- **`-eduke_init or -ei`**: Init file is EDUKE.CON.
 
 ---
 

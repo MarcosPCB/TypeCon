@@ -1,0 +1,10 @@
+node_modules
+compiled
+obj
+test
+test
+*.cfg
+*.log
+*.cache
+texturecache
+*.index
