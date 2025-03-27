@@ -102,6 +102,24 @@ declare global {
 
     export interface pointer { }
 
+    /**
+     * quote type. In TypeCON, we have strings, which are kept inside the flat memory and can be converted
+     * and then we have quotes, which are kept separately from the memory and are used in native CON commands.
+     * quotes have a 128 character limitation.
+     */
+    export interface quote { }
+
+    /**
+     * Converts a string to a quote
+     * @param str String to be converted
+     */
+    export function toQuote(str: string): quote;
+
+    /**
+     * Constant type. Only literals are accepted
+     */
+    export type constant = number & { __brandConstant?: never };
+
     /** 
      * Returns a pointer for thhe specified label
      * @param name - Label (can be an action, move or AI)
@@ -109,28 +127,26 @@ declare global {
     */
     export function Label(name: string): pointer;
 
-    export type constant = number & { __brandConstant?: never };
-
     /**
- * Interface representing an action.
- *
- * Use this interface to create actions within the system.
- *
- * Available properties:
- * @property {TLabel} name - The unique action label.
- * @property {number} start - The start point from the actor's tile number.
- * @property {number} length - The length of the animation.
- * @property {number} viewType - The type of sprite view. Valid values are 1, 3, 5, 7, or 8.
- * @property {number} incValue - The incremental value per tick. Use values 1, 0, or -1.
- * @property {number} delay - The delay for the action.
- *   - [0,3]: Minimum delay, equal to the tic counter.
- *   - [4,7]: 1/2 of the tic counter delay.
- *   - [8,11]: 1/3 of the tic counter delay.
- *   - [12,15]: 1/4 of the tic counter delay.
- *   - [16,19]: 1/5 of the tic counter delay; etc.
- *
- * @interface IAction
- */
+     * Interface representing an action.
+     *
+     * Use this interface to create actions within the system.
+     *
+     * Available properties:
+     * @property {TLabel} name - The unique action label.
+     * @property {number} start - The start point from the actor's tile number.
+     * @property {number} length - The length of the animation.
+     * @property {number} viewType - The type of sprite view. Valid values are 1, 3, 5, 7, or 8.
+     * @property {number} incValue - The incremental value per tick. Use values 1, 0, or -1.
+     * @property {number} delay - The delay for the action.
+     *   - [0,3]: Minimum delay, equal to the tic counter.
+     *   - [4,7]: 1/2 of the tic counter delay.
+     *   - [8,11]: 1/3 of the tic counter delay.
+     *   - [12,15]: 1/4 of the tic counter delay.
+     *   - [16,19]: 1/5 of the tic counter delay; etc.
+     *
+     * @interface IAction
+     */
     export interface IAction {
         /**
          * The unique action label.
@@ -370,7 +386,7 @@ declare global {
      * Display on the screen using the traditional quote system the string referenced
      * @param quote - the string you want to be shown
      */
-    export function Quote(quote: string): CON_NATIVE<void>;
+    export function Quote(quote: quote): CON_NATIVE<void>;
 
     //Global readonly variables
 

@@ -38,7 +38,8 @@ import {
   InterfaceDeclaration,
   EnumDeclaration,
   EnumMember,
-  StringLiteral
+  StringLiteral,
+  Identifier
 } from "ts-morph";
 
 import {
@@ -96,7 +97,7 @@ interface TranspilerOptions {
 
 interface SymbolDefinition {
   name: string;
-  type: "number" | "string" | "object" | "array" | "pointer" | 'function' | 'native';
+  type: "number" | "string" | "object" | "array" | "pointer" | 'function' | 'native' | 'quote';
   offset: number;        // Delta from the object's base pointer.
   size?: number;         // How many slots this symbol occupies.
   num_elements?: number;
@@ -158,6 +159,7 @@ export interface TranspilerContext {
   currentFile: ICompiledFile;
 
   stringExpr: boolean;
+  quoteExpr: boolean;
 }
 
 interface TranspileResult {
@@ -260,7 +262,8 @@ export class TsToConTranspiler {
       enums: new Map(),
       symbolTable: new Map(),
       currentFile: undefined,
-      stringExpr: false
+      stringExpr: false,
+      quoteExpr: false
     };
 
     const outputLines: string[] = [];
@@ -618,16 +621,22 @@ export class TsToConTranspiler {
       //context.symbolTable.set(varName, { name: varName, type: "object", offset: 0, size: size });
     } else {
       // Process non-object initializers as before.
+      const localVars = context.localVarCount;
       code += this.visitExpression(init as Expression, context);
-      code += `add rsp 1\nsetarray flat[rsp] ra\n`;
+      if(context.stringExpr)
+        code += `set ra rd\nadd ra 1\nsetarray flat[rd] ra\n`;
+      else
+        code += `add rsp 1\nsetarray flat[rsp] ra\n`;
       context.symbolTable.set(varName, {
-        name: varName, type: init.isKind(SyntaxKind.StringLiteral) ? 'string' : "number", offset: context.localVarCount, size: 1,
+        name: varName, type: context.stringExpr ? 'string' : "number",
+        offset: localVars, size: context.stringExpr ? context.localVarCount : 1,
         native_pointer: context.localVarNativePointer,
         native_pointer_index: context.localVarNativePointerIndexed
       });
       context.localVarNativePointer = undefined;
       context.localVarNativePointerIndexed = false;
-      context.localVarCount++;
+      if(!context.stringExpr)
+        context.localVarCount++;
     }
     return code;
   }
@@ -825,6 +834,7 @@ export class TsToConTranspiler {
     let code = "";
 
     context.stringExpr = false;
+    context.quoteExpr = false;
 
     if (expr.isKind(SyntaxKind.Identifier)) {
       const name = expr.getText();
@@ -869,11 +879,10 @@ export class TsToConTranspiler {
     }
     if (expr.isKind(SyntaxKind.StringLiteral)) {
       let text = expr.getText().replace(/[`'"]/g, "");
-      if(text.length > 128) {
-        addDiagnostic(expr, context, 'warning', `String length greater than 128, truncating...`);
-        text = text.slice(0, 128);
-      }
-      code += `add rssp 1\nqputs 1023 ${expr.getText().replace(/[`'"]/g, "")}\nqstrcpy rssp 1023\nset ra rssp\n`
+      code += `add rsp 1\nset rd rsp\nadd rsp 1\nsetarray flat[rsp] ${text.length}\n`;
+      for(let i = 0; i < text.length; i++)
+        code += `add rsp 1\nsetarray flat[rsp] ${text.charCodeAt(i)}\n`;
+      context.localVarCount += text.length + 2;
       context.stringExpr = true;
       return code;
     }
@@ -913,9 +922,9 @@ export class TsToConTranspiler {
     }
 
     code += this.visitExpression(left, context);
-    const isString = context.stringExpr;
+    const isQuote = context.quoteExpr;
 
-    if(isString && opText != '+') {
+    if(isQuote && opText != '+') {
       addDiagnostic(bin, context, "error", `Unhandled operator for string expression "${opText}"`);
         code += `set ra 0\n`;
     }
@@ -923,14 +932,14 @@ export class TsToConTranspiler {
     code += `set rd ra\n`;
     code += this.visitExpression(right, context);
 
-    if(!context.stringExpr)
+    if(!context.quoteExpr)
       code += `qputs 1022 %d\nqsprintf 1023 1022 ra\nset ra 1022\n`;
 
-    context.stringExpr = isString;
+    context.quoteExpr = isQuote;
 
     switch (opText) {
       case "+":
-        if(isString)
+        if(isQuote)
           code += `qstrcat rd ra\n`;
         else
           code += `add rd ra\nset ra rd\n`;
@@ -1268,6 +1277,24 @@ set rb ra
 //END OF HAND-WRITTEN UNSAFE CODE
 `
       return code;
+    }
+
+    if(fnNameRaw == 'toQuote' && !fnObj) {
+      if(args[0].isKind(SyntaxKind.StringLiteral)) {
+        let text = args[0].getText().replace(/[`'"]/g, "");
+        if(text.length > 128) {
+          addDiagnostic(args[0], context, 'warning', `Quote length greater than 128, truncating...`);
+          text = text.slice(0, 128);
+        }
+        code += `add rssp 1\nqputs 1023 ${text}\nqstrcpy rssp 1023\nset ra rssp\n`;
+        return code;
+      }
+
+      if(args[0].isKind(SyntaxKind.Identifier)) {
+        code += this.visitExpression(args[0] as Identifier, context);
+        code += `state pushr1\nset r0 ra\nstate _convertString2Quote\nstate popr1\nset ra rb\n`
+        return code;
+      }
     }
 
     const nativeFn = findNativeFunction(fnNameRaw, fnObj);
@@ -1912,7 +1939,7 @@ set rb ra
       localVarCount: 0,
       paramMap: {}
     };
-    let code = `${this.options.lineDetail ? `/*${fd.getText()}*/` : ''}\ndefstate ${name}\n  set ra rbp \n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n`;
+    let code = `${this.options.lineDetail ? `/*${fd.getText()}*/` : ''}\ndefstate ${name}\n  set ra rbp \n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
     fd.getParameters().forEach((p, i) => {
       localCtx.paramMap[p.getName()] = i;
     });
@@ -1947,7 +1974,7 @@ set rb ra
         code += indent(this.visitStatement(st, localCtx), 1) + "\n";
       });
     }
-    code += `  set rsp rbp \n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
+    code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
     return code;
   }
 
@@ -2026,7 +2053,7 @@ set rb ra
               paramMap: {}
             };
 
-            code += `${this.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  ifactor ${localCtx.currentActorPicnum} {\n`;
+            code += `${this.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  ifactor ${localCtx.currentActorPicnum} {\n`;
             const body = e.getBody() as any;
             if (body) {
               const stmts = body.getStatements() as Statement[];
@@ -2036,7 +2063,7 @@ set rb ra
               });
             }
 
-            code += `  }\n  set rsp rbp \n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nendevent \n\n`;
+            code += `  }\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nendevent \n\n`;
           }
         }
       }
@@ -2267,7 +2294,7 @@ set rb ra
       const extra = localCtx.currentActorExtra || 0;
       const firstAction = localCtx.currentActorFirstAction || "0";
       const enemy = localCtx.currentActorIsEnemy ? 1 : 0;
-      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n`;
+      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
       md.getParameters().forEach((p, i) => {
         localCtx.paramMap[p.getName()] = i;
       });
@@ -2277,22 +2304,22 @@ set rb ra
           code += indent(this.visitStatement(st, localCtx), 1) + "\n";
         });
       }
-      code += `  set rsp rbp \n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nenda \n\n`;
+      code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nenda \n\n`;
       return code;
     } else if (type == 'CEvent' && (mName.toLowerCase() == 'append' || mName.toLowerCase() == 'prepend')) {
-      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\n${mName.toLowerCase() == 'append' ? 'append' : 'on'}event EVENT_${context.currentEventName}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n`;
+      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\n${mName.toLowerCase() == 'append' ? 'append' : 'on'}event EVENT_${context.currentEventName}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
       const body = md.getBody() as any;
       if (body) {
         body.getStatements().forEach(st => {
           code += indent(this.visitStatement(st, localCtx), 1) + "\n";
         });
       }
-      code += `  set rsp rbp \n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nendevent \n\n`;
+      code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nendevent \n\n`;
       return code;
     }
 
     // otherwise => normal state
-    let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n`;
+    let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
 
     md.getParameters().forEach((p, i) => {
       localCtx.paramMap[p.getName()] = i;
@@ -2316,7 +2343,7 @@ set rb ra
         code += indent(this.visitStatement(st, localCtx), 1) + "\n";
       });
     }
-    code += `  set rsp rbp \n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
+    code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
     return code;
   }
 }

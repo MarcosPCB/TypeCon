@@ -97,6 +97,104 @@ define STRINGSTACK 1024 //This is where the stack begins - 1023 and 1022 are use
 var rsbp 1024 0
 var rssp 1023 0
 
+//ASCII conversion table
+string 900  
+string 901 !
+string 902 "
+string 903 #
+string 904 $
+string 905 %
+string 906 &
+string 907 '
+string 908 (
+string 909 )
+string 910 *
+string 911 +
+string 912 ,
+string 913 -
+string 914 .
+string 915 /
+string 916 0
+string 917 1
+string 918 2
+string 919 3
+string 920 4
+string 921 5
+string 922 6
+string 923 7
+string 924 8
+string 925 9
+string 926 :
+string 927 ;
+string 928 <
+string 929 =
+string 930 >
+string 931 ?
+string 932 @
+string 933 A
+string 934 B
+string 935 C
+string 936 D
+string 937 E
+string 938 F
+string 939 G
+string 940 H
+string 941 I
+string 942 J
+string 943 K
+string 944 L
+string 945 M
+string 946 N
+string 947 O
+string 948 P
+string 949 Q
+string 950 R
+string 951 S
+string 952 T
+string 953 U
+string 954 V
+string 955 W
+string 956 X
+string 957 Y
+string 958 Z
+string 959 [
+string 960 \
+string 961 ]
+string 962 ^
+string 963 _
+string 964 \`
+string 965 a
+string 966 b
+string 967 c
+string 968 d
+string 969 e
+string 970 f
+string 971 g
+string 972 h
+string 973 i
+string 974 j
+string 975 k
+string 976 l
+string 977 m
+string 978 n
+string 979 o
+string 980 p
+string 981 q
+string 982 r
+string 983 s
+string 984 t
+string 985 u
+string 986 v
+string 987 w
+string 988 x
+string 989 y
+string 990 z
+string 991 {
+string 992 |
+string 993 }
+string 994 ~
+
+
 ${quoteInit}
 
 //Internal per-actor vars
@@ -131,6 +229,64 @@ array rstack 24 0
 array flat ${stackSize + this.heapSize}
 `;
             this.initStates = `
+state _convertString2Quote
+    set ra r0
+    add rssp 1
+
+    //Get length
+    set rb flat[ra]
+    
+    //Now we are in the text area
+    add ra 1
+    
+    //Set ri to the first element of the ASCII conversion table
+    set ri 900
+    
+    //Set rssp quote to the first letter of the string
+    add ri flat[ra]
+    sub ri 32
+    qstrcpy rssp ri
+
+    //rd serves as a flag for when there's a whitespace
+    set rd 0
+
+    set rc 1
+    add ra 1
+    whilel rc rb {
+        set ri 900
+        ife rd 1 {
+            add ri flat[ra]
+            sub ri 32
+            qputs 1022 %s %s
+            qsprintf 1023 1022 rssp ri
+            qstrcpy rssp 1023
+            add rc 1
+            add ra 1
+            set rd 0
+            continue
+        }
+
+        ife flat[ra] 32 {
+            set rd 1
+            add rc 1
+            add ra 1
+            continue
+        }
+
+        add ri flat[ra]
+        sub ri 32
+        qstrcat rssp ri
+
+        add rc 1
+        add ra 1
+        set rd 0
+    }
+
+    echo rssp
+
+    set rb rssp
+ends
+
 var _HEAPi 0 0
 var _HEAPj 0 0
 var _HEAPk 0 0
