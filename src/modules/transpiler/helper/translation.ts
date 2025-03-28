@@ -101,6 +101,7 @@ var rssp 1023 0
 string 900  
 string 901 !
 string 902 "
+//" - this comment stops some IDEs to fuck up the rest of the code analysis 
 string 903 #
 string 904 $
 string 905 %
@@ -158,7 +159,7 @@ string 956 X
 string 957 Y
 string 958 Z
 string 959 [
-string 960 \
+string 960 \\
 string 961 ]
 string 962 ^
 string 963 _
@@ -501,20 +502,23 @@ defstate popd
 ends
 
 defstate _GetFreePages
-    set _HEAPi 1
+    set _HEAPi 0
     set _HEAPj 0
     set _HEAP_pointer -1
-    for _HEAPi range heaptables {
+    whilel _HEAPi heaptables {
         ife allocTable[_HEAPi] 0 {
-            add _HEAPj 1
-            ife _HEAPj _HEAP_request {
+            add _HEAPj PAGE_SIZE
+            ifge _HEAPj _HEAP_request {
                 set _HEAP_pointer _HEAPi
+                div _HEAPj PAGE_SIZE
                 sub _HEAP_pointer _HEAPj
                 mul _HEAP_pointer PAGE_SIZE
+                set _HEAP_request _HEAPj
                 exit
             }
-        } else ifn _HEAPj 0
-            set _HEAPj 0
+        } else set _HEAPj 0
+
+        add _HEAPi 1
     }
 
     ife _HEAP_pointer -1 {
@@ -522,9 +526,9 @@ defstate _GetFreePages
         mul _HEAPi _HEAP_request
         set _HEAP_pointer heapsize
         add heapsize _HEAPi
-        add heapsize ${stackSize}
+        add heapsize 1024
         resizearray flat heapsize
-        sub heapsize ${stackSize}
+        sub heapsize 1024
         resizearray lookupHeap heaptables
         resizearray allocTable heaptables
     }
@@ -532,33 +536,26 @@ ends
 
 defstate alloc
     set _HEAP_request r0
-    div _HEAP_request PAGE_SIZE
     ife _HEAP_request 0
         set _HEAP_request 1
     state _GetFreePages
 
     set _HEAPi _HEAP_pointer
     div _HEAPi PAGE_SIZE
-    set _HEAPj _HEAPi
-    add _HEAP_request _HEAPi
-    for _HEAPi range _HEAP_request {
-        //set _HEAPk _HEAPj
-        //add _HEAPk _HEAP_request
-        //shiftl _HEAPk 16
-        //or _HEAPk _HEAPi
-        //mul _HEAPk PAGE_SIZE
-        setarray lookupHeap[_HEAPi] _HEAPj
-
+    whilel _HEAPi _HEAP_request {
+        setarray lookupHeap[_HEAPi] _HEAP_pointer
         setarray allocTable[_HEAPi] 1
+        add _HEAPi 1
     }
 
     set rb _HEAP_pointer
-    add rb ${stackSize}
+    al rb
+    add rb 1024
 ends
 
 defstate free
     set _HEAP_pointer r0
-    sub _HEAP_pointer ${stackSize}
+    sub _HEAP_pointer 1024
     ifl _HEAP_pointer 0 {
         qputs 9999 ERROR: TRIED TO FREE MEMORY BELOW HEAP
         //We gotta break or crash or we might have a memory leakage
@@ -568,120 +565,107 @@ defstate free
     set _HEAPj _HEAP_pointer
     div _HEAPj PAGE_SIZE
     set _HEAPi _HEAPj
-    //set _HEAPk lo[_HEAPi]
-    //set _HEAPi _HEAPk
-    //and _HEAPi 0xFFFF
-    //shiftr _HEAPk 16
-    for _HEAPi range heaptables {
+    whilel _HEAPi heaptables {
         ife lookupHeap[_HEAPi] _HEAPj {
             setarray lookupHeap[_HEAPi] 0
             setarray allocTable[_HEAPi] 0
         }
+
+        add _HEAPi 1
     }
 ends
 
 defstate realloc
     set _HEAP_request r0
-    div _HEAP_request PAGE_SIZE
     ife _HEAP_request 0
         set _HEAP_request 1
     state _GetFreePages
 
     set _HEAPi _HEAP_pointer
     div _HEAPi PAGE_SIZE
-    set _HEAPj _HEAPi
-    add _HEAP_request _HEAPi
-    for _HEAPi range _HEAP_request {
-        set _HEAPk _HEAPj
-        //add _HEAPk _HEAP_request
-        //shiftl _HEAPk 16
-        //or _HEAPk _HEAPi
-        mul _HEAPk PAGE_SIZE
-        setarray lookupHeap[_HEAPi] _HEAPk
-
+    whilel _HEAPi _HEAP_request {
+        setarray lookupHeap[_HEAPi] _HEAP_pointer
         setarray allocTable[_HEAPi] 1
+        
+        add _HEAPi 1
     }
 
     set rb _HEAP_pointer
-    add rb ${stackSize}
+    add rb 1024
 
     set _HEAP_pointer r1
     set _HEAPi _HEAP_pointer
-    //div _HEAPj PAGE_SIZE
-    //set _HEAPi _HEAPj
     set _HEAPj _HEAP_request
     mul _HEAPj PAGE_SIZE
-    sub _HEAPj _HEAPi
-    //set _HEAPk lookupHeap[_HEAPi]
-    //set _HEAPi _HEAPk
-    //and _HEAPi 0xFFFF
-    //shiftr _HEAPk 16
-    //mul _HEAPi PAGE_SIZE
-    //mul _HEAPk PAGE_SIZE
-    //sub _HEAPk _HEAPi
+
     copy flat[_HEAPi] flat[rb] _HEAPj
 
     state free
 ends
 
-defstate _CheckAndFreePage
-    state push
-    state pushb
-    state pushd
-    set _HEAP_pointer r0
-    set _HEAPj _HEAP_pointer
-    div _HEAPj PAGE_SIZE
-    set _HEAPi _HEAPj
-    set _HEAPk lookupHeap[_HEAPi]
-    set _HEAPi _HEAPk
-    and _HEAPi 0xFFFF
-    shiftr _HEAPk 16
+defstate _GC
+    set _HEAPi 1
 
-    set _HEAPj 0
-    set _HEAPl rsp
-    add _HEAPl 1
-    for _HEAPj range _HEAPl {
-        ifle flat[_HEAPj] _HEAPi
-            set rb 1
-
-        ifge flat[_HEAPj] _HEAPk 
-            set rd 1
-        
-        //Free the pages
-        ifeither rd rb {
-            set ra _HEAPi
-            state push
-
-            set ra _HEAPj
-            state push
-
-            set ra _HEAPk
-            state push
-
-            set ra _HEAPl
-            state push
-
-            state free
-
-            state pop
-            set _HEAPl ra
-
-            state pop
-            set _HEAPk ra
-
-            state pop
-            set _HEAPj ra
-
-            state pop
-            set _HEAPi ra
-
-            exit
+    whilel _HEAPi heaptables {
+        ife allocTable[_HEAPi] 0 {
+            add _HEAPi 1
+            continue
         }
-    }
 
-    state popd
-    state popb
-    state pop
+        set _HEAP_pointer lookupHeap[_HEAPi]
+
+        set _HEAPj rbp
+        set _HEAPk 0
+        whilel _HEAPj rsp {
+            ife flat[_HEAPj] _HEAP_pointer {
+                set _HEAPk 1
+                exit
+            }
+
+            add _HEAPi 1
+        }
+
+        ife _HEAPk 1
+        ife allocTable[_HEAPi] 2 {
+            setarray allocTable[_HEAPi] 1
+
+            whilel _HEAPi heaptables {
+                ifn lookupHeap[_HEAPi] _HEAP_pointer
+                    exit
+
+                setarray allocTable[_HEAPi] 1
+                add _HEAPi 1
+            }
+
+            add _HEAPi 1
+            continue
+        }
+
+        ife _HEAPk 0 {
+            ife allocTable[_HEAPi] 2 {
+                setarray allocTable[_HEAPi] 0
+                setarray lookupHeap[_HEAPi] 0
+            } else 
+                setarray allocTable[_HEAPi] 2
+            
+            add _HEAPi 1
+
+            whilel _HEAPi heaptables {
+                ifn lookupHeap[_HEAPi] _HEAP_pointer
+                    exit
+
+                ife allocTable[_HEAPi] 2 {
+                    setarray allocTable[_HEAPi] 0
+                    setarray lookupHeap[_HEAPi] 0
+                } else 
+                    setarray allocTable[_HEAPi] 2
+
+                add _HEAPi 1
+            }
+        }
+
+        add _HEAPi 1
+    }
 ends
 `
         }

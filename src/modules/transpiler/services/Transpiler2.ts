@@ -623,9 +623,7 @@ export class TsToConTranspiler {
       // Process non-object initializers as before.
       const localVars = context.localVarCount;
       code += this.visitExpression(init as Expression, context);
-      if(context.stringExpr)
-        code += `set ra rd\nadd ra 1\nsetarray flat[rd] ra\n`;
-      else
+      if(!context.stringExpr)
         code += `add rsp 1\nsetarray flat[rsp] ra\n`;
       context.symbolTable.set(varName, {
         name: varName, type: context.stringExpr ? 'string' : "number",
@@ -879,9 +877,10 @@ export class TsToConTranspiler {
     }
     if (expr.isKind(SyntaxKind.StringLiteral)) {
       let text = expr.getText().replace(/[`'"]/g, "");
-      code += `add rsp 1\nset rd rsp\nadd rsp 1\nsetarray flat[rsp] ${text.length}\n`;
+      code += `state pushr1\nset r0 ${text.length + 1}\nstate alloc\nstate popr1\nadd rsp 1\nsetarray flat[rsp] rb\nsetarray flat[rb] ${text.length}\nset ri rb\n`;
+      //code += `add rsp 1\nset rd rsp\nadd rsp 1\nsetarray flat[rsp] ${text.length}\n`;
       for(let i = 0; i < text.length; i++)
-        code += `add rsp 1\nsetarray flat[rsp] ${text.charCodeAt(i)}\n`;
+        code += `add ri 1\nsetarray flat[ri] ${text.charCodeAt(i)}\n`;
       context.localVarCount += text.length + 2;
       context.stringExpr = true;
       return code;
@@ -2063,7 +2062,7 @@ set rb ra
               });
             }
 
-            code += `  }\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nendevent \n\n`;
+            code += `  }\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nendevent \n\n`;
           }
         }
       }
@@ -2304,7 +2303,7 @@ set rb ra
           code += indent(this.visitStatement(st, localCtx), 1) + "\n";
         });
       }
-      code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nenda \n\n`;
+      code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nenda \n\n`;
       return code;
     } else if (type == 'CEvent' && (mName.toLowerCase() == 'append' || mName.toLowerCase() == 'prepend')) {
       let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\n${mName.toLowerCase() == 'append' ? 'append' : 'on'}event EVENT_${context.currentEventName}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
@@ -2314,7 +2313,7 @@ set rb ra
           code += indent(this.visitStatement(st, localCtx), 1) + "\n";
         });
       }
-      code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nendevent \n\n`;
+      code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nendevent \n\n`;
       return code;
     }
 
