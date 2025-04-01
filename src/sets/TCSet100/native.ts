@@ -60,7 +60,8 @@ export interface CON_NATIVE_FUNCTION {
     return_size?: number,
     arguments: CON_NATIVE_FLAGS[],
     arguments_default?: any[]
-    object_belong?: string[]
+    object_belong?: string[],
+    type_belong?: string[]
 }
 
 export interface CON_NATIVE_VAR {
@@ -536,7 +537,7 @@ state pop
         ]
     },
     {
-        name: 'Quote',
+        name: 'DisplayQuote',
         code: `setp[].fta 99\nsetp[].ftq`,
         returns: false,
         return_type: null,
@@ -552,6 +553,100 @@ state pop
         arguments: [
             CON_NATIVE_FLAGS.VARIABLE
         ]
+    },
+    {
+        name: 'slice',
+        returns: true,
+        return_type: 'string',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
+        ],
+        arguments_default: [
+            0, -1
+        ],
+        type_belong: ['string'],
+        code: (args: boolean) => {
+            return `
+state push
+state pushd
+set ri r2
+set ra flat[ri]
+
+ifl r0 0
+  set r0 0
+
+ifl r1 0
+  add ra r1
+else ifle r1 ra
+  set ra r1
+
+set rd r0
+sub ra rd
+state pushr1
+set r0 ra
+add r0 1
+state alloc
+state popr1
+
+setarray flat[rb] ra
+add rb 1
+add ri 1
+add ri rd
+copy flat[ri] flat[rb] ra
+sub rb 1
+state popd
+state pop
+`;
+        }
+    },
+    {
+        name: 'includes',
+        return_type: 'variable',
+        returns: true,
+        arguments: [ CON_NATIVE_FLAGS.VARIABLE ],
+        type_belong: [ 'string' ],
+        code: (args) => {
+            return `
+state push
+state pushd
+state pushr3
+
+set ra r0
+set rb flat[ra]
+add ra 1
+
+set rd flat[r1]
+set ri r1
+add ri 1
+add rd ri
+
+set rc ri
+set r2 0
+whilel rc rd {
+  ife flat[rc] flat[ra] {
+    add ra 1
+    add r2 1
+
+    ife r2 rb
+      exit
+  } else {
+    sub ra r2
+    set r2 0 
+  }
+
+  add rc 1
+}
+
+ife r2 rb
+  set rb 1
+else set rb 0
+
+state popr4
+state popd
+state pop
+`
+        }
     }
 ]
 

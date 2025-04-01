@@ -230,64 +230,6 @@ array rstack 24 0
 array flat ${stackSize + this.heapSize}
 `;
             this.initStates = `
-state _convertString2Quote
-    set ra r0
-    add rssp 1
-
-    //Get length
-    set rb flat[ra]
-    
-    //Now we are in the text area
-    add ra 1
-    
-    //Set ri to the first element of the ASCII conversion table
-    set ri 900
-    
-    //Set rssp quote to the first letter of the string
-    add ri flat[ra]
-    sub ri 32
-    qstrcpy rssp ri
-
-    //rd serves as a flag for when there's a whitespace
-    set rd 0
-
-    set rc 1
-    add ra 1
-    whilel rc rb {
-        set ri 900
-        ife rd 1 {
-            add ri flat[ra]
-            sub ri 32
-            qputs 1022 %s %s
-            qsprintf 1023 1022 rssp ri
-            qstrcpy rssp 1023
-            add rc 1
-            add ra 1
-            set rd 0
-            continue
-        }
-
-        ife flat[ra] 32 {
-            set rd 1
-            add rc 1
-            add ra 1
-            continue
-        }
-
-        add ri flat[ra]
-        sub ri 32
-        qstrcat rssp ri
-
-        add rc 1
-        add ra 1
-        set rd 0
-    }
-
-    echo rssp
-
-    set rb rssp
-ends
-
 var _HEAPi 0 0
 var _HEAPj 0 0
 var _HEAPk 0 0
@@ -303,9 +245,10 @@ defstate pushrall
 ends
 
 defstate poprall
-    sub rsp 24
+    sub rsp 23
     copy flat[rsp] rstack[0] 24
     getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 
+    sub rsp 1
 ends
 
 defstate pushr1
@@ -326,9 +269,10 @@ defstate pushr2
 ends
 
 defstate popr2
-    sub rsp 2
+    sub rsp 1
     copy flat[rsp] rstack[0] 2
     getarrayseq rstack r0 r1
+    sub rsp 1
 ends
 
 defstate pushr3
@@ -352,9 +296,10 @@ defstate pushr4
 ends
 
 defstate popr4
-    sub rsp 4
+    sub rsp 3
     copy flat[rsp] rstack[0] 4
     getarrayseq rstack r0 r1 r2 r3
+    sub rsp 1
 ends
 
 defstate pushr5
@@ -365,9 +310,10 @@ defstate pushr5
 ends
 
 defstate popr5
-    sub rsp 5
+    sub rsp 4
     copy flat[rsp] rstack[0] 5
     getarrayseq rstack r0 r1 r2 r3 r4
+    sub rsp 1
 ends
 
 defstate pushr6
@@ -378,9 +324,10 @@ defstate pushr6
 ends
 
 defstate popr6
-    sub rsp 6
+    sub rsp 5
     copy flat[rsp] rstack[0] 6
     getarrayseq rstack r0 r1 r2 r3 r4 r5
+    sub rsp 1
 ends
 
 defstate pushr7
@@ -391,9 +338,10 @@ defstate pushr7
 ends
 
 defstate popr7
-    sub rsp 7
+    sub rsp 6
     copy flat[rsp] rstack[0] 7
     getarrayseq rstack r0 r1 r2 r3 r4 r5 r6
+    sub rsp 1
 ends
 
 defstate pushr8
@@ -404,9 +352,10 @@ defstate pushr8
 ends
 
 defstate popr8
-    sub rsp 8
+    sub rsp 7
     copy flat[rsp] rstack[0] 8
     getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7
+    sub rsp 1
 ends
 
 defstate pushr9
@@ -417,9 +366,10 @@ defstate pushr9
 ends
 
 defstate popr9
-    sub rsp 9
+    sub rsp 8
     copy flat[rsp] rstack[0] 9
     getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8
+    sub rsp 1
 ends
 
 defstate pushr10
@@ -430,9 +380,10 @@ defstate pushr10
 ends
 
 defstate popr10
-    sub rsp 10
+    sub rsp 9
     copy flat[rsp] rstack[0] 10
     getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9
+    sub rsp 1
 ends
 
 defstate pushr11
@@ -443,9 +394,10 @@ defstate pushr11
 ends
 
 defstate popr11
-    sub rsp 11
+    sub rsp 10
     copy flat[rsp] rstack[0] 11
     getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10
+    sub rsp 1
 ends
 
 defstate pushr12
@@ -456,9 +408,10 @@ defstate pushr12
 ends
 
 defstate popr12
-    sub rsp 12
+    sub rsp 11
     copy flat[rsp] rstack[0] 12
     getarrayseq rstack r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11
+    sub rsp 1
 ends
 
 defstate push
@@ -512,6 +465,7 @@ defstate _GetFreePages
                 set _HEAP_pointer _HEAPi
                 div _HEAPj PAGE_SIZE
                 sub _HEAP_pointer _HEAPj
+                add _HEAP_pointer 1
                 mul _HEAP_pointer PAGE_SIZE
                 set _HEAP_request _HEAPj
                 exit
@@ -522,13 +476,20 @@ defstate _GetFreePages
     }
 
     ife _HEAP_pointer -1 {
-        set _HEAPi PAGE_SIZE
-        mul _HEAPi _HEAP_request
+        //Get the exact size we need
+        set _HEAPj _HEAP_request
+        div _HEAPj PAGE_SIZE
+        add _HEAPj 1
+        set _HEAPi _HEAPj
+        mul _HEAPj PAGE_SIZE
+        
         set _HEAP_pointer heapsize
-        add heapsize _HEAPi
-        add heapsize 1024
+        add _HEAP_pointer ${stackSize}
+        add heapsize _HEAPj
+        add heapsize ${stackSize}
         resizearray flat heapsize
-        sub heapsize 1024
+        sub heapsize ${stackSize}
+        add heaptables _HEAPi
         resizearray lookupHeap heaptables
         resizearray allocTable heaptables
     }
@@ -541,32 +502,34 @@ defstate alloc
     state _GetFreePages
 
     set _HEAPi _HEAP_pointer
+    add _HEAP_pointer ${stackSize}
     div _HEAPi PAGE_SIZE
-    whilel _HEAPi _HEAP_request {
+    set _HEAPj _HEAP_request
+    add _HEAPj _HEAPi
+    whilel _HEAPi _HEAPj {
         setarray lookupHeap[_HEAPi] _HEAP_pointer
         setarray allocTable[_HEAPi] 1
         add _HEAPi 1
     }
 
     set rb _HEAP_pointer
-    al rb
-    add rb 1024
 ends
 
 defstate free
     set _HEAP_pointer r0
-    sub _HEAP_pointer 1024
+    sub _HEAP_pointer ${stackSize}
     ifl _HEAP_pointer 0 {
         qputs 9999 ERROR: TRIED TO FREE MEMORY BELOW HEAP
         //We gotta break or crash or we might have a memory leakage
         debug 9999
         return
     }
-    set _HEAPj _HEAP_pointer
-    div _HEAPj PAGE_SIZE
-    set _HEAPi _HEAPj
+    add _HEAP_pointer ${stackSize}
+    set _HEAPi _HEAP_pointer
+    sub _HEAPi ${stackSize}
+    div _HEAPi PAGE_SIZE
     whilel _HEAPi heaptables {
-        ife lookupHeap[_HEAPi] _HEAPj {
+        ife lookupHeap[_HEAPi] _HEAP_pointer {
             setarray lookupHeap[_HEAPi] 0
             setarray allocTable[_HEAPi] 0
         }
@@ -576,30 +539,27 @@ defstate free
 ends
 
 defstate realloc
-    set _HEAP_request r0
-    ife _HEAP_request 0
-        set _HEAP_request 1
-    state _GetFreePages
+    state alloc
 
-    set _HEAPi _HEAP_pointer
+    set _HEAPi r1
+    sub _HEAPi ${stackSize}
     div _HEAPi PAGE_SIZE
-    whilel _HEAPi _HEAP_request {
-        setarray lookupHeap[_HEAPi] _HEAP_pointer
-        setarray allocTable[_HEAPi] 1
-        
+
+    set _HEAPj 0
+    whilel _HEAPi heaptables {
+        ifn lookupHeap[_HEAPi] r1
+            exit
+
+        add _HEAPj 1
         add _HEAPi 1
     }
 
-    set rb _HEAP_pointer
-    add rb 1024
-
-    set _HEAP_pointer r1
-    set _HEAPi _HEAP_pointer
-    set _HEAPj _HEAP_request
     mul _HEAPj PAGE_SIZE
+    set _HEAPi r1
 
     copy flat[_HEAPi] flat[rb] _HEAPj
 
+    set r0 r1
     state free
 ends
 
@@ -622,7 +582,7 @@ defstate _GC
                 exit
             }
 
-            add _HEAPi 1
+            add _HEAPj 1
         }
 
         ife _HEAPk 1
@@ -666,6 +626,169 @@ defstate _GC
 
         add _HEAPi 1
     }
+ends
+
+defstate pow
+    state pushc
+    set rc 0
+    whilel rc r1 {
+        mul r0 r0
+        add rc 1
+    }
+    state popc
+    set rb r0
+ends
+
+defstate _stringConcat
+    state push
+    state pushd
+    state pushc
+
+    set ra flat[r0] //String 1 length
+    set rd flat[r1] //String 2 length
+
+    set rc ra
+    add rc rd
+    state pushr2
+    set r1 r0
+    set r0 rc
+    add r0 1
+    state realloc
+    state popr2
+    setarray flat[rb] rc
+    set ri rb
+    add ri ra
+    add ri 1
+    add r1 1
+
+    copy flat[r1] flat[ri] rd
+
+    state popc
+    state popd
+    state pop
+ends
+
+defstate _convertInt2String
+    state push
+    set ra r0
+
+    ife ra 0 {
+        state pushr1
+        set r0 2
+        state alloc
+        state popr1
+        setarray flat[rb] 1
+        add rb 1
+        setarray flat[rb] 48
+        sub rb 1
+        state pop
+        terminate
+    }
+
+    state pushc
+    state pushd
+    set rc 0
+
+    set rd 0
+    ifl ra 0 {
+        set rd 1 //Flag it as a negative number
+        state pushd
+        add rc 1
+    }
+    
+    whilen ra 0 {
+        set rd ra
+        mod rd 10
+        add rd 48 //48 = '0'
+        state pushd
+        add rc 1
+        div ra 10
+    }
+
+    state pushr1
+    set r0 rc
+    add r0 1
+    state alloc
+    state popr1
+
+    set ri rb
+    setarray flat[ri] rc
+
+    whilen rc 0 {
+        add ri 1
+        state popd
+        setarray flat[ri] rd
+        sub rc 1
+    }
+
+    state popd
+    state popc
+    state pop
+    
+ends
+
+defstate _convertString2Quote
+    state push
+    state pushd
+    state pushc
+
+    set ra r0
+    add rssp 1
+
+    //Get length
+    set rb flat[ra]
+    
+    //Now we are in the text area
+    add ra 1
+    
+    //Set ri to the first element of the ASCII conversion table
+    set ri 900
+    
+    //Set rssp quote to the first letter of the string
+    add ri flat[ra]
+    sub ri 32
+    qstrcpy rssp ri
+
+    //rd serves as a flag for when there's a whitespace
+    set rd 0
+
+    set rc 1
+    add ra 1
+    whilel rc rb {
+        set ri 900
+        ife rd 1 {
+            add ri flat[ra]
+            sub ri 32
+            qputs 1022 %s %s
+            qsprintf 1023 1022 rssp ri
+            qstrcpy rssp 1023
+            add rc 1
+            add ra 1
+            set rd 0
+            continue
+        }
+
+        ife flat[ra] 32 {
+            set rd 1
+            add rc 1
+            add ra 1
+            continue
+        }
+
+        add ri flat[ra]
+        sub ri 32
+        qstrcat rssp ri
+
+        add rc 1
+        add ra 1
+        set rd 0
+    }
+
+    set rb rssp
+
+    state popc
+    state popd
+    state pop
 ends
 `
         }

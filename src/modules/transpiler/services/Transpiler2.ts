@@ -627,14 +627,13 @@ export class TsToConTranspiler {
         code += `add rsp 1\nsetarray flat[rsp] ra\n`;
       context.symbolTable.set(varName, {
         name: varName, type: context.stringExpr ? 'string' : "number",
-        offset: localVars, size: context.stringExpr ? context.localVarCount : 1,
+        offset: localVars, size: 1,
         native_pointer: context.localVarNativePointer,
         native_pointer_index: context.localVarNativePointerIndexed
       });
       context.localVarNativePointer = undefined;
       context.localVarNativePointerIndexed = false;
-      if(!context.stringExpr)
-        context.localVarCount++;
+      context.localVarCount++;
     }
     return code;
   }
@@ -769,6 +768,16 @@ export class TsToConTranspiler {
       const callExpr = expr as CallExpression;
       const fnName = callExpr.getExpression().getText();
       const nativeFn = findNativeFunction(fnName);
+      /*const callExp = call.getExpression();
+      let fnNameRaw = '';
+      let fnObj: string | undefined;
+      if (callExp.isKind(SyntaxKind.Identifier))
+        fnNameRaw = call.getExpression().getText();
+      else if (callExp.isKind(SyntaxKind.PropertyAccessExpression)
+        || callExp.isKind(SyntaxKind.ElementAccessExpression)) {
+        const segments = this.unrollMemberExpression(callExp);
+
+      let obj = segments[0];*/
       if (nativeFn && nativeFn.returns && nativeFn.return_type === "variable") {
         // Instead of fabricating a fake Expression, simply return 1 as the expected boolean value.
         return { op: "ife", left: callExpr, right: 1 };
@@ -801,6 +810,7 @@ export class TsToConTranspiler {
    *****************************************************************************/
   private visitExpression(expr: Expression, context: TranspilerContext): string {
     let code = ''//`/* ${expr.getText()} */\n`;
+    context.stringExpr = context.quoteExpr = false;
 
     switch (expr.getKind()) {
       case SyntaxKind.BinaryExpression:
@@ -861,6 +871,8 @@ export class TsToConTranspiler {
           return code + `set ra ${off.CON_code}\n`;
 
         code += `set ri rbp\nadd ri ${off.offset}\nset ra flat[ri]\n`;
+        if(off.type == 'string')
+          context.stringExpr = true;
         if (off.heap)
           code += `set rf 1\n`;
         return code;
@@ -881,7 +893,8 @@ export class TsToConTranspiler {
       //code += `add rsp 1\nset rd rsp\nadd rsp 1\nsetarray flat[rsp] ${text.length}\n`;
       for(let i = 0; i < text.length; i++)
         code += `add ri 1\nsetarray flat[ri] ${text.charCodeAt(i)}\n`;
-      context.localVarCount += text.length + 2;
+
+      code += `set ra rb\n`;
       context.stringExpr = true;
       return code;
     }
@@ -922,6 +935,7 @@ export class TsToConTranspiler {
 
     code += this.visitExpression(left, context);
     const isQuote = context.quoteExpr;
+    const isString = context.stringExpr;
 
     if(isQuote && opText != '+') {
       addDiagnostic(bin, context, "error", `Unhandled operator for string expression "${opText}"`);
@@ -931,15 +945,21 @@ export class TsToConTranspiler {
     code += `set rd ra\n`;
     code += this.visitExpression(right, context);
 
-    if(!context.quoteExpr)
+    if(isQuote && !context.quoteExpr)
       code += `qputs 1022 %d\nqsprintf 1023 1022 ra\nset ra 1022\n`;
 
+    if(isString && !context.stringExpr)
+      code += `state pushr1\nset r0 ra\nstate _convertInt2String\nset ra rb\n`
+
     context.quoteExpr = isQuote;
+    context.stringExpr = isString;
 
     switch (opText) {
       case "+":
         if(isQuote)
           code += `qstrcat rd ra\n`;
+        else if(isString)
+          code += `state pushr2\nset r0 rd\nset r1 ra\nstate _stringConcat\nset ra rb\n`;
         else
           code += `add rd ra\nset ra rd\n`;
         break;
@@ -1023,7 +1043,7 @@ export class TsToConTranspiler {
         if(v.type == 'native')
           return code + `set ${v.CON_code} ra\n`;
 
-        if(v.type == 'string')
+        if(v.type == 'quote')
           return code + `set ri rsbp\nadd ri ${v.offset}\nqstrcpy ri ra\n`;
 
         code += `set ri rbp\nadd ri ${v.offset}\nsetarray flat[ri] ra\n`;
@@ -1278,7 +1298,7 @@ set rb ra
       return code;
     }
 
-    if(fnNameRaw == 'toQuote' && !fnObj) {
+    if(fnNameRaw == 'Quote' && !fnObj) {
       if(args[0].isKind(SyntaxKind.StringLiteral)) {
         let text = args[0].getText().replace(/[`'"]/g, "");
         if(text.length > 128) {
@@ -1287,19 +1307,26 @@ set rb ra
         }
         code += `add rssp 1\nqputs 1023 ${text}\nqstrcpy rssp 1023\nset ra rssp\n`;
         return code;
-      }
-
-      if(args[0].isKind(SyntaxKind.Identifier)) {
-        code += this.visitExpression(args[0] as Identifier, context);
+      } else {
+        code += this.visitExpression(args[0] as Expression, context);
         code += `state pushr1\nset r0 ra\nstate _convertString2Quote\nstate popr1\nset ra rb\n`
         return code;
       }
     }
 
-    const nativeFn = findNativeFunction(fnNameRaw, fnObj);
+    const variable = context.symbolTable.get(fnObj);
+    let typeName: undefined | string = undefined;
+
+    if(variable && (variable.type != 'function' && variable.type != 'array' && variable.type != 'object'))
+      typeName = variable.type;
+
+    const nativeFn = findNativeFunction(fnNameRaw, fnObj, typeName);
     if (nativeFn) {
       let argCode = '';
       let argsLen = 0;
+
+      if(nativeFn.type_belong)
+        argsLen++;
 
       if (args.length > 0) {
         nativeFn.arguments.forEach(e => {
@@ -1344,6 +1371,13 @@ set rb ra
           resolvedLiterals.push(null);
         }
       }
+
+      if(nativeFn.type_belong) {
+        code += `set ri rbp\nadd ri ${variable.offset}\nset r${argsLen - 1} flat[ri]\n`;
+        if(nativeFn.type_belong.includes('string') && nativeFn.return_type == 'string')
+          context.stringExpr = true;
+      }
+
       // For simple native functions (code is a string), concatenate the command with the arguments.
       if (typeof nativeFn.code === "string") {
         code += nativeFn.code; // e.g., "rotatesprite "
@@ -1658,6 +1692,11 @@ set rb ra
         return "set ra 0\n";
       }
 
+      if(sym.type == 'string') {
+        if(segments[1].kind == 'property' && segments[1].name == 'length')
+          return code + `set ri rbp\nadd ri ${sym.offset}\nset ri flat[ri]\nset ra flat[ri]\n`;
+      }
+
       if (!sym.native_pointer) {
         code += `set ri rbp\nadd ri ${sym.offset}\n`;
         code += `set ri flat[ri]\n`;
@@ -1891,7 +1930,7 @@ set rb ra
           code += `sub ra 1\n`;
           break;
         case SyntaxKind.MinusToken:
-          code += `neg ra\n`;
+          code += `mul ra -1\n`;
           break;
         case SyntaxKind.ExclamationToken:
           addDiagnostic(expr, context, "error", `"!" not allowed in normal expressions (only if patterns)`);

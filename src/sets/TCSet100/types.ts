@@ -107,13 +107,13 @@ declare global {
      * and then we have quotes, which are kept separately from the memory and are used in native CON commands.
      * quotes have a 128 character limitation.
      */
-    export interface quote { }
+    export type quote = string & { _brand: 'quote' };
 
     /**
      * Converts a string to a quote
      * @param str String to be converted
      */
-    export function toQuote(str: string): quote;
+    export function Quote(str: string): quote;
 
     /**
      * Constant type. Only literals are accepted
@@ -386,7 +386,7 @@ declare global {
      * Display on the screen using the traditional quote system the string referenced
      * @param quote - the string you want to be shown
      */
-    export function Quote(quote: quote): CON_NATIVE<void>;
+    export function DisplayQuote(quote: quote): CON_NATIVE<void>;
 
     //Global readonly variables
 

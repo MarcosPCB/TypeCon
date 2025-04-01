@@ -104,10 +104,10 @@ import {
     }
   }
 
-  export function findNativeFunction(fnName: string, obj?: string): CON_NATIVE_FUNCTION | undefined {
+  export function findNativeFunction(fnName: string, obj?: string, type?: string): CON_NATIVE_FUNCTION | undefined {
     // Remove "this." prefix if it exists.
     const cleanName = fnName.startsWith("this.") ? fnName.substring(5) : fnName;
-    return nativeFunctions.find(nf => (nf.name == cleanName && ((obj && nf.object_belong.includes(obj)) || !obj)));
+    return nativeFunctions.find(nf => (nf.name == cleanName && ((obj && nf.object_belong && nf.object_belong.includes(obj) || (obj && type && nf.type_belong && nf.type_belong.includes(type))) || !obj)));
   }
 
   export function findNativeVar_Sprite(propName: string): CON_NATIVE_VAR | undefined {

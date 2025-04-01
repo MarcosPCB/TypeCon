@@ -130,10 +130,19 @@ class newEnemy extends CActor {
 
             this.Guts(Names.JIBS6, 2);
 
-            const text: string = 'This is a test';
-            Quote(toQuote(text));
+            let text: string = 'This is a test';
+            DisplayQuote(Quote(text.slice(1, -1) + text.length));
+
+            if(text.includes('test'))
+                console.log(1);
+
+            if(text.includes('uva'))
+                console.log(2);
+
+            const u: quote = Quote('test');
 
             if(this.IsDead()) {
+                DisplayQuote(Quote(text + ' or testu'));
                 TroopBodyJibs();
                 this.KillIt();
             }
