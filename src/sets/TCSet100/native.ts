@@ -519,11 +519,45 @@ state pop
     },
     {
         name: 'log',
-        code: `al`,
+        code: 'echo',
         returns: false,
         return_type: null,
         arguments: [
-            CON_NATIVE_FLAGS.VARIABLE
+            CON_NATIVE_FLAGS.STRING
+        ],
+        object_belong: ['console']
+    },
+    {
+        name: 'debug',
+        code: (args) => {
+            return `
+qputs 1022 DEBUG: %s
+qsprintf 1023 1022 r0            
+echo 1023
+al r0            
+`
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.STRING
+        ],
+        object_belong: ['console']
+    },
+    {
+        name: 'error',
+        code: (args) => {
+            return `
+qputs 1022 ERROR: %s
+qsprintf 1023 1022 r0            
+echo 1023
+al r0            
+`
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.STRING
         ],
         object_belong: ['console']
     },
@@ -542,7 +576,7 @@ state pop
         returns: false,
         return_type: null,
         arguments: [
-            CON_NATIVE_FLAGS.STRING
+            CON_NATIVE_FLAGS.VARIABLE
         ]
     },
     {

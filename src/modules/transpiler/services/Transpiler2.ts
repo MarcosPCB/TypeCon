@@ -766,25 +766,13 @@ export class TsToConTranspiler {
     }
     if (expr.isKind(SyntaxKind.CallExpression)) {
       const callExpr = expr as CallExpression;
-      const fnName = callExpr.getExpression().getText();
-      const nativeFn = findNativeFunction(fnName);
-      /*const callExp = call.getExpression();
-      let fnNameRaw = '';
-      let fnObj: string | undefined;
-      if (callExp.isKind(SyntaxKind.Identifier))
-        fnNameRaw = call.getExpression().getText();
-      else if (callExp.isKind(SyntaxKind.PropertyAccessExpression)
-        || callExp.isKind(SyntaxKind.ElementAccessExpression)) {
-        const segments = this.unrollMemberExpression(callExp);
-
-      let obj = segments[0];*/
-      if (nativeFn && nativeFn.returns && nativeFn.return_type === "variable") {
+      //if (nativeFn && nativeFn.returns && nativeFn.return_type === "variable") {
         // Instead of fabricating a fake Expression, simply return 1 as the expected boolean value.
-        return { op: "ife", left: callExpr, right: 1 };
-      } else {
+        return { op: "ifg", left: callExpr, right: 0 };
+      /*} else {
         addDiagnostic(expr, context, "error", `Native function call ${fnName} not allowed or not returning a boolean value`);
         return undefined;
-      }
+      }*/
     }
     if (expr.isKind(SyntaxKind.PrefixUnaryExpression)) {
       const pre = expr as PrefixUnaryExpression;
@@ -796,8 +784,19 @@ export class TsToConTranspiler {
             return { op: "ifneither", left: bin.getLeft(), right: bin.getRight() };
           }
         }
-        addDiagnostic(expr, context, "error", `if condition must be in the form !(A || B). Found something else.`);
-        return undefined;
+
+        //if (sub.isKind(SyntaxKind.CallExpression)) {
+          //const callExpr = sub as CallExpression;;
+          //if (nativeFn && nativeFn.returns && nativeFn.return_type === "variable") {
+            // Instead of fabricating a fake Expression, simply return 1 as the expected boolean value.
+            return { op: "ifle", left: sub, right: 0 };
+          /*} else {
+            addDiagnostic(expr, context, "error", `Native function call ${fnName} not allowed or not returning a boolean value`);
+            return undefined;
+          }*/
+        //}
+        //addDiagnostic(expr, context, "error", `if condition must be in the form !(A || B). Found something else.`);
+        //return undefined;
       }
     }
     addDiagnostic(expr, context, "error", `Unrecognized if condition. Must be (A&&B), (A||B), a comparison, or a function call.`);
@@ -949,7 +948,7 @@ export class TsToConTranspiler {
       code += `qputs 1022 %d\nqsprintf 1023 1022 ra\nset ra 1022\n`;
 
     if(isString && !context.stringExpr)
-      code += `state pushr1\nset r0 ra\nstate _convertInt2String\nset ra rb\n`
+      code += `state pushr1\nset r0 ra\nstate _convertInt2String\nstate popr1\nset ra rb\n`
 
     context.quoteExpr = isQuote;
     context.stringExpr = isString;
@@ -959,7 +958,7 @@ export class TsToConTranspiler {
         if(isQuote)
           code += `qstrcat rd ra\n`;
         else if(isString)
-          code += `state pushr2\nset r0 rd\nset r1 ra\nstate _stringConcat\nset ra rb\n`;
+          code += `state pushr2\nset r0 rd\nset r1 ra\nstate _stringConcat\nstate popr2\nset ra rb\n`;
         else
           code += `add rd ra\nset ra rd\n`;
         break;
@@ -1346,6 +1345,10 @@ set rb ra
           // We do not emit register loads for these.
         } else if (expected & CON_NATIVE_FLAGS.STRING) {
           code += this.visitExpression(args[i] as Expression, context);
+          if(!context.stringExpr)
+            code += `state pushr1\nset r0 ra\nstate _convertInt2String\nstate popr1\nset ra rb\n`
+
+          code += `state pushr1\nset r0 ra\nstate _convertString2Quote\nstate popr1\nset ra rb\n`
           code += `set r${j} ra\n`;
           resolvedLiterals.push(null);
         } else if (expected & CON_NATIVE_FLAGS.VARIABLE) {

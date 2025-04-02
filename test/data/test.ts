@@ -134,10 +134,13 @@ class newEnemy extends CActor {
             DisplayQuote(Quote(text.slice(1, -1) + text.length));
 
             if(text.includes('test'))
-                console.log(1);
+                console.log(2);
 
             if(text.includes('uva'))
-                console.log(2);
+                console.log(3);
+
+            console.debug(3);
+            console.debug('fuck');
 
             const u: quote = Quote('test');
 
