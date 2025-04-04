@@ -19,6 +19,8 @@ export interface ICompiledFile {
 
 export const compiledFiles: Map<string, ICompiledFile> = new Map();
 
+export let pageSize = 8;
+
 export class CONInit {
     public readonly heapSize: number;
     private initCode: string;
@@ -28,6 +30,7 @@ export class CONInit {
         public readonly heapPageSize = 8,
         public readonly heapNumPages = 64) {
             this.heapSize = heapNumPages * heapPageSize;
+            pageSize = heapPageSize;
 
             let quoteInit = '';
             for(let i = 1023; i < stackSize + 1023; i++)
@@ -74,6 +77,9 @@ var rd 0 0
 
 //Index
 var ri 0 0
+
+//Source index
+var rsi 0 0
 
 //Flags register
 /*
@@ -777,6 +783,13 @@ defstate _convertString2Quote
 
         add ri flat[ra]
         sub ri 32
+        ifl ri 900 {
+            qputs 1022 ERROR: %d is not a valid ASCII character
+            qsprintf 1023 1022 ri
+            echo 1023
+            al ri
+            exit
+        }
         qstrcat rssp ri
 
         add rc 1

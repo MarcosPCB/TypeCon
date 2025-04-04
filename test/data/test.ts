@@ -142,6 +142,17 @@ class newEnemy extends CActor {
             console.debug(3);
             console.debug('fuck');
 
+            const testSplit: string[] = text.split(' ');
+            console.debug(testSplit.length);
+            console.debug(testSplit[0]);
+            console.debug(testSplit[0].length);
+            console.debug(testSplit[1]);
+            console.debug(testSplit[1].length);
+            console.debug(testSplit[2]);
+            console.debug(testSplit[2].length);
+            console.debug(testSplit[3]);
+            console.debug(testSplit[3].length);
+
             const u: quote = Quote('test');
 
             if(this.IsDead()) {

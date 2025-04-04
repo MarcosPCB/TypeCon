@@ -676,11 +676,139 @@ ife r2 rb
   set rb 1
 else set rb 0
 
-state popr4
+state popr3
 state popd
 state pop
 `
         }
+    },
+    {
+        name: 'split',
+        code: (args) => {
+            return `
+state push
+state pushc
+state pushd
+
+set rd flat[r4] //String length
+set ri r4
+add ri 1
+
+set rb flat[r0] //Separator length
+add r0 1
+
+set r2 0
+set ra 0
+set rc 0
+set r3 rb
+
+whilel rc rd {
+  add ra 1
+  state push
+  sub rd 1
+
+  set ra 0
+  ife rc rd
+    set ra 1
+
+  add rd 1
+  state pushd
+  set rd 0
+
+  state pushb
+
+  set rb 0
+  ife flat[ri] flat[r0] 
+    set rb 1
+
+  ifeither ra rb
+    set rd 1
+
+  state popb
+
+  ife rd 1 {
+    state popd
+    state pop
+    sub rb 1
+    add r0 1
+    sub ra 1
+    sub rd 1
+    ife rc rd
+    ifn flat[ri] flat[r0] {
+      add ri 1
+      add ra 1
+    }
+    add rd 1
+    ife rb 0 {
+      sub r1 1
+
+      state pushr1
+      set r0 ra
+      add r0 1
+      state alloc
+      setarray flat[rb] ra
+      add rb 1
+      set r0 ri
+      sub r0 ra
+      copy flat[r0] flat[rb] ra
+      sub rb 1
+      state popr1
+      state pushb
+
+      add r2 1
+      sub r0 r3
+      set rb r3
+      set ra 0
+
+      ife r1 0
+        exit
+    }
+  } else ifn rb r3 {
+   state popd
+   state pop
+   sub r0 r3
+   set rb r3
+   set ra 0
+  } else {
+    state popd
+    state pop
+  }
+
+  add rc 1
+  add ri 1
+}
+
+add r2 1
+state pushr1
+set r0 r2
+state alloc
+state popr1
+sub r2 1
+setarray flat[rb] r2
+add rb 1
+sub rsp r2
+add rsp 1
+copy flat[rsp] flat[rb] r2
+sub rsp 1
+sub rb 1
+
+state popd
+state popc
+state pop
+`
+        },
+        returns: true,
+        return_type: 'array',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL, //internal use
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL //internal use
+        ],
+        arguments_default: [
+            0, -1, 0
+        ],
+        type_belong: ['string']
     }
 ]
 

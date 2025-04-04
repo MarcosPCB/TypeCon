@@ -39,7 +39,8 @@ import {
   EnumDeclaration,
   EnumMember,
   StringLiteral,
-  Identifier
+  Identifier,
+  ArrayLiteralExpression
 } from "ts-morph";
 
 import {
@@ -58,7 +59,7 @@ import {
 import { EventList, Names, TEvents } from "../types";
 
 import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../helper/helpers";
-import { compiledFiles, ECompileOptions, ICompiledFile } from "../helper/translation";
+import { compiledFiles, ECompileOptions, ICompiledFile, pageSize } from "../helper/translation";
 
 
 type DiagnosticSeverity = "error" | "warning";
@@ -97,7 +98,7 @@ interface TranspilerOptions {
 
 interface SymbolDefinition {
   name: string;
-  type: "number" | "string" | "object" | "array" | "pointer" | 'function' | 'native' | 'quote';
+  type: "number" | "string" | "object" | "array" | "pointer" | 'function' | 'native' | 'quote' | 'object_array' | 'string_array';
   offset: number;        // Delta from the object's base pointer.
   size?: number;         // How many slots this symbol occupies.
   num_elements?: number;
@@ -160,6 +161,7 @@ export interface TranspilerContext {
 
   stringExpr: boolean;
   quoteExpr: boolean;
+  arrayExpr: boolean;
 }
 
 interface TranspileResult {
@@ -263,7 +265,8 @@ export class TsToConTranspiler {
       symbolTable: new Map(),
       currentFile: undefined,
       stringExpr: false,
-      quoteExpr: false
+      quoteExpr: false,
+      arrayExpr: false,
     };
 
     const outputLines: string[] = [];
@@ -621,13 +624,14 @@ export class TsToConTranspiler {
       //context.symbolTable.set(varName, { name: varName, type: "object", offset: 0, size: size });
     } else {
       // Process non-object initializers as before.
-      const localVars = context.localVarCount;
+      //const localVars = context.localVarCount;
       code += this.visitExpression(init as Expression, context);
-      if(!context.stringExpr)
-        code += `add rsp 1\nsetarray flat[rsp] ra\n`;
+      //if(!context.stringExpr || (context.stringExpr && context.arrayExpr))
+      code += `add rsp 1\nsetarray flat[rsp] ra\n`;
       context.symbolTable.set(varName, {
-        name: varName, type: context.stringExpr ? 'string' : "number",
-        offset: localVars, size: 1,
+        name: varName, type: context.arrayExpr && context.stringExpr ? 'string_array' : (context.arrayExpr ? 'array'
+          : (context.stringExpr ? 'string' : 'number')),
+        offset: context.localVarCount, size: 1,
         native_pointer: context.localVarNativePointer,
         native_pointer_index: context.localVarNativePointerIndexed
       });
@@ -809,7 +813,7 @@ export class TsToConTranspiler {
    *****************************************************************************/
   private visitExpression(expr: Expression, context: TranspilerContext): string {
     let code = ''//`/* ${expr.getText()} */\n`;
-    context.stringExpr = context.quoteExpr = false;
+    context.stringExpr = context.quoteExpr = context.arrayExpr = false;
 
     switch (expr.getKind()) {
       case SyntaxKind.BinaryExpression:
@@ -842,6 +846,7 @@ export class TsToConTranspiler {
 
     context.stringExpr = false;
     context.quoteExpr = false;
+    context.arrayExpr = false;
 
     if (expr.isKind(SyntaxKind.Identifier)) {
       const name = expr.getText();
@@ -872,6 +877,10 @@ export class TsToConTranspiler {
         code += `set ri rbp\nadd ri ${off.offset}\nset ra flat[ri]\n`;
         if(off.type == 'string')
           context.stringExpr = true;
+
+        if(off.type == 'string_array')
+          context.stringExpr = context.arrayExpr = true;
+
         if (off.heap)
           code += `set rf 1\n`;
         return code;
@@ -888,7 +897,7 @@ export class TsToConTranspiler {
     }
     if (expr.isKind(SyntaxKind.StringLiteral)) {
       let text = expr.getText().replace(/[`'"]/g, "");
-      code += `state pushr1\nset r0 ${text.length + 1}\nstate alloc\nstate popr1\nadd rsp 1\nsetarray flat[rsp] rb\nsetarray flat[rb] ${text.length}\nset ri rb\n`;
+      code += `state pushr1\nset r0 ${text.length + 1}\nstate alloc\nstate popr1\nsetarray flat[rb] ${text.length}\nset ri rb\n`;
       //code += `add rsp 1\nset rd rsp\nadd rsp 1\nsetarray flat[rsp] ${text.length}\n`;
       for(let i = 0; i < text.length; i++)
         code += `add ri 1\nsetarray flat[ri] ${text.charCodeAt(i)}\n`;
@@ -904,6 +913,23 @@ export class TsToConTranspiler {
     if (expr.isKind(SyntaxKind.FalseKeyword)) {
       code += `set ra 0\n`;
       return code;
+    }
+
+    if(expr.isKind(SyntaxKind.ArrayLiteralExpression)) {
+      const args = expr.getElements();
+
+      context.arrayExpr = true;
+
+      if(args.length == 0) {
+        code += `state pushr1\nset r0 ${pageSize}\nstate alloc\nstate popr1\nset ra rb\n`;
+        return code;
+      }
+
+      args.forEach((a) => {
+        code += this.visitExpression(a as Expression, context);
+      });
+
+      return code + `state pushr1\nset r0 ra\nstate alloc\nstate popr1\nset ra rb\n`;
     }
 
     addDiagnostic(expr, context, "error", `Unhandled leaf/literal: ${expr.getKindName()}`);
@@ -1381,6 +1407,9 @@ set rb ra
           context.stringExpr = true;
       }
 
+      if(nativeFn.return_type == 'array')
+        context.arrayExpr = true;
+
       // For simple native functions (code is a string), concatenate the command with the arguments.
       if (typeof nativeFn.code === "string") {
         code += nativeFn.code; // e.g., "rotatesprite "
@@ -1486,12 +1515,14 @@ set rb ra
         if (prop && prop.isKind(SyntaxKind.PropertyAssignment)) {
           const pa = prop as PropertyAssignment;
           if (propType.endsWith("[]")) {
+            totalSlots++;
             // For an array property (e.g., low: wow[])
             const baseType = propType.slice(0, -2).trim();
             const initText = pa.getInitializerOrThrow().getText();
             const count = this.getArraySize(initText);
             const instanceSize = this.getObjectSize(baseType, context);
             const instanceType = context.typeAliases.get(baseType);
+            code += `add rsp 1\nsetarray flat[rsp] ${count}\n`;
             if (instanceType) {
               const result = this.getObjectTypeLayout(baseType, context);
               for (let j = 0; j < count; j++) {
@@ -1503,7 +1534,7 @@ set rb ra
 
               layout[propName] = {
                 name: propName,
-                type: "array",
+                type: 'object_array',
                 offset: totalSlots - (count * instanceSize),
                 size: count * instanceSize,
                 num_elements: count,
@@ -1560,17 +1591,19 @@ set rb ra
           const init = p.getInitializerOrThrow();
           const propName = p.getName().replace(/[`'"]/g, "");
           if (init.isKind(SyntaxKind.ArrayLiteralExpression)) {
+            totalSlots++;
             const initText = init.getText();
             const count = this.getArraySize(initText);
             //const instanceSize = this.getObjectSize(baseType, context);
             // For each element, allocate instanceSize slots.
+            code += `add rsp 1\nsetarray flat[rsp] ${count}\n`;
             for (let j = 0; j < count; j++) {
               code += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
               totalSlots++;
             }
             layout[propName] = {
               name: propName,
-              type: "array",
+              type: 'object_array',
               offset: totalSlots - (count),
               size: count,
               num_elements: count,
@@ -1695,9 +1728,9 @@ set rb ra
         return "set ra 0\n";
       }
 
-      if(sym.type == 'string') {
-        if(segments[1].kind == 'property' && segments[1].name == 'length')
-          return code + `set ri rbp\nadd ri ${sym.offset}\nset ri flat[ri]\nset ra flat[ri]\n`;
+      if(sym.type == 'string' || sym.type.includes('array')) {
+        if((segments[1].kind == 'property' && segments[1].name == 'length'))
+          return code + `set ri rbp\nadd ri ${sym.offset}\nset ri flat[ri]\n${assignment ? 'setarray flat[ri] ra\n' : 'set ra flat[ri]'}\n`;
       }
 
       if (!sym.native_pointer) {
@@ -1707,8 +1740,8 @@ set rb ra
         for (let i = 1; i < segments.length; i++) {
           const seg = segments[i];
           if (seg.kind == 'index') {
-            if (sym.type != 'array') {
-              addDiagnostic(expr, context, "error", `Indexing a non array variable: ${expr.getText()}`);
+            if (sym.type != 'array' && sym.type != 'object_array' && sym.type != 'string_array') {
+              addDiagnostic(expr, context, "error", `Indexing a non array variable: ${expr.getText()} - ${sym.type}`);
               return "set ra 0\n";
             }
 
@@ -1720,13 +1753,26 @@ set rb ra
               code += `add rsp 1\n` //Account for the push rd we did back there
               context.localVarCount = localVars;
             }
-            code += `mul ra ${sym.size / sym.num_elements}\nadd ri ra\n`
+            if(sym.type == 'object_array')
+              code += `mul ra ${sym.size / sym.num_elements}\nadd ri ra\nadd ri 1\n`
+            else
+              code += `add ri ra\nadd ri 1\n`;
+
+            if(sym.type == 'string_array')
+              context.arrayExpr = context.stringExpr = true;
+
             continue;
           }
 
           if (seg.kind == 'property') {
+            if(seg.name == 'length' && sym.type.includes('array')) {
+              code += `set ri flat[ri]\n`;
+              context.arrayExpr = context.stringExpr = false;
+              break;
+            }
+
             if (!sym.children) {
-              addDiagnostic(expr, context, "error", `Object property ${seg.name} is not a object: ${expr.getText()}`);
+              addDiagnostic(expr, context, "error", `Object property ${seg.name} is not defined: ${expr.getText()}`);
               return "set ra 0\n";
             }
 
