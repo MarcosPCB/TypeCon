@@ -40,7 +40,8 @@ import {
   EnumMember,
   StringLiteral,
   Identifier,
-  ArrayLiteralExpression
+  ArrayLiteralExpression,
+  WhileStatement
 } from "ts-morph";
 
 import {
@@ -96,9 +97,24 @@ interface TranspilerOptions {
   lineDetail?: boolean;
 }
 
+/**
+ * Symbol definition for the symbol table.
+ * Holds every bit of necessary information about the symbols (variables, functions, classes, objects, arrays and etc.)
+ * 
+ * @property {string} name - The name of the symbol
+ * @property {"number" | "string" | "object" | 'class' | "array" | "pointer" | 'function' | 'native' | 'quote' | 'object_array' | 'string_array'} type - The type of the symbol
+ * @property {number} offset - The current offset of the symbol
+ * @property {number} size - (optional) The total size of the symbol
+ * @property {number} num_elements - (optional) The total number of elements that belong to this symbol
+ * @property {boolean} heap - (optional) If it belongs to the heap or not
+ * @property {'sprites' | 'sectors' | 'walls' | 'players' | 'projectiles'} native_pointer - (optional) If it's native pointer (holding a native reference) this should hold which structure it is referencing
+ * @property {boolean} native_pointer_index - (optional) True if its a indexed native pointer (sprites[2])
+ * @property {[key: string]: SymbolDefinition} children - (optional) Hold data about its children symbols
+ * @property {string} CON_code - (optional) Holds the CON code of the symbol
+ */
 interface SymbolDefinition {
   name: string;
-  type: "number" | "string" | "object" | "array" | "pointer" | 'function' | 'native' | 'quote' | 'object_array' | 'string_array';
+  type: "number" | "string" | "object" | 'class' | "array" | "pointer" | 'function' | 'native' | 'quote' | 'object_array' | 'string_array';
   offset: number;        // Delta from the object's base pointer.
   size?: number;         // How many slots this symbol occupies.
   num_elements?: number;
@@ -115,6 +131,7 @@ interface TypeAliasDefinition {
   name: string;
   members: Record<string, string>; // property name -> type (as a string)
   literal?: string;
+  membersCode?: Record<string, string>; 
 }
 
 interface EnumDefinition {
@@ -131,7 +148,7 @@ export interface TranspilerContext {
   localVarCount: number;
   localVarNativePointer: 'sprites' | 'sectors' | 'walls' | 'players' | 'projectiles' | undefined, //Only true if you're passing a native pointer to a local variable
   localVarNativePointerIndexed: boolean,
-  paramMap: Record<string, number>;
+  paramMap: Record<string, SymbolDefinition>;
 
   diagnostics: TranspileDiagnostic[];
 
@@ -154,6 +171,9 @@ export interface TranspilerContext {
 
   enums: Map<string, EnumDefinition>;
 
+  // Current custom class
+  curClass: SymbolDefinition;
+
   // New symbol table for object layouts (global or per–scope)
   symbolTable: Map<string, SymbolDefinition>;
 
@@ -162,6 +182,8 @@ export interface TranspilerContext {
   stringExpr: boolean;
   quoteExpr: boolean;
   arrayExpr: boolean;
+  isInLoop: boolean;
+  mainBFunc: boolean;
 }
 
 interface TranspileResult {
@@ -252,6 +274,8 @@ export class TsToConTranspiler {
       diagnostics: [],
       options: this.options,
 
+      curClass: null,
+
       currentActorPicnum: undefined,
       currentActorExtra: undefined,
       currentActorIsEnemy: undefined,
@@ -267,6 +291,8 @@ export class TsToConTranspiler {
       stringExpr: false,
       quoteExpr: false,
       arrayExpr: false,
+      isInLoop: false,
+      mainBFunc: false,
     };
 
     const outputLines: string[] = [];
@@ -376,7 +402,7 @@ export class TsToConTranspiler {
 
     if (!typeNode || !typeNode.isKind(SyntaxKind.TypeLiteral)) {
       if (typeNode) {
-        if (['OnEvent', 'constant', 'TLabel', 'CON_NATIVE', 'CON_NATIVE_POINTER'].includes(aliasName))
+        if (['OnEvent', 'constant', 'TLabel', 'CON_NATIVE', 'CON_NATIVE_POINTER', 'quote'].includes(aliasName))
           return;
 
         if (typeNode.getKind() == SyntaxKind.NumberKeyword
@@ -412,13 +438,19 @@ export class TsToConTranspiler {
     const aliasName = id.getName();
 
     const members: Record<string, string> = {};
+    const membersCode: Record<string, string> = {};
     id.getMembers().forEach((member, i) => {
       if (member.getKind() === SyntaxKind.PropertySignature) {
         const prop = member as PropertySignature;
-        members[prop.getName()] = prop.getType().getText();
+        if(prop.getType().getAliasSymbol() && prop.getType().getAliasSymbol().getName() == 'CON_NATIVE_GAMEVAR') {
+          const type = prop.getType().getAliasTypeArguments()[1].getText().replace(/[`'"]/g, "");
+          const code = prop.getType().getAliasTypeArguments()[0].getText().replace(/[`'"]/g, "");
+          members[prop.getName()] = type;
+          membersCode[prop.getName()] = code;
+        } else members[prop.getName()] = prop.getType().getText();
       }
     });
-    context.typeAliases.set(aliasName, { name: aliasName, members });
+    context.typeAliases.set(aliasName, { name: aliasName, members, membersCode });
   }
 
   private storeEnum(ed: EnumDeclaration, context: TranspilerContext): void {
@@ -472,6 +504,7 @@ export class TsToConTranspiler {
       const keys = Object.keys(typeDef.members);
       for (let i = 0; i < keys.length; i++) {
         const t = typeDef.members[keys[i]];
+        const code = typeDef.membersCode ? typeDef.membersCode[keys[i]] : undefined;
         const k = keys[i];
         // If the member is an array type (e.g., "wow[]")
         if (t.endsWith("[]")) {
@@ -497,7 +530,8 @@ export class TsToConTranspiler {
             //@ts-ignore
             type: t,
             offset: i,
-            size: 1
+            size: 1,
+            CON_code: code
           };
         }
       }
@@ -520,9 +554,6 @@ export class TsToConTranspiler {
     let code = ''//`/* ${stmt.getText()} */\n`;
     switch (stmt.getKind()) {
       case SyntaxKind.VariableStatement:
-        if (context.currentFile.options & ECompileOptions.no_compile)
-          return code;
-
         return code + this.visitVariableStatement(stmt as VariableStatement, context);
 
       case SyntaxKind.ExpressionStatement:
@@ -561,8 +592,14 @@ export class TsToConTranspiler {
         this.storeEnum(stmt as EnumDeclaration, context);
         break;
 
-      case SyntaxKind.BreakStatement:
-        return code + `break\n`;
+      case SyntaxKind.BreakStatement: {
+        if(context.isInLoop)
+          code += `exit\n`;
+        else
+          code += `break\n`;
+
+        return code;
+      }
 
       case SyntaxKind.ModuleDeclaration:
         const b = context.currentFile.options;
@@ -582,6 +619,9 @@ export class TsToConTranspiler {
       case SyntaxKind.FunctionDeclaration:
         return code + this.visitFunctionDeclaration(stmt as FunctionDeclaration, context);
 
+      case SyntaxKind.WhileStatement:
+        return code + this.visitWhileStatement(stmt as WhileStatement, context);
+
       default:
         addDiagnostic(stmt, context, "warning", `Unhandled statement kind: ${stmt.getKindName()}`);
         return code;
@@ -589,10 +629,45 @@ export class TsToConTranspiler {
   }
 
   /******************************************************************************
+   * while statements
+   *****************************************************************************/
+  private visitWhileStatement(ws: WhileStatement, context: TranspilerContext): string {
+    let code = this.options.lineDetail ? `/*${ws.getText()}*/\n` : '';
+
+    context.isInLoop = true;
+
+    const pattern = this.parseIfCondition(ws.getExpression(), context);
+    const right = typeof pattern.right === 'number' ? `set rd ${pattern.right}\n`
+      : (this.visitExpression(pattern.right, context) + `set rd ra\n`);
+
+    const left = typeof pattern.left === 'number' ? `set rb ${pattern.left}\n`
+      : (this.visitExpression(pattern.left, context) + `set rb ra\n`);
+
+    const ifCode = `set ra 0\n${pattern.op} rb rd\n  set ra 1\n`;
+    code += ifCode + 'set rc 0\nwhilen ra 1 {\n' + indent('state pushc\n', 1);
+    const block = ws.getStatement();
+    if(block.isKind(SyntaxKind.Block)) {
+      const stmts = block.getStatements();
+      stmts.forEach(stmt => {
+        code += this.visitStatement(stmt, context);
+      });
+    }
+    code += indent(ifCode + 'state popc\nadd rc 1\n', 1);
+    code += '}\n';
+
+    context.isInLoop = false;
+
+    return code;
+  }
+
+  /******************************************************************************
    * variable statements => local var
    *****************************************************************************/
   private visitVariableStatement(node: VariableStatement, context: TranspilerContext): string {
-    let code = this.options.lineDetail ? `/*${node.getText()}*/\n` : '';
+    let code = '';
+    if (!(context.currentFile.options & ECompileOptions.no_compile))
+      code = this.options.lineDetail ? `/*${node.getText()}*/\n` : '';
+
     const decls = node.getDeclarationList().getDeclarations();
     for (const d of decls) {
       code += this.visitVariableDeclaration(d, context);
@@ -613,6 +688,22 @@ export class TsToConTranspiler {
       return code;
     } 
 
+    if(type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_NATIVE_OBJECT') {
+      const alias = this.getObjectTypeLayout(type.getAliasTypeArguments()[0].getText().replace(/[`'"]/g, ""), context);
+      if(!alias) {
+        addDiagnostic(decl, context, 'error', `Undeclared type object ${type.getAliasTypeArguments()[0].getText()}`);
+        return '';
+      }
+
+      context.symbolTable.set(varName, {
+        name: varName, type: "native", offset: 0, size: 1, children: alias
+      });
+      return code;
+    } 
+
+    if (context.currentFile.options & ECompileOptions.no_compile)
+      return code;
+
     const init = decl.getInitializer();
     if (init && init.isKind(SyntaxKind.ObjectLiteralExpression)) {
       code += this.visitObjectLiteral(init as ObjectLiteralExpression, context);
@@ -625,7 +716,8 @@ export class TsToConTranspiler {
     } else {
       // Process non-object initializers as before.
       //const localVars = context.localVarCount;
-      code += this.visitExpression(init as Expression, context);
+      if(init)
+        code += this.visitExpression(init as Expression, context);
       //if(!context.stringExpr || (context.stringExpr && context.arrayExpr))
       code += `add rsp 1\nsetarray flat[rsp] ra\n`;
       context.symbolTable.set(varName, {
@@ -662,6 +754,10 @@ export class TsToConTranspiler {
     } else {
       code += `set rb 0\n`;
     }
+    if(context.mainBFunc)
+      code += `break\n`
+    else code += `return\n`;
+
     code += `// end function\n`;
     return code;
   }
@@ -853,7 +949,14 @@ export class TsToConTranspiler {
       // check param
       if (name in context.paramMap) {
         const i = context.paramMap[name];
-        code += `set ra r${i}\n`;
+        code += `set ra r${i.offset}\n`;
+
+        if(i.type == 'string')
+          context.stringExpr = true;
+
+        if(i.type == 'string_array')
+          context.stringExpr = context.arrayExpr = true;
+
         return code;
       }
 
@@ -895,7 +998,7 @@ export class TsToConTranspiler {
       code += `set ra ${expr.getText()}\n`;
       return code;
     }
-    if (expr.isKind(SyntaxKind.StringLiteral)) {
+    if (expr.isKind(SyntaxKind.StringLiteral) || expr.isKind(SyntaxKind.NoSubstitutionTemplateLiteral)) {
       let text = expr.getText().replace(/[`'"]/g, "");
       code += `state pushr1\nset r0 ${text.length + 1}\nstate alloc\nstate popr1\nsetarray flat[rb] ${text.length}\nset ri rb\n`;
       //code += `add rsp 1\nset rd rsp\nadd rsp 1\nsetarray flat[rsp] ${text.length}\n`;
@@ -931,8 +1034,20 @@ export class TsToConTranspiler {
 
       return code + `state pushr1\nset r0 ra\nstate alloc\nstate popr1\nset ra rb\n`;
     }
+    
+    if(expr.isKind(SyntaxKind.AsExpression)) {
+      code += this.visitExpression(expr.getExpression(), context);
 
-    addDiagnostic(expr, context, "error", `Unhandled leaf/literal: ${expr.getKindName()}`);
+      if(expr.asKind(SyntaxKind.StringLiteral) || expr.asKind(SyntaxKind.NoSubstitutionTemplateLiteral))
+        context.stringExpr = true;
+
+      return code;
+    }
+
+    if(expr.isKind(SyntaxKind.NullKeyword))
+      return code + 'set ra 0\n';
+
+    addDiagnostic(expr, context, "error", `Unhandled leaf/literal: ${expr.getKindName()} - ${expr.getText()}`);
     code += `set ra 0\n`;
     return code;
   }
@@ -951,9 +1066,47 @@ export class TsToConTranspiler {
       return code;
     }*/
 
-    if (opText === "=") {
+    if (opText.includes("=")) {
       // assignment
       code += this.visitExpression(right, context);
+
+      if(opText != '=') {
+        code += `set rd ra\n`
+        code += this.visitExpression(left, context);
+        switch(opText) {
+          case '+=':
+            code += `add rd ra\nset ra rd\n`;
+            break;
+          case "-=":
+            code += `sub rd ra\nset ra rd\n`;
+            break;
+          case "*=":
+            code += `mul rd ra\nset ra rd\n`;
+            break;
+          case "/=":
+            code += `div rd ra\nset ra rd\n`;
+            break;
+          case "%=":
+            code += `mod rd ra\nset ra rd\n`;
+            break;
+          case "&=":
+            code += `and rd ra\nset ra rd\n`;
+            break;
+          case "|=":
+            code += `or rd ra\nset ra rd\n`;
+            break;
+          case "^=":
+            code += `xor rd ra\nset ra rd\n`;
+            break;
+          case ">>=":
+            code += `shiftr rd ra\nset ra rd\n`;
+            break;
+          case "<<=":
+            code += `shiftl rd ra\nset ra rd\n`;
+            break;
+        }
+      }
+
       code += this.storeLeftSideOfAssignment(left, context);
       return code;
     }
@@ -1053,7 +1206,7 @@ export class TsToConTranspiler {
       const name = left.getText();
       if (name in context.paramMap) {
         addDiagnostic(left, context, "warning", `Assigning to param: ${name} => set rX ra`);
-        code += `set r${context.paramMap[name]} ra\n`;
+        code += `set r${context.paramMap[name].offset} ra\n`;
         return code;
       }
       if (name in context.localVarOffset) {
@@ -1162,17 +1315,19 @@ export class TsToConTranspiler {
           //Assume it's greater than 2
           //In this case, we know this is not a native function
           //Search in the context for any objects/classes that contain the function
+          let o: SymbolDefinition;
 
-          obj = segments[1] as SegmentProperty;
+          if(!context.curClass) {
+            obj = segments[1] as SegmentProperty;
+            o = context.symbolTable.get(obj.name);
 
-          let o = context.symbolTable.get(obj.name);
+            if (!o || !o.children) {
+              addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
+              return '';
+            }
+          } else o = context.curClass;          
 
-          if (!o || !o.children) {
-            addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
-            return '';
-          }
-
-          for (let i = 2; i < segments.length; i++) {
+          for (let i = context.curClass ? 1 : 2; i < segments.length; i++) {
             if (segments[i].kind == 'index') {
               if (o.type != 'array') {
                 addDiagnostic(call, context, 'error', `Invalid index at non-array ${o.name}: ${fnNameRaw}`);
@@ -1207,19 +1362,25 @@ export class TsToConTranspiler {
             //If got it here, than we found the function
             //If not native, assume it's a user function state.
             //TO-DO: SETUP THE STACK WITH THE HEAP ELEMENTS OF THE INSTANTIATED CLASS
+            const isClass = (segments[0] as SegmentIdentifier).name == 'this' && context.curClass;
+            const totalArgs = args.length + (isClass ? 1 : 0);
+
             if (args.length > 0) {
-              code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
-              context.localVarCount += args.length;
+              code += `state pushr${totalArgs > 12 ? 'all' : totalArgs}\n`;
+              context.localVarCount += totalArgs;
             }
-            for (let i = 0; i < args.length; i++) {
+            for (let i = 0; i < totalArgs; i++) {
               code += this.visitExpression(args[i] as Expression, context);
               code += `set r${i} ra\n`;
               resolvedLiterals.push(null);
             }
 
-            code += `state ${o.name}\nset ra rb\n`;
-            if (args.length > 0) {
-              code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
+            if(isClass)
+              code += `set r${totalArgs - 1} flat[rbp]\n`;
+
+            code += `state ${isClass ? `${context.curClass.name}_`: ''}${o.name}\nset ra rb\n`;
+            if (totalArgs > 0) {
+              code += `state popr${args.length > 12 ? 'all' : totalArgs}\n`;
               context.localVarCount -= args.length;
             }
             return code;
@@ -1242,6 +1403,8 @@ export class TsToConTranspiler {
             addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
             return '';
           }
+
+          const isClass = o.type == 'class';
 
           for (let i = 1; i < segments.length; i++) {
             if (segments[i].kind == 'index') {
@@ -1278,19 +1441,25 @@ export class TsToConTranspiler {
             //If got it here, than we found the function
             //If not native, assume it's a user function state.
             //TO-DO: SETUP THE STACK WITH THE HEAP ELEMENTS OF THE INSTANTIATED CLASS
+            const totalArgs = args.length + (isClass ? 1 : 0);
+            const objSym = context.symbolTable.get((segments[0] as SegmentIdentifier).name);
+
             if (args.length > 0) {
-              code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
-              context.localVarCount += args.length;
+              code += `state pushr${totalArgs > 12 ? 'all' : totalArgs}\n`;
+              context.localVarCount += totalArgs;
             }
-            for (let i = 0; i < args.length; i++) {
+            for (let i = 0; i < totalArgs; i++) {
               code += this.visitExpression(args[i] as Expression, context);
               code += `set r${i} ra\n`;
               resolvedLiterals.push(null);
             }
 
-            code += `state ${o.name}\nset ra rb\n`;
-            if (args.length > 0) {
-              code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
+            if(isClass)
+              code += `set ri rbp\nadd ri ${objSym.offset}\nset r${totalArgs - 1} flat[ri]\n`;
+
+            code += `state ${isClass ? `${objSym.name}_`: ''}${o.name}\nset ra rb\n`;
+            if (totalArgs > 0) {
+              code += `state popr${args.length > 12 ? 'all' : totalArgs}\n`;
               context.localVarCount -= args.length;
             }
             return code;
@@ -1724,13 +1893,47 @@ set rb ra
     if (obj.kind == 'identifier' && ['sprites', 'sectors', 'walls', 'players', 'Names', 'EMoveFlags'].indexOf(obj.name) == -1) {
       sym = context.symbolTable.get(obj.name);
       if (!sym) {
-        addDiagnostic(expr, context, "error", `Undefined object: ${expr.getText()}`);
-        return "set ra 0\n";
+        sym = context.paramMap[obj.name];
+
+        if(!sym) {
+          addDiagnostic(expr, context, "error", `Undefined object: ${expr.getText()}`);
+          return "set ra 0\n";
+        }
       }
 
       if(sym.type == 'string' || sym.type.includes('array')) {
         if((segments[1].kind == 'property' && segments[1].name == 'length'))
           return code + `set ri rbp\nadd ri ${sym.offset}\nset ri flat[ri]\n${assignment ? 'setarray flat[ri] ra\n' : 'set ra flat[ri]'}\n`;
+      }
+
+      if(sym.type == 'native') {
+        //If got here, it must be a symbol only
+        for (let i = 1; i < segments.length; i++) {
+          const seg = segments[i];
+
+          if (seg.kind == 'index') {
+            addDiagnostic(expr, context, "error", `Native object array symbols not yet supported`);
+            return "";
+          }
+
+          if (seg.kind == 'property') {
+            if (!sym.children) {
+              addDiagnostic(expr, context, "error", `Object property ${seg.name} is not defined: ${expr.getText()}`);
+              return "set ra 0\n";
+            }
+
+            if (!sym.children[seg.name]) {
+              addDiagnostic(expr, context, "error", `Property ${seg.name} not found in: ${expr.getText()}`);
+              return "set ra 0\n";
+            }
+
+            sym = sym.children[seg.name];
+            continue;
+          }
+        }
+
+        code += assignment ? `set ${sym.CON_code} ra\n` : `set ra ${sym.CON_code}\n`;
+        return code;
       }
 
       if (!sym.native_pointer) {
@@ -1836,7 +2039,10 @@ set rb ra
               code += `set ri ra\n`;
             }
           } else {
-            code += `set ri THISACTOR\n`;
+            if(context.curClass)
+              code += `set ri flat[rbp]\n`;
+            else code += `set ri THISACTOR\n`;
+
             if (context.currentActorPicnum)
               obj.name = 'sprites';
           }
@@ -1860,6 +2066,67 @@ set rb ra
           }
 
           if (seg.kind == 'property') {
+            if(obj.name == 'this' && context.curClass) {
+              if(context.curClass.num_elements == 0) {
+                addDiagnostic(expr, context, 'error', `Class ${context.curClass.name} has no properties`);
+                return '';
+              }
+
+              if(!Object.keys(context.curClass.children).find(e => e == seg.name)) {
+                addDiagnostic(expr, context, 'error', `Undefined property ${seg.name} in class ${context.curClass.name}`);
+                return '';
+              }
+
+              let pSym = context.curClass.children[seg.name];
+
+              code += `add ri ${pSym.offset}\n`;
+
+              for(let i = 2; i < segments.length; i++) {
+                const s = segments[i];
+
+                if(s.kind == 'index') {
+                  if(!pSym.type.includes('array')) {
+                    addDiagnostic(expr, context, 'error', `Indexing a non-array property ${pSym.name}`);
+                    return '';
+                  }
+
+                  const localVars = context.localVarCount;
+                  //code += `state pushd\n`
+                  code += this.visitExpression(s.expr, context);
+                  if (localVars != context.localVarCount) {
+                    code += `sub rsp ${localVars - context.localVarCount}\n`;
+                    code += `add rsp 1\n` //Account for the push rd we did back there
+                    context.localVarCount = localVars;
+                  }
+                  if(pSym.type == 'object_array')
+                    code += `mul ra ${pSym.size / pSym.num_elements}\nadd ri ra\nadd ri 1\n`
+                  else
+                    code += `add ri ra\nadd ri 1\n`;
+
+                  if(pSym.type == 'string_array')
+                    context.arrayExpr = context.stringExpr = true;
+
+                  continue;
+                }
+
+                if(s.name == 'length' && (pSym.type == 'string' || pSym.type.includes('array')))
+                  return code + (assignment ? `setarray flat[ri] ra\n` : `set ra flat[ri]\n`);
+
+                if(!Object.keys(pSym.children).find(e => e == s.name)) {
+                  addDiagnostic(expr, context, 'error', `Undefined property ${s.name} in class ${context.curClass.name}`);
+                  return '';
+                }
+
+                code += `set ri flat[ri]\n`;
+
+                pSym = pSym.children[s.name];
+
+                code += `add ri ${pSym.offset}\n`;
+              }
+
+              return code + (assignment ? `setarray flat[ri] ra\n` : `set ra flat[ri]\n`);
+            }
+
             let nativeVar: CON_NATIVE_VAR[];
 
             switch (obj.name) {
@@ -2024,11 +2291,58 @@ set rb ra
       ...context,
       localVarOffset: {},
       localVarCount: 0,
-      paramMap: {}
+      paramMap: {},
+      isInLoop: false,
+      mainBFunc: false
     };
     let code = `${this.options.lineDetail ? `/*${fd.getText()}*/` : ''}\ndefstate ${name}\n  set ra rbp \n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
     fd.getParameters().forEach((p, i) => {
-      localCtx.paramMap[p.getName()] = i;
+      const type = p.getType();
+      let t = '';
+      let children: Record<string, SymbolDefinition>;
+      let con = '';
+      switch(type.getText()) {
+        case 'string':
+        case 'number':
+          t = type.getText();
+          break;
+
+        case 'constant':
+          t = 'number';
+          break;
+
+        case 'quote':
+          t = 'quote';
+          break;
+
+        case 'string[]':
+          t = 'string_array';
+          break;
+
+        case 'number[]':
+        case '[]':
+        case 'any[]':
+          t = 'array';
+          break;
+
+        default:
+          let tText = type.getText();
+
+          if(type.getText().endsWith('[]')) {
+            t = 'object_array';
+            tText = tText.slice(0, tText.length - 2);
+          } else t = 'object';
+
+          const alias = context.typeAliases.get(tText);
+
+          if(!alias) {
+            addDiagnostic(fd, context, 'error', `Undeclared type alias ${tText}`);
+            return '';
+          }
+
+          children = this.getObjectTypeLayout(tText, context);
+      }
+      localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type:  t as any, children };
     });
 
     context.symbolTable.set(name, {
@@ -2088,12 +2402,35 @@ set rb ra
       currentActorFirstAction: undefined,
       currentActorActions: [],
       currentActorMoves: [],
-      currentActorAis: []
+      currentActorAis: [],
+      mainBFunc: false,
     };
+
+    let cls: SymbolDefinition;
+
+    if(type == '') {
+      cls = context.symbolTable.get(className);
+      if(cls) {
+        addDiagnostic(cd, context, 'error', `Duplicate definition. Tried to declare as class named ${className} when there's already a ${cls.type} with the same name`);
+        return '';
+      }
+
+      context.symbolTable.set(className, {
+        name: className,
+        type: 'class',
+        offset: 0,
+        num_elements: 0,
+        size: 0,
+        heap: true,
+        children: {}
+      });
+
+      cls = context.symbolTable.get(className);
+    }
 
     // visit constructor(s)
     const ctors = cd.getConstructors();
-    if (ctors.length > 0) {
+    if (ctors.length > 0 && type != '') {
       code += this.visitConstructorDeclaration(ctors[0], localCtx, type);
     }
 
@@ -2153,13 +2490,72 @@ set rb ra
             code += `  }\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nendevent \n\n`;
           }
         }
+      } else if(type == '') {
+        const pName = p.getName();
+        const pType = p.getTypeNode().getText();
+
+        cls.children[pName] = { name: pName, offset: cls.num_elements, type: 'number' };
+
+        switch(pType) {
+          case 'string':
+          case 'number':
+          case 'pointer':
+            cls.children[pName].type = pType;
+            break;
+          
+          case 'string[]':
+            cls.children[pName].type = 'string_array';
+            break;
+
+          case 'number[]':
+          case '[]':
+            cls.children[pName].type = 'array';
+            break;
+
+          default:
+            let t = pType;
+            let isArray = false;
+            if(t.endsWith('[]')) {
+              t = pType.slice(0, t.length - 2);
+              isArray = true;
+            }
+
+            const type = context.typeAliases.get(t);
+
+            if(!type) {
+              addDiagnostic(p, context, 'error', `Undeclared type ${pType}`);
+              return  '';
+            }
+
+            if(type.literal) {
+              if(type.literal == 'string' && isArray)
+                cls.children[pName].type = 'string_array';
+              else if(isArray)
+                cls.children[pName].type = 'array';
+              else cls.children[pName].type = type.literal as any;
+            } else {
+              cls.children[pName].type = isArray ? 'object_array' : 'object'
+              cls.children[pName].children = this.getObjectTypeLayout(t, context);
+              cls.children[pName].size = this.getObjectSize(t, context);
+              cls.children[pName].num_elements = Object.keys(cls.children[pName].children).length;
+            }
+        }
+        cls.num_elements++;
       }
+    }
+
+    if (ctors.length > 0 && type == '') {
+      context.curClass = cls;
+      code = `${this.options.lineDetail ? `/*${ctors[0].getText()}*/` : ''}\ndefstate ${className}_constructor \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+      code += indent(`state pushr1\nset r0 ${cls.num_elements}\nstate alloc\nstate popr1\nstate pushb\n`, 1);
+      code += this.visitConstructorDeclaration(ctors[0], context, '');
+      code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
     }
 
     // visit methods
     const methods = cd.getInstanceMethods();
     for (const m of methods) {
-      code += this.visitMethodDeclaration(m, className, localCtx, type);
+      code += this.visitMethodDeclaration(m, className, type != '' ? localCtx : context, type);
     }
 
     return code;
@@ -2171,7 +2567,7 @@ set rb ra
   private visitConstructorDeclaration(
     ctor: ConstructorDeclaration,
     context: TranspilerContext,
-    type: string
+    type: string,
   ): string {
     let code = this.options.lineDetail ? `// skipping actual constructor code\n` : '';
     const body = ctor.getBody() as any;
@@ -2229,6 +2625,65 @@ set rb ra
               }
             }
           }
+        }
+      } else {
+        const statements = body.getStatements();
+        const localCtx: TranspilerContext = {
+          ...context,
+          localVarOffset: {},
+          localVarCount: 0,
+          paramMap: {}
+        };
+        ctor.getParameters().forEach((p, i) => {
+          const type = p.getType();
+          let t = '';
+          let children: Record<string, SymbolDefinition>;
+          let con = '';
+          switch(type.getText()) {
+            case 'string':
+            case 'number':
+              t = type.getText();
+              break;
+
+            case 'constant':
+              t = 'number';
+              break;
+
+            case 'quote':
+              t = 'quote';
+              break;
+
+            case 'string[]':
+              t = 'string_array';
+              break;
+
+            case 'number[]':
+            case '[]':
+            case 'any[]':
+              t = 'array';
+              break;
+
+            default:
+              let tText = type.getText();
+
+              if(type.getText().endsWith('[]')) {
+                t = 'object_array';
+                tText = tText.slice(0, tText.length - 2);
+              } else t = 'object';
+
+              const alias = context.typeAliases.get(tText);
+
+              if(!alias) {
+                addDiagnostic(ctor, context, 'error', `Undeclared type alias ${tText}`);
+                return '';
+              }
+
+              children = this.getObjectTypeLayout(tText, context);
+          }
+          localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type:  t as any, children };
+        });
+        for (const st of statements) {
+          code += indent(this.visitStatement(st, localCtx), 1);
         }
       }
     }
@@ -2373,7 +2828,9 @@ set rb ra
       ...context,
       localVarOffset: {},
       localVarCount: 0,
-      paramMap: {}
+      paramMap: {},
+      isInLoop: false,
+      mainBFunc: false,
     };
 
     if (type == 'CActor' && mName.toLowerCase() === "main") {
@@ -2381,9 +2838,55 @@ set rb ra
       const extra = localCtx.currentActorExtra || 0;
       const firstAction = localCtx.currentActorFirstAction || "0";
       const enemy = localCtx.currentActorIsEnemy ? 1 : 0;
+      localCtx.mainBFunc = true;
       let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
       md.getParameters().forEach((p, i) => {
-        localCtx.paramMap[p.getName()] = i;
+        const type = p.getType();
+        let t = '';
+        let children: Record<string, SymbolDefinition>;
+        let con = '';
+        switch(type.getText()) {
+          case 'string':
+          case 'number':
+            t = type.getText();
+            break;
+
+          case 'constant':
+            t = 'number';
+            break;
+
+          case 'string[]':
+            t = 'string_array';
+            break;
+
+          case 'quote':
+            t = 'quote';
+            break;
+
+          case 'number[]':
+          case '[]':
+          case 'any[]':
+            t = 'array';
+            break;
+
+          default:
+            let tText = type.getText();
+
+            if(type.getText().endsWith('[]')) {
+              t = 'object_array';
+              tText = tText.slice(0, tText.length - 2);
+            } else t = 'object';
+
+            const alias = context.typeAliases.get(tText);
+
+            if(!alias) {
+              addDiagnostic(md, context, 'error', `Undeclared type alias ${tText}`);
+              return '';
+            }
+
+            children = this.getObjectTypeLayout(tText, context);
+        }
+        localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type:  t as any, children };
       });
       const body = md.getBody() as any;
       if (body) {
@@ -2409,7 +2912,52 @@ set rb ra
     let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
 
     md.getParameters().forEach((p, i) => {
-      localCtx.paramMap[p.getName()] = i;
+      const type = p.getType();
+      let t = '';
+      let children: Record<string, SymbolDefinition>;
+      let con = '';
+      switch(type.getText()) {
+        case 'string':
+        case 'number':
+          t = type.getText();
+          break;
+
+        case 'constant':
+          t = 'number';
+          break;
+
+        case 'string[]':
+          t = 'string_array';
+          break;
+
+        case 'quote':
+          t = 'quote';
+          break;
+
+        case 'number[]':
+        case '[]':
+        case 'any[]':
+          t = 'array';
+          break;
+
+        default:
+          let tText = type.getText();
+
+          if(type.getText().endsWith('[]')) {
+            t = 'object_array';
+            tText = tText.slice(0, tText.length - 2);
+          } else t = 'object';
+
+          const alias = context.typeAliases.get(tText);
+
+          if(!alias) {
+            addDiagnostic(md, context, 'error', `Undeclared type alias ${tText}`);
+            return '';
+          }
+
+          children = this.getObjectTypeLayout(tText, context);
+      }
+      localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type:  t as any, children };
     });
 
     context.symbolTable.set(mName, {

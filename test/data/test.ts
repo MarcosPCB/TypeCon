@@ -1,5 +1,6 @@
 import '../../src/sets/TCSet100/types';
 import '../../src/sets/TCSet100/DN3D_game';
+import { CFile } from '../../src/sets/TCSet100/CFile';
 
 type wow = {
     name: number,
@@ -158,6 +159,7 @@ class newEnemy extends CActor {
             if(this.IsDead()) {
                 DisplayQuote(Quote(text + ' or testu'));
                 TroopBodyJibs();
+                const f = new CFile('test.txt');
                 this.KillIt();
             }
         }

@@ -1,4 +1,4 @@
-import { CON_NATIVE, CON_NATIVE_GAMEVAR, CON_NATIVE_POINTER } from "./native"
+import { CON_NATIVE, CON_NATIVE_GAMEVAR, CON_NATIVE_OBJECT, CON_NATIVE_POINTER } from "./native"
 
 //@typecon
 
@@ -98,9 +98,127 @@ declare global {
         hitag: CON_NATIVE<number>;
     }
 
+    /**
+     * Interface representing the TypeCON system framework
+     * 
+     * @property {number} ra - Accumulator register. Used for all kinds of operations. All results are stored in it.
+     * @property {number} rb - Base register. Used for return values and sometimes as a helper in some operations.
+     * @property {number} rc - Counter register. Used for loops.
+     * @property {number} rd - Data registers. Used in if/binary expressions to hold the right side of the operation.
+     * @property {number} rf - Flags register.
+     * @property {number} ri - Index register. Holds the current index of the stack/heap memory during operations.
+     * @property {number} rsi - Source Index register. In operations envolving 2 memory pointers, it usually holds the "source".
+     * @property {number} rbp - Base pointer register. Holds the base of the current stack.
+     * @property {number} rsp - Stack pointer register. Holds the current stack value.
+     * @property {number} rssp - String Stack pointer register. Holds the current string stack value.
+     * @property {number} rsbp - String Base pointer register. Hold the base of the current string stack.
+     * @property {(number): [] | string} GetReference - Function to get the reference from a register.
+     * @property {(any[], boolean): void} BufferToIndex - Returns the reference from the buffer to ri register
+     * @property {(any[], boolean): void} BufferToSourceIndex - Returns the reference from the buffer to rsi register
+     * 
+     * @interface ISys
+     */
+    export interface ISys {
+        /**
+         * Accumulator register. Used for all kinds of operations. All results are stored in it.
+         */
+        ra: CON_NATIVE_GAMEVAR<'ra', number>;
+        /**
+         * Base register. Used for return values and sometimes as a helper in some operations.
+         */
+        rb: CON_NATIVE_GAMEVAR<'rb', number>;
+        /**
+         * Counter register. Used for loops.
+         */
+        rc: CON_NATIVE_GAMEVAR<'rc', number>;
+        /**
+         * Data registers. Used in if/binary expressions to hold the right side of the operation.
+         */
+        rd: CON_NATIVE_GAMEVAR<'rd', number>;
+        /**
+         * Flags register.
+         */
+        rf: CON_NATIVE_GAMEVAR<'rf', number>;
+        /**
+         * Index register. Holds the current index of the stack/heap memory during operations.
+         */
+        ri: CON_NATIVE_GAMEVAR<'ri', number>;
+        /**
+         * Source Index register. In operations envolving 2 memory pointers, it usually holds the "source".
+         */
+        rsi: CON_NATIVE_GAMEVAR<'rsi', number>;
+        /**
+         * Base pointer register. Holds the base of the current stack.
+         */
+        rbp: CON_NATIVE_GAMEVAR<'rbp', number>;
+        /**
+         * Stack pointer register. Holds the current stack value.
+         */
+        rsp: CON_NATIVE_GAMEVAR<'rsp', number>;
+        /**
+         * String Stack pointer register. Holds the current string stack value.
+         */
+        rssp: CON_NATIVE_GAMEVAR<'rssp', number>;
+        /**
+         * String Base pointer register. Hold the base of the current string stack.
+         */
+        rbsp: CON_NATIVE_GAMEVAR<'rbsp', number>;
+        /**
+         * Returns a reference from the register's value
+         * @param register - The register to get the reference
+         */
+        GetReference(register: number): [] | string;
+        /**
+         * Returns the reference from the buffer to ri register
+         * @param buffer - The buffer reference
+         * @param array - If true, it adds 1 to the ri (first slot is the length)
+         */
+        BufferToIndex(buffer: any[], array: boolean): void;
+         /**
+         * Returns the reference from the buffer to rsi register
+         * @param buffer - The buffer reference
+         * @param array - If true, it adds 1 to the ri (first slot is the length)
+         */
+        BufferToSourceIndex(buffer: any[], array: boolean): void;
+    }
+
+    /**
+     * Object representing the TypeCON system framework
+     * 
+     * @property {number} ra - Accumulator register. Used for all kinds of operations. All results are stored in it.
+     * @property {number} rb - Base register. Used for return values and sometimes as a helper in some operations.
+     * @property {number} rc - Counter register. Used for loops.
+     * @property {number} rd - Data registers. Used in if/binary expressions to hold the right side of the operation.
+     * @property {number} rf - Flags register.
+     * @property {number} ri - Index register. Holds the current index of the stack/heap memory during operations.
+     * @property {number} rsi - Source Index register. In operations envolving 2 memory pointers, it usually holds the "source".
+     * @property {number} rbp - Base pointer register. Holds the base of the current stack.
+     * @property {number} rsp - Stack pointer register. Holds the current stack value.
+     * @property {number} rssp - String Stack pointer register. Holds the current string stack value.
+     * @property {number} rsbp - String Base pointer register. Hold the base of the current string stack.
+     * @property {(number): [] | string} GetReference - Function to get the reference from a register.
+     * @property {(any[], boolean): void} BufferToIndex - Returns the reference from the buffer to ri register
+     * @property {(any[], boolean): void} BufferToSourceIndex - Returns the reference from the buffer to rsi register
+     */
+    export const sysFrame: CON_NATIVE_OBJECT<ISys>;
+
+    /**
+     * Copies a portion of a memory to another
+     * @param source_buffer - The source buffer
+     * @param dest_buffer - The destination buffer
+     * @param num_dwords - Number of double words (32-bit) or 4 bytes to copy from source to destination
+     */
+    export function MemCopy(source_buffer: [], dest_buffer: [], num_dwords: number): CON_NATIVE<void>;
+
     export type TLabel = string; //Use this to define constants and pointers
 
     export interface pointer { }
+
+    /**
+     * Breaks the system for debugging and logs a value to the console.
+     * @param value The value to be logged.
+     */
+    export function CONBreak(value: constant): CON_NATIVE<void>;
 
     /**
      * quote type. In TypeCON, we have strings, which are kept inside the flat memory and can be converted
@@ -353,13 +471,13 @@ declare global {
      * Frees a memory allocation
      * @param buffer - a pointer or reference to that memory
      */
-    export function Delete(buffer: any): void;
+    export function Delete(buffer: []): void;
 
     /**
      * Frees a memory allocation
      * @param buffer - a pointer or reference to that memory
      */
-    export function Free(buffer: any): void;
+    export function Free(buffer: []): void;
 
     /**
      * Generates a 'safe' native CON code written by hand
@@ -380,7 +498,7 @@ declare global {
      * @param state - the state that needs to be checked
      * @returns if true or not
      */
-    export function IsPlayerState(state: constant | EPlayerStates): CON_NATIVE<boolean>;
+    export function IsPlayerState(state: constant): CON_NATIVE<boolean>;
 
     /**
      * Display on the screen using the traditional quote system the string referenced
@@ -391,21 +509,21 @@ declare global {
     //Global readonly variables
 
     /** The window width */
-    export const xDim: CON_NATIVE_GAMEVAR<'xdim'>;
+    export const xDim: CON_NATIVE_GAMEVAR<'xdim', number>;
     /** the window height */
-    export const yDim: CON_NATIVE_GAMEVAR<'ydim'>;
+    export const yDim: CON_NATIVE_GAMEVAR<'ydim', number>;
     /** The weapon x offset (used for weapon bobbing) */
-    export const weaponXOff: CON_NATIVE_GAMEVAR<'weapon_xoffset'>;
+    export const weaponXOff: CON_NATIVE_GAMEVAR<'weapon_xoffset', number>;
     /** the Counter for HUD weapon animations */
-    export const weaponCount: CON_NATIVE_GAMEVAR<'weaponcount'>;
+    export const weaponCount: CON_NATIVE_GAMEVAR<'weaponcount', number>;
     /** The totalclock counter for the game (by default, 120 is a second) */
-    export const totalClock: CON_NATIVE_GAMEVAR<'totalclock'>;
+    export const totalClock: CON_NATIVE_GAMEVAR<'totalclock', number>;
     /** The weapon y position. Use this to lower the HUD sprite */
-    export const gunPos: CON_NATIVE_GAMEVAR<'gun_pos'>;
+    export const gunPos: CON_NATIVE_GAMEVAR<'gun_pos', number>;
     /** Used in weapon bobbing */
-    export const lookingArc: CON_NATIVE_GAMEVAR<'looking_arc'>;
+    export const lookingArc: CON_NATIVE_GAMEVAR<'looking_arc', number>;
     /** Contains the current ID of the current actor */
-    export const thisActor: CON_NATIVE_GAMEVAR<'THISACTOR'>;
+    export const thisActor: CON_NATIVE_GAMEVAR<'THISACTOR', number>;
 
     /** @class for actor declaration. Use this as extension to declare your custom actors. */
     export class CActor {

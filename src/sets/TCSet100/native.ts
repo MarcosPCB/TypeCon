@@ -2,7 +2,8 @@ namespace noread {}
 
 //Type for native functions
 export type CON_NATIVE<Type> = Type;
-export type CON_NATIVE_GAMEVAR<Type> = Type;
+export type CON_NATIVE_GAMEVAR<Code, Type> = Type;
+export type CON_NATIVE_OBJECT<Type> = Type;
 
 export class CON_NATIVE_POINTER { }
 
@@ -809,6 +810,44 @@ state pop
             0, -1, 0
         ],
         type_belong: ['string']
+    },
+    {
+        name: 'GetReference',
+        code: (args: boolean) => {
+            return `set rb r0\n`;
+        },
+        returns: true,
+        return_type: 'array',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        object_belong: [ 'sysFrame' ]
+    },
+    {
+        name: 'BufferToIndex',
+        code: (args: boolean) => {
+            return `set ri r0\nife r1 1\n  add ri 1\n`;
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        object_belong: [ 'sysFrame' ]
+    },
+    {
+        name: 'BufferToSourceIndex',
+        code: (args: boolean) => {
+            return `set rsi r0\nife r1 1\n  add rsi 1\n`;
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        object_belong: [ 'sysFrame' ]
     }
 ]
 
