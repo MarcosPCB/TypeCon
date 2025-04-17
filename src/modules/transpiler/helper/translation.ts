@@ -460,6 +460,16 @@ defstate popd
     sub rsp 1
 ends
 
+defstate pushi
+    add rsp 1
+    setarray flat[rsp] ri
+ends
+
+defstate popi
+    set ri flat[rsp]
+    sub rsp 1
+ends
+
 defstate _GetFreePages
     set _HEAPi 0
     set _HEAPj 0

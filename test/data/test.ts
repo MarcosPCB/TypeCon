@@ -1,6 +1,6 @@
 import '../../src/sets/TCSet100/types';
 import '../../src/sets/TCSet100/DN3D_game';
-import { CFile } from '../../src/sets/TCSet100/CFile';
+import { CFile, FileReadType } from '../../src/sets/TCSet100/CFile';
 
 type wow = {
     name: number,
@@ -65,20 +65,11 @@ class newEnemy extends CActor {
 
     Events: OnEvent = {
         EGS() {
-            console.log(1);
+            console.debug(1);
         }
     }
 
     Idle() {
-        const s = sprites;
-        const s1 = sprites[0];
-
-        s[0].ang = 56;
-        //console.log(sprites[0].ang);
-
-        s1.ang = 57;
-        //console.log(sprites[0].ang);
-
         if(this.CanSee()) {
             if(this.CanShootTarget()) {
                 if(this.playerDist < 4096) {
@@ -131,35 +122,16 @@ class newEnemy extends CActor {
 
             this.Guts(Names.JIBS6, 2);
 
-            let text: string = 'This is a test';
-            DisplayQuote(Quote(text.slice(1, -1) + text.length));
-
-            if(text.includes('test'))
-                console.log(2);
-
-            if(text.includes('uva'))
-                console.log(3);
-
-            console.debug(3);
-            console.debug('fuck');
-
-            const testSplit: string[] = text.split(' ');
-            console.debug(testSplit.length);
-            console.debug(testSplit[0]);
-            console.debug(testSplit[0].length);
-            console.debug(testSplit[1]);
-            console.debug(testSplit[1].length);
-            console.debug(testSplit[2]);
-            console.debug(testSplit[2].length);
-            console.debug(testSplit[3]);
-            console.debug(testSplit[3].length);
-
-            const u: quote = Quote('test');
-
             if(this.IsDead()) {
-                DisplayQuote(Quote(text + ' or testu'));
                 TroopBodyJibs();
                 const f = new CFile('test.txt');
+                console.debug(1);
+                f.Read(FileReadType.text, 8);
+                const s = f.ReadString();
+
+                if(s) {
+                    console.debug(s);
+                }
                 this.KillIt();
             }
         }

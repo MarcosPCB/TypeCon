@@ -848,6 +848,28 @@ state pop
             CON_NATIVE_FLAGS.VARIABLE
         ],
         object_belong: [ 'sysFrame' ]
+    },
+    {
+        name: 'CONBreak',
+        code: 'debug',
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.CONSTANT
+        ]
+    },
+    {
+        name: 'MemCopy',
+        code: (args: boolean) => {
+            return `copy flat[r0] flat[r1] r2\n`
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE
+        ]
     }
 ]
 

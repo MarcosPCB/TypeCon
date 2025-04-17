@@ -41,14 +41,15 @@ import {
   StringLiteral,
   Identifier,
   ArrayLiteralExpression,
-  WhileStatement
+  WhileStatement,
+  Type,
+  TypeNode,
+  TypeFlags
 } from "ts-morph";
 
 import {
   CON_NATIVE_FLAGS,
-  nativeFunctions,
   EMoveFlags,
-  CON_NATIVE_FUNCTION,
   CON_NATIVE_TYPE,
   nativeVars_Sprites,
   CON_NATIVE_VAR,
@@ -97,12 +98,26 @@ interface TranspilerOptions {
   lineDetail?: boolean;
 }
 
+enum ESymbolType {
+  number = 1,
+  string = 2,
+  boolean = 4,
+  object = 8,
+  pointer = 16,
+  function = 32,
+  native = 64,
+  quote = 128,
+  class = 256,
+  array = 512,
+  null = 1024,
+}
+
 /**
  * Symbol definition for the symbol table.
  * Holds every bit of necessary information about the symbols (variables, functions, classes, objects, arrays and etc.)
  * 
  * @property {string} name - The name of the symbol
- * @property {"number" | "string" | "object" | 'class' | "array" | "pointer" | 'function' | 'native' | 'quote' | 'object_array' | 'string_array'} type - The type of the symbol
+ * @property {ESymbolType} type - The type of the symbol
  * @property {number} offset - The current offset of the symbol
  * @property {number} size - (optional) The total size of the symbol
  * @property {number} num_elements - (optional) The total number of elements that belong to this symbol
@@ -114,7 +129,7 @@ interface TranspilerOptions {
  */
 interface SymbolDefinition {
   name: string;
-  type: "number" | "string" | "object" | 'class' | "array" | "pointer" | 'function' | 'native' | 'quote' | 'object_array' | 'string_array';
+  type: ESymbolType;
   offset: number;        // Delta from the object's base pointer.
   size?: number;         // How many slots this symbol occupies.
   num_elements?: number;
@@ -125,13 +140,15 @@ interface SymbolDefinition {
   native_pointer_index?: boolean,
   children?: { [key: string]: SymbolDefinition }; // For nested objects.
   CON_code?: string,
+  returns?: ESymbolType | null;
 }
 
 interface TypeAliasDefinition {
   name: string;
   members: Record<string, string>; // property name -> type (as a string)
   literal?: string;
-  membersCode?: Record<string, string>; 
+  union?: TypeAliasDefinition;
+  membersCode?: Record<string, string>;
 }
 
 interface EnumDefinition {
@@ -174,14 +191,20 @@ export interface TranspilerContext {
   // Current custom class
   curClass: SymbolDefinition;
 
+  // Current function/method being declared
+  curFunc: SymbolDefinition;
+
   // New symbol table for object layouts (global or per–scope)
   symbolTable: Map<string, SymbolDefinition>;
 
   currentFile: ICompiledFile;
 
-  stringExpr: boolean;
-  quoteExpr: boolean;
-  arrayExpr: boolean;
+  // Last expression
+  curExpr: ESymbolType;
+
+  // Last symbol returned
+  curSymRet: SymbolDefinition;
+
   isInLoop: boolean;
   mainBFunc: boolean;
 }
@@ -275,6 +298,7 @@ export class TsToConTranspiler {
       options: this.options,
 
       curClass: null,
+      curFunc: null,
 
       currentActorPicnum: undefined,
       currentActorExtra: undefined,
@@ -288,9 +312,8 @@ export class TsToConTranspiler {
       enums: new Map(),
       symbolTable: new Map(),
       currentFile: undefined,
-      stringExpr: false,
-      quoteExpr: false,
-      arrayExpr: false,
+      curExpr: ESymbolType.number,
+      curSymRet: null,
       isInLoop: false,
       mainBFunc: false,
     };
@@ -351,13 +374,13 @@ export class TsToConTranspiler {
         context.currentFile.options = ECompileOptions.no_read;
         console.log(`Ignoring...\n`);
         return null;
-      } else { 
+      } else {
         if (modules.findIndex(e => e.getName() == 'nocompile') != -1) {
           console.log(`Building symbols only...`);
           context.currentFile.options |= ECompileOptions.no_compile;
-        } 
-        
-        if(modules.findIndex(e => e.getName() == 'statedecl') != -1) {
+        }
+
+        if (modules.findIndex(e => e.getName() == 'statedecl') != -1) {
           console.log(`Reading functions as states...`);
           context.currentFile.options |= ECompileOptions.state_decl;
         }
@@ -394,6 +417,109 @@ export class TsToConTranspiler {
       conOutput: outputLines.join("\n"),
       diagnostics: context.diagnostics
     };
+  }
+
+  /**
+ * Resolves a TypeNode (or anything that eventually points to it) to the
+ * primitive “base” that the compiler cares about: `string`, `number`,
+ * `boolean` or `object`.
+ *
+ * – If the node is a type‑alias, we follow the alias recursively.  
+ * – If it is a union we make sure every member resolves to the **same**
+ *   base (only homogeneous unions are allowed).  
+ * – If it is, or resolves to, an object literal we cache its layout with
+ *   `this.storeAliasType`.  
+ * – When the type cannot be reduced to one of the four bases we emit a
+ *   diagnostic and return `null`.
+ */
+  private getTypeBase(tn: TypeNode, ctx: TranspilerContext): string | null {
+    const type = tn.getType();
+  
+    /* ────────────────────────────────────────────────────────────────────
+     * 1.  Unions – every member must collapse to the same base
+     * ──────────────────────────────────────────────────────────────────── */
+    if (type.isUnion()) {
+      const bases = type.getUnionTypes()
+        .map(u => this.baseFromType(u, ctx))
+        .filter((b): b is string => !!b);
+  
+      const first = bases[0];
+      const allSame = bases.every(b => b === first);
+  
+      if (!allSame) {
+        addDiagnostic(tn, ctx, "error",
+          `Union members must share the same base: ${type.getText()}`);
+        return null;
+      }
+      return first;
+    }
+  
+    /* ────────────────────────────────────────────────────────────────────
+     * 2.  Primitives & literal primitives
+     * ──────────────────────────────────────────────────────────────────── */
+    if (type.isString()  || type.isStringLiteral())  return "string";
+    if (type.isNumber()  || type.isNumberLiteral())  return "number";
+    if (type.isBoolean() || type.isBooleanLiteral()) return "boolean";
+  
+    /* ────────────────────────────────────────────────────────────────────
+     * 3.  Inline object literal  { a: string }
+     * ──────────────────────────────────────────────────────────────────── */
+    if (Node.isTypeLiteral(tn)) {
+      this.storeTypeAlias(tn as unknown as TypeAliasDeclaration, ctx);   // unnamed literal
+      return "object";
+    }
+  
+    /* ────────────────────────────────────────────────────────────────────
+     * 4.  Type references  Foo, Bar<Baz>, SomeInterface
+     *     (includes aliases, interfaces, classes, generics…)
+     * ──────────────────────────────────────────────────────────────────── */
+    if (Node.isTypeReference(tn)) {
+      const aliSym = type.getAliasSymbol();           // present only for aliases
+      if (aliSym) {
+        const aliasDecl = aliSym.getDeclarations()
+          .find(Node.isTypeAliasDeclaration) as TypeAliasDeclaration | undefined;
+  
+        if (aliasDecl) {
+          const aliasedNode = aliasDecl.getTypeNode();
+          if (aliasedNode) {
+            // cache literal shapes declared via alias
+            if (Node.isTypeLiteral(aliasedNode)) {
+              this.storeTypeAlias(aliasedNode as unknown as TypeAliasDeclaration, ctx);
+            }
+            return this.getTypeBase(aliasedNode, ctx);   // recurse
+          }
+        }
+      }
+      // Any other reference (interface, class, generic instantiation…)
+      return "object";
+    }
+  
+    /* ────────────────────────────────────────────────────────────────────
+     * 5.  Fallback for plain object types
+     * ──────────────────────────────────────────────────────────────────── */
+    if (type.isObject()) return "object";
+  
+    /* ────────────────────────────────────────────────────────────────────
+     * 6.  Unsupported
+     * ──────────────────────────────────────────────────────────────────── */
+    addDiagnostic(tn, ctx, "error",
+      `Unsupported parameter type: ${type.getText()}`);
+    return null;
+  }
+  
+  /* -------------------------------------------------------------------- */
+  /* Helper for reducing a ts-morph Type when we don’t have its node      */
+  /* -------------------------------------------------------------------- */
+  private baseFromType(t: Type, ctx: TranspilerContext): string | null {
+    const node = t.getSymbol()?.getDeclarations()?.find(Node.isTypeNode);
+    if (node) return this.getTypeBase(node, ctx);
+  
+    // Literal types (`"foo"`, `42`) don’t have declarations; create one on‑the‑fly
+    const sf = this.project.createSourceFile("__temp.ts", `type __T = ${t.getText()};`);
+    const litNode = sf.getTypeAliasOrThrow("__T").getTypeNodeOrThrow();
+    const base = this.getTypeBase(litNode, ctx);
+    sf.delete();
+    return base;
   }
 
   private storeTypeAlias(ta: TypeAliasDeclaration, context: TranspilerContext): void {
@@ -442,7 +568,7 @@ export class TsToConTranspiler {
     id.getMembers().forEach((member, i) => {
       if (member.getKind() === SyntaxKind.PropertySignature) {
         const prop = member as PropertySignature;
-        if(prop.getType().getAliasSymbol() && prop.getType().getAliasSymbol().getName() == 'CON_NATIVE_GAMEVAR') {
+        if (prop.getType().getAliasSymbol() && prop.getType().getAliasSymbol().getName() == 'CON_NATIVE_GAMEVAR') {
           const type = prop.getType().getAliasTypeArguments()[1].getText().replace(/[`'"]/g, "");
           const code = prop.getType().getAliasTypeArguments()[0].getText().replace(/[`'"]/g, "");
           members[prop.getName()] = type;
@@ -593,7 +719,7 @@ export class TsToConTranspiler {
         break;
 
       case SyntaxKind.BreakStatement: {
-        if(context.isInLoop)
+        if (context.isInLoop)
           code += `exit\n`;
         else
           code += `break\n`;
@@ -643,10 +769,10 @@ export class TsToConTranspiler {
     const left = typeof pattern.left === 'number' ? `set rb ${pattern.left}\n`
       : (this.visitExpression(pattern.left, context) + `set rb ra\n`);
 
-    const ifCode = `set ra 0\n${pattern.op} rb rd\n  set ra 1\n`;
-    code += ifCode + 'set rc 0\nwhilen ra 1 {\n' + indent('state pushc\n', 1);
+    const ifCode = `${right}\n${left}\nset ra 1\n${pattern.op} rb rd\n  set ra 0\n`;
+    code += ifCode + 'set rc 0\nwhilen ra 1 {\n' + indent('al rc\nstate pushc\n', 1);
     const block = ws.getStatement();
-    if(block.isKind(SyntaxKind.Block)) {
+    if (block.isKind(SyntaxKind.Block)) {
       const stmts = block.getStatements();
       stmts.forEach(stmt => {
         code += this.visitStatement(stmt, context);
@@ -681,25 +807,25 @@ export class TsToConTranspiler {
 
     const type = decl.getType();
 
-    if(type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_NATIVE_GAMEVAR') {
+    if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_NATIVE_GAMEVAR') {
       context.symbolTable.set(varName, {
-        name: varName, type: "native", offset: 0, size: 1, CON_code: type.getAliasTypeArguments()[0].getText().replace(/[`'"]/g, "")
+        name: varName, type: ESymbolType.native, offset: 0, size: 1, CON_code: type.getAliasTypeArguments()[0].getText().replace(/[`'"]/g, "")
       });
       return code;
-    } 
+    }
 
-    if(type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_NATIVE_OBJECT') {
+    if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_NATIVE_OBJECT') {
       const alias = this.getObjectTypeLayout(type.getAliasTypeArguments()[0].getText().replace(/[`'"]/g, ""), context);
-      if(!alias) {
+      if (!alias) {
         addDiagnostic(decl, context, 'error', `Undeclared type object ${type.getAliasTypeArguments()[0].getText()}`);
         return '';
       }
 
       context.symbolTable.set(varName, {
-        name: varName, type: "native", offset: 0, size: 1, children: alias
+        name: varName, type: ESymbolType.native, offset: 0, size: 1, children: alias
       });
       return code;
-    } 
+    }
 
     if (context.currentFile.options & ECompileOptions.no_compile)
       return code;
@@ -716,17 +842,18 @@ export class TsToConTranspiler {
     } else {
       // Process non-object initializers as before.
       //const localVars = context.localVarCount;
-      if(init)
+      if (init)
         code += this.visitExpression(init as Expression, context);
       //if(!context.stringExpr || (context.stringExpr && context.arrayExpr))
       code += `add rsp 1\nsetarray flat[rsp] ra\n`;
       context.symbolTable.set(varName, {
-        name: varName, type: context.arrayExpr && context.stringExpr ? 'string_array' : (context.arrayExpr ? 'array'
-          : (context.stringExpr ? 'string' : 'number')),
+        name: varName, type: context.curExpr,
         offset: context.localVarCount, size: 1,
         native_pointer: context.localVarNativePointer,
-        native_pointer_index: context.localVarNativePointerIndexed
+        native_pointer_index: context.localVarNativePointerIndexed,
+        children: context.curSymRet ? context.curSymRet.children : undefined
       });
+
       context.localVarNativePointer = undefined;
       context.localVarNativePointerIndexed = false;
       context.localVarCount++;
@@ -754,9 +881,15 @@ export class TsToConTranspiler {
     } else {
       code += `set rb 0\n`;
     }
-    if(context.mainBFunc)
+
+    if (context.mainBFunc) {
+      code += `sub rbp 1\nset rsp rbp\nset rssp rsbp\nstate pop\nset rsbp ra\nstate pop\nset rbp ra\n`;
       code += `break\n`
-    else code += `return\n`;
+    } else {
+      code += `sub rbp 1\nset rsp rbp\nset rssp rsbp\nstate pop\nset rsbp ra\nstate pop\nset rbp ra\n`;
+      code += `terminate\n`;
+      context.curFunc.returns |= context.curExpr;
+    }
 
     code += `// end function\n`;
     return code;
@@ -864,11 +997,21 @@ export class TsToConTranspiler {
       addDiagnostic(expr, context, "error", `if condition must be (A&&B), (A||B), a comparison, or a function call. Found operator "${op}"`);
       return undefined;
     }
+
+    if (expr.isKind(SyntaxKind.PropertyAccessExpression)) {
+      const pExpr = expr as PropertyAccessExpression;
+      return { op: "ifge", left: pExpr, right: 1 };
+    }
+
+    if(expr.isKind(SyntaxKind.Identifier)) {
+      return { op: "ifge", left: expr as Identifier, right: 1 };
+    }
+
     if (expr.isKind(SyntaxKind.CallExpression)) {
       const callExpr = expr as CallExpression;
       //if (nativeFn && nativeFn.returns && nativeFn.return_type === "variable") {
-        // Instead of fabricating a fake Expression, simply return 1 as the expected boolean value.
-        return { op: "ifg", left: callExpr, right: 0 };
+      // Instead of fabricating a fake Expression, simply return 1 as the expected boolean value.
+      return { op: "ifg", left: callExpr, right: 0 };
       /*} else {
         addDiagnostic(expr, context, "error", `Native function call ${fnName} not allowed or not returning a boolean value`);
         return undefined;
@@ -886,19 +1029,20 @@ export class TsToConTranspiler {
         }
 
         //if (sub.isKind(SyntaxKind.CallExpression)) {
-          //const callExpr = sub as CallExpression;;
-          //if (nativeFn && nativeFn.returns && nativeFn.return_type === "variable") {
-            // Instead of fabricating a fake Expression, simply return 1 as the expected boolean value.
-            return { op: "ifle", left: sub, right: 0 };
-          /*} else {
-            addDiagnostic(expr, context, "error", `Native function call ${fnName} not allowed or not returning a boolean value`);
-            return undefined;
-          }*/
+        //const callExpr = sub as CallExpression;;
+        //if (nativeFn && nativeFn.returns && nativeFn.return_type === "variable") {
+        // Instead of fabricating a fake Expression, simply return 1 as the expected boolean value.
+        return { op: "ifle", left: sub, right: 0 };
+        /*} else {
+          addDiagnostic(expr, context, "error", `Native function call ${fnName} not allowed or not returning a boolean value`);
+          return undefined;
+        }*/
         //}
         //addDiagnostic(expr, context, "error", `if condition must be in the form !(A || B). Found something else.`);
         //return undefined;
       }
     }
+
     addDiagnostic(expr, context, "error", `Unrecognized if condition. Must be (A&&B), (A||B), a comparison, or a function call.`);
     return undefined;
   }
@@ -909,7 +1053,8 @@ export class TsToConTranspiler {
    *****************************************************************************/
   private visitExpression(expr: Expression, context: TranspilerContext): string {
     let code = ''//`/* ${expr.getText()} */\n`;
-    context.stringExpr = context.quoteExpr = context.arrayExpr = false;
+    context.curExpr = ESymbolType.number;
+    context.curSymRet = null;
 
     switch (expr.getKind()) {
       case SyntaxKind.BinaryExpression:
@@ -939,10 +1084,9 @@ export class TsToConTranspiler {
 
   private visitLeafOrLiteral(expr: Expression, context: TranspilerContext): string {
     let code = "";
+    context.curSymRet = null;
 
-    context.stringExpr = false;
-    context.quoteExpr = false;
-    context.arrayExpr = false;
+    context.curExpr = ESymbolType.number;
 
     if (expr.isKind(SyntaxKind.Identifier)) {
       const name = expr.getText();
@@ -951,11 +1095,11 @@ export class TsToConTranspiler {
         const i = context.paramMap[name];
         code += `set ra r${i.offset}\n`;
 
-        if(i.type == 'string')
-          context.stringExpr = true;
+        if (i.type & ESymbolType.string)
+          context.curExpr = ESymbolType.string
 
-        if(i.type == 'string_array')
-          context.stringExpr = context.arrayExpr = true;
+        if (i.type & ESymbolType.array)
+          context.curExpr |= ESymbolType.array
 
         return code;
       }
@@ -974,15 +1118,15 @@ export class TsToConTranspiler {
 
       if (context.symbolTable.has(name)) {
         const off = context.symbolTable.get(name)
-        if(off.type == 'native')
+        if (off.type & ESymbolType.native)
           return code + `set ra ${off.CON_code}\n`;
 
         code += `set ri rbp\nadd ri ${off.offset}\nset ra flat[ri]\n`;
-        if(off.type == 'string')
-          context.stringExpr = true;
+        if (off.type & ESymbolType.string)
+          context.curExpr = ESymbolType.string;
 
-        if(off.type == 'string_array')
-          context.stringExpr = context.arrayExpr = true;
+        if (off.type & ESymbolType.array)
+          context.curExpr |= ESymbolType.array;
 
         if (off.heap)
           code += `set rf 1\n`;
@@ -1002,11 +1146,11 @@ export class TsToConTranspiler {
       let text = expr.getText().replace(/[`'"]/g, "");
       code += `state pushr1\nset r0 ${text.length + 1}\nstate alloc\nstate popr1\nsetarray flat[rb] ${text.length}\nset ri rb\n`;
       //code += `add rsp 1\nset rd rsp\nadd rsp 1\nsetarray flat[rsp] ${text.length}\n`;
-      for(let i = 0; i < text.length; i++)
+      for (let i = 0; i < text.length; i++)
         code += `add ri 1\nsetarray flat[ri] ${text.charCodeAt(i)}\n`;
 
       code += `set ra rb\n`;
-      context.stringExpr = true;
+      context.curExpr = ESymbolType.string;
       return code;
     }
     if (expr.isKind(SyntaxKind.TrueKeyword)) {
@@ -1018,12 +1162,12 @@ export class TsToConTranspiler {
       return code;
     }
 
-    if(expr.isKind(SyntaxKind.ArrayLiteralExpression)) {
+    if (expr.isKind(SyntaxKind.ArrayLiteralExpression)) {
       const args = expr.getElements();
 
-      context.arrayExpr = true;
+      context.curExpr |= ESymbolType.array;
 
-      if(args.length == 0) {
+      if (args.length == 0) {
         code += `state pushr1\nset r0 ${pageSize}\nstate alloc\nstate popr1\nset ra rb\n`;
         return code;
       }
@@ -1034,18 +1178,52 @@ export class TsToConTranspiler {
 
       return code + `state pushr1\nset r0 ra\nstate alloc\nstate popr1\nset ra rb\n`;
     }
-    
-    if(expr.isKind(SyntaxKind.AsExpression)) {
+
+    if (expr.isKind(SyntaxKind.AsExpression)) {
       code += this.visitExpression(expr.getExpression(), context);
 
-      if(expr.asKind(SyntaxKind.StringLiteral) || expr.asKind(SyntaxKind.NoSubstitutionTemplateLiteral))
-        context.stringExpr = true;
+      const asKind = expr.compilerNode.type.kind;
+
+      if (asKind == SyntaxKind.StringLiteral
+        || asKind == SyntaxKind.NoSubstitutionTemplateLiteral
+        || asKind == SyntaxKind.StringKeyword)
+        context.curExpr = ESymbolType.string;
 
       return code;
     }
 
-    if(expr.isKind(SyntaxKind.NullKeyword))
+    if (expr.isKind(SyntaxKind.NullKeyword)) {
+      context.curExpr = ESymbolType.null;
       return code + 'set ra 0\n';
+    }
+
+    if(expr.isKind(SyntaxKind.NewExpression)) {
+      const className = expr.getExpression().getText();
+      const sym = context.symbolTable.get(className);
+
+      if(!sym) {
+        addDiagnostic(expr, context, 'error', `Undeclared class ${className}`);
+        return '';
+      }
+
+      if(sym.type != ESymbolType.class) {
+        addDiagnostic(expr, context, 'error', `Onyl classes are supported by a New Expression: ${expr.getText()}`);
+        return '';
+      }
+
+      const args = expr.getArguments();
+
+      code += `state pushr${args.length > 12 ? 'all' : args.length}\n`
+      args.forEach((a, i) => {
+        code += this.visitExpression(a as Expression, context);
+        code += `set r${i} ra\n`;
+      });
+      code += `state ${className}_constructor\nset ra rb\n`;
+      code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
+      context.curExpr = ESymbolType.class;
+      context.curSymRet = sym;
+      return code;
+    }
 
     addDiagnostic(expr, context, "error", `Unhandled leaf/literal: ${expr.getKindName()} - ${expr.getText()}`);
     code += `set ra 0\n`;
@@ -1070,10 +1248,10 @@ export class TsToConTranspiler {
       // assignment
       code += this.visitExpression(right, context);
 
-      if(opText != '=') {
+      if (opText != '=') {
         code += `set rd ra\n`
         code += this.visitExpression(left, context);
-        switch(opText) {
+        switch (opText) {
           case '+=':
             code += `add rd ra\nset ra rd\n`;
             break;
@@ -1112,31 +1290,31 @@ export class TsToConTranspiler {
     }
 
     code += this.visitExpression(left, context);
-    const isQuote = context.quoteExpr;
-    const isString = context.stringExpr;
+    const isQuote = Boolean(context.curExpr & ESymbolType.quote);
+    const isString = Boolean(context.curExpr & ESymbolType.string);
 
-    if(isQuote && opText != '+') {
+    if (isQuote && opText != '+') {
       addDiagnostic(bin, context, "error", `Unhandled operator for string expression "${opText}"`);
-        code += `set ra 0\n`;
+      code += `set ra 0\n`;
     }
 
     code += `set rd ra\n`;
     code += this.visitExpression(right, context);
 
-    if(isQuote && !context.quoteExpr)
+    if (isQuote && !(context.curExpr & ESymbolType.quote))
       code += `qputs 1022 %d\nqsprintf 1023 1022 ra\nset ra 1022\n`;
 
-    if(isString && !context.stringExpr)
+    if (isString && !(context.curExpr & ESymbolType.string))
       code += `state pushr1\nset r0 ra\nstate _convertInt2String\nstate popr1\nset ra rb\n`
 
-    context.quoteExpr = isQuote;
-    context.stringExpr = isString;
+    context.curExpr = isQuote ? ESymbolType.quote : ESymbolType.number;
+    context.curExpr = isString ? ESymbolType.string : ESymbolType.number;
 
     switch (opText) {
       case "+":
-        if(isQuote)
+        if (isQuote)
           code += `qstrcat rd ra\n`;
-        else if(isString)
+        else if (isString)
           code += `state pushr2\nset r0 rd\nset r1 ra\nstate _stringConcat\nstate popr2\nset ra rb\n`;
         else
           code += `add rd ra\nset ra rd\n`;
@@ -1218,10 +1396,10 @@ export class TsToConTranspiler {
       const v = context.symbolTable.get(name);
 
       if (v) {
-        if(v.type == 'native')
+        if (v.type & ESymbolType.native)
           return code + `set ${v.CON_code} ra\n`;
 
-        if(v.type == 'quote')
+        if (v.type & ESymbolType.quote)
           return code + `set ri rsbp\nadd ri ${v.offset}\nqstrcpy ri ra\n`;
 
         code += `set ri rbp\nadd ri ${v.offset}\nsetarray flat[ri] ra\n`;
@@ -1234,7 +1412,6 @@ export class TsToConTranspiler {
     }
 
     if (left.isKind(SyntaxKind.PropertyAccessExpression) || left.isKind(SyntaxKind.ElementAccessExpression)) {
-      code += `state push\n`;
       code += this.visitMemberExpression(left, context, true);
       return code;
     }
@@ -1317,7 +1494,7 @@ export class TsToConTranspiler {
           //Search in the context for any objects/classes that contain the function
           let o: SymbolDefinition;
 
-          if(!context.curClass) {
+          if (!context.curClass) {
             obj = segments[1] as SegmentProperty;
             o = context.symbolTable.get(obj.name);
 
@@ -1325,11 +1502,11 @@ export class TsToConTranspiler {
               addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
               return '';
             }
-          } else o = context.curClass;          
+          } else o = context.curClass;
 
           for (let i = context.curClass ? 1 : 2; i < segments.length; i++) {
             if (segments[i].kind == 'index') {
-              if (o.type != 'array') {
+              if (!(o.type & ESymbolType.array)) {
                 addDiagnostic(call, context, 'error', `Invalid index at non-array ${o.name}: ${fnNameRaw}`);
                 return '';
               }
@@ -1345,13 +1522,13 @@ export class TsToConTranspiler {
 
             o = o.children[obj.name];
             if (i != segments.length - 1) {
-              if (o.type == 'function') {
+              if (o.type & ESymbolType.function) {
                 //Function properties are not yet supported
                 addDiagnostic(call, context, 'error', `Function properties are not yet supported: ${fnNameRaw}`);
                 return '';
               }
 
-              if (o.type != 'object' && o.type != 'array') {
+              if (!(o.type & ESymbolType.object) && !(o.type & ESymbolType.array)) {
                 addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
                 return '';
               }
@@ -1369,20 +1546,23 @@ export class TsToConTranspiler {
               code += `state pushr${totalArgs > 12 ? 'all' : totalArgs}\n`;
               context.localVarCount += totalArgs;
             }
-            for (let i = 0; i < totalArgs; i++) {
+            for (let i = 0; i < args.length; i++) {
               code += this.visitExpression(args[i] as Expression, context);
               code += `set r${i} ra\n`;
               resolvedLiterals.push(null);
             }
 
-            if(isClass)
+            if (isClass)
               code += `set r${totalArgs - 1} flat[rbp]\n`;
 
-            code += `state ${isClass ? `${context.curClass.name}_`: ''}${o.name}\nset ra rb\n`;
+            code += `state ${o.name}\nset ra rb\n`;
             if (totalArgs > 0) {
               code += `state popr${args.length > 12 ? 'all' : totalArgs}\n`;
               context.localVarCount -= args.length;
             }
+
+            context.curExpr = o.returns;
+
             return code;
           }
         }
@@ -1404,11 +1584,11 @@ export class TsToConTranspiler {
             return '';
           }
 
-          const isClass = o.type == 'class';
+          const isClass = Boolean(o.type & ESymbolType.class);
 
           for (let i = 1; i < segments.length; i++) {
             if (segments[i].kind == 'index') {
-              if (o.type != 'array') {
+              if (!(o.type & ESymbolType.array)) {
                 addDiagnostic(call, context, 'error', `Invalid index at non-array ${o.name}: ${fnNameRaw}`);
                 return '';
               }
@@ -1424,13 +1604,13 @@ export class TsToConTranspiler {
 
             o = o.children[obj.name];
             if (i != segments.length - 1) {
-              if (o.type == 'function') {
+              if (o.type & ESymbolType.function) {
                 //Function properties are not yet supported
                 addDiagnostic(call, context, 'error', `Function properties are not yet supported: ${fnNameRaw}`);
                 return '';
               }
 
-              if (o.type != 'object' && o.type != 'array') {
+              if (!(o.type & ESymbolType.object) && !(o.type & ESymbolType.array)) {
                 addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
                 return '';
               }
@@ -1448,20 +1628,23 @@ export class TsToConTranspiler {
               code += `state pushr${totalArgs > 12 ? 'all' : totalArgs}\n`;
               context.localVarCount += totalArgs;
             }
-            for (let i = 0; i < totalArgs; i++) {
+            for (let i = 0; i < args.length; i++) {
               code += this.visitExpression(args[i] as Expression, context);
               code += `set r${i} ra\n`;
               resolvedLiterals.push(null);
             }
 
-            if(isClass)
+            if (isClass)
               code += `set ri rbp\nadd ri ${objSym.offset}\nset r${totalArgs - 1} flat[ri]\n`;
 
-            code += `state ${isClass ? `${objSym.name}_`: ''}${o.name}\nset ra rb\n`;
+            code += `state ${o.name}\nset ra rb\n`;
             if (totalArgs > 0) {
               code += `state popr${args.length > 12 ? 'all' : totalArgs}\n`;
               context.localVarCount -= args.length;
             }
+
+            context.curExpr = o.returns;
+
             return code;
           }
         }
@@ -1492,10 +1675,10 @@ set rb ra
       return code;
     }
 
-    if(fnNameRaw == 'Quote' && !fnObj) {
-      if(args[0].isKind(SyntaxKind.StringLiteral)) {
+    if (fnNameRaw == 'Quote' && !fnObj) {
+      if (args[0].isKind(SyntaxKind.StringLiteral)) {
         let text = args[0].getText().replace(/[`'"]/g, "");
-        if(text.length > 128) {
+        if (text.length > 128) {
           addDiagnostic(args[0], context, 'warning', `Quote length greater than 128, truncating...`);
           text = text.slice(0, 128);
         }
@@ -1511,15 +1694,15 @@ set rb ra
     const variable = context.symbolTable.get(fnObj);
     let typeName: undefined | string = undefined;
 
-    if(variable && (variable.type != 'function' && variable.type != 'array' && variable.type != 'object'))
-      typeName = variable.type;
+    //if (variable && (!(variable.type & ESymbolType.function) && !(variable.type & ESymbolType.array) && !(variable.type & ESymbolType.object)))
+    typeName = (variable && variable.type == ESymbolType.string) ? 'string' : undefined;
 
     const nativeFn = findNativeFunction(fnNameRaw, fnObj, typeName);
     if (nativeFn) {
       let argCode = '';
       let argsLen = 0;
 
-      if(nativeFn.type_belong)
+      if (nativeFn.type_belong)
         argsLen++;
 
       if (args.length > 0) {
@@ -1540,7 +1723,7 @@ set rb ra
           // We do not emit register loads for these.
         } else if (expected & CON_NATIVE_FLAGS.STRING) {
           code += this.visitExpression(args[i] as Expression, context);
-          if(!context.stringExpr)
+          if (!(context.curExpr & ESymbolType.string))
             code += `state pushr1\nset r0 ra\nstate _convertInt2String\nstate popr1\nset ra rb\n`
 
           code += `state pushr1\nset r0 ra\nstate _convertString2Quote\nstate popr1\nset ra rb\n`
@@ -1570,14 +1753,14 @@ set rb ra
         }
       }
 
-      if(nativeFn.type_belong) {
+      if (nativeFn.type_belong) {
         code += `set ri rbp\nadd ri ${variable.offset}\nset r${argsLen - 1} flat[ri]\n`;
-        if(nativeFn.type_belong.includes('string') && nativeFn.return_type == 'string')
-          context.stringExpr = true;
+        if (nativeFn.type_belong.includes('string') && nativeFn.return_type == 'string')
+          context.curExpr = ESymbolType.string;
       }
 
-      if(nativeFn.return_type == 'array')
-        context.arrayExpr = true;
+      if (nativeFn.return_type == 'array')
+        context.curExpr |= ESymbolType.array;
 
       // For simple native functions (code is a string), concatenate the command with the arguments.
       if (typeof nativeFn.code === "string") {
@@ -1605,28 +1788,44 @@ set rb ra
       }
     } else {
       const fnName = fnNameRaw.startsWith("this.") ? fnNameRaw.substring(5) : fnNameRaw;
-      const func = context.symbolTable.get(fnName);
+      const func = context.symbolTable.get(fnObj ? fnObj : fnName);
 
       if (!func) {
-        addDiagnostic(call, context, 'error', `Invalid function ${fnNameRaw}`);
+        addDiagnostic(call, context, 'error', `Invalid ${fnObj ? 'class/object' : 'function'} ${fnNameRaw}`);
         return '';
       }
-      // If not native, assume it's a user function state
-      if (args.length > 0) {
-        code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
-        context.localVarCount += args.length;
+
+      const isClass = Boolean(func.type & ESymbolType.class);
+      const totalArgs = args.length + (isClass ? 1 : 0);
+
+      if(isClass && (!func.children || (func.children && !func.children[fnName]))) {
+        addDiagnostic(call, context, 'error', `Undefined method ${fnName} in class ${func.name}`)
+        return '';
       }
+
+      // If not native, assume it's a user function state
+      if (totalArgs > 0) {
+        code += `state pushr${totalArgs > 12 ? 'all' : totalArgs}\n`;
+        context.localVarCount += totalArgs;
+      }
+
       for (let i = 0; i < args.length; i++) {
         code += this.visitExpression(args[i] as Expression, context);
         code += `set r${i} ra\n`;
         resolvedLiterals.push(null);
       }
 
-      code += `state ${func.CON_code ? func.CON_code : func.name}\nset ra rb\n`;
-      if (args.length > 0) {
-        code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
-        context.localVarCount -= args.length;
+      if (isClass)
+        code += `set ri rbp\nadd ri ${func.offset}\nset r${totalArgs - 1} flat[ri]\n`;
+
+      code += `state ${isClass ? func.children[fnName].name : (func.CON_code ? func.CON_code : func.name)}\nset ra rb\n`;
+      if (totalArgs > 0) {
+        code += `state popr${totalArgs > 12 ? 'all' : totalArgs}\n`;
+        context.localVarCount -= totalArgs;
       }
+
+
+      context.curExpr = isClass ? func.children[fnName].returns : func.returns;
     }
     if (nativeFn && nativeFn.returns) {
       code += `set ra rb\n`;
@@ -1703,7 +1902,7 @@ set rb ra
 
               layout[propName] = {
                 name: propName,
-                type: 'object_array',
+                type: ESymbolType.object | ESymbolType.array,
                 offset: totalSlots - (count * instanceSize),
                 size: count * instanceSize,
                 num_elements: count,
@@ -1719,7 +1918,7 @@ set rb ra
               }
               layout[propName] = {
                 name: propName,
-                type: "array",
+                type: ESymbolType.array,
                 offset: totalSlots - (count * instanceSize),
                 size: count * instanceSize,
                 num_elements: count,
@@ -1732,7 +1931,7 @@ set rb ra
             const nestedSize = result.size;
             layout[propName] = {
               name: propName,
-              type: "object",
+              type: ESymbolType.object,
               offset: totalSlots,
               size: nestedSize,
               children: { ...result.layout }  // clone children as plain object
@@ -1742,12 +1941,12 @@ set rb ra
             // For a primitive property.
             code += this.visitExpression(pa.getInitializerOrThrow(), context);
             code += `add rsp 1\nsetarray flat[rsp] ra\n`;
-            layout[propName] = { name: propName, type: "number", offset: totalSlots, size: 1 };
+            layout[propName] = { name: propName, type: ESymbolType.number, offset: totalSlots, size: 1 };
           }
         } else {
           // Property not provided: default to 0.
           code += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
-          layout[propName] = { name: propName, type: "number", offset: totalSlots, size: 1 };
+          layout[propName] = { name: propName, type: ESymbolType.number, offset: totalSlots, size: 1 };
         }
       }
     } else {
@@ -1772,7 +1971,7 @@ set rb ra
             }
             layout[propName] = {
               name: propName,
-              type: 'object_array',
+              type: ESymbolType.object | ESymbolType.array,
               offset: totalSlots - (count),
               size: count,
               num_elements: count,
@@ -1784,7 +1983,7 @@ set rb ra
             const nestedSize = result.size;
             layout[p.getName()] = {
               name: propName,
-              type: "object",
+              type: ESymbolType.object,
               offset: totalSlots,
               size: nestedSize,
               children: { ...result.layout }  // clone children as plain object
@@ -1794,7 +1993,7 @@ set rb ra
             // For a primitive property.
             code += this.visitExpression(init, context);
             code += `add rsp 1\nsetarray flat[rsp] ra\n`;
-            layout[propName] = { name: propName, type: "number", offset: totalSlots, size: 1 };
+            layout[propName] = { name: propName, type: ESymbolType.number, offset: totalSlots, size: 1 };
           }
         } else
           addDiagnostic(objLit, context, "error", `No property assignmetn found during object declaration: ${objLit.getText()}`);
@@ -1818,7 +2017,7 @@ set rb ra
     const varName = this.getVarNameForObjectLiteral(objLit);
     if (varName) {
       // Store the layout in the global symbol table.
-      context.symbolTable.set(varName, { name: varName, type: "object", offset: context.localVarCount + 1, size: result.size, children: result.layout });
+      context.symbolTable.set(varName, { name: varName, type: ESymbolType.object, offset: context.localVarCount + 1, size: result.size, children: result.layout });
     }
     context.localVarCount += result.size + 1;
     return result.code + `set ra rbp\nadd ra ${context.localVarCount - result.size}\nset rf 0\n`;
@@ -1891,22 +2090,33 @@ set rb ra
     const obj = segments[0] as SegmentIdentifier;
     let sym: SymbolDefinition | null = null;
     if (obj.kind == 'identifier' && ['sprites', 'sectors', 'walls', 'players', 'Names', 'EMoveFlags'].indexOf(obj.name) == -1) {
+      const eSym = context.enums.get(obj.name);
+
+      if (eSym) {
+        const seg = segments[1] as SegmentProperty
+        if (direct)
+          return String(eSym.members[seg.name]);
+
+        code += `set ra ${eSym.members[seg.name]}\n`;
+        return code;
+      }
+
       sym = context.symbolTable.get(obj.name);
       if (!sym) {
         sym = context.paramMap[obj.name];
 
-        if(!sym) {
+        if (!sym) {
           addDiagnostic(expr, context, "error", `Undefined object: ${expr.getText()}`);
           return "set ra 0\n";
         }
       }
 
-      if(sym.type == 'string' || sym.type.includes('array')) {
-        if((segments[1].kind == 'property' && segments[1].name == 'length'))
+      if (sym.type & ESymbolType.string || sym.type & ESymbolType.array) {
+        if ((segments[1].kind == 'property' && segments[1].name == 'length'))
           return code + `set ri rbp\nadd ri ${sym.offset}\nset ri flat[ri]\n${assignment ? 'setarray flat[ri] ra\n' : 'set ra flat[ri]'}\n`;
       }
 
-      if(sym.type == 'native') {
+      if (sym.type & ESymbolType.native) {
         //If got here, it must be a symbol only
         for (let i = 1; i < segments.length; i++) {
           const seg = segments[i];
@@ -1938,39 +2148,47 @@ set rb ra
 
       if (!sym.native_pointer) {
         code += `set ri rbp\nadd ri ${sym.offset}\n`;
-        code += `set ri flat[ri]\n`;
+        code += `set ri flat[ri]\nstate push\n`;
 
         for (let i = 1; i < segments.length; i++) {
           const seg = segments[i];
           if (seg.kind == 'index') {
-            if (sym.type != 'array' && sym.type != 'object_array' && sym.type != 'string_array') {
+            if (!(sym.type & ESymbolType.array) && !(sym.type & ESymbolType.object) && !(sym.type & ESymbolType.string)) {
               addDiagnostic(expr, context, "error", `Indexing a non array variable: ${expr.getText()} - ${sym.type}`);
               return "set ra 0\n";
             }
 
             const localVars = context.localVarCount;
             //code += `state pushd\n`
+            if(assignment)
+              code += `state push\n`;
+
+            code += `state pushi\n`;
             code += this.visitExpression(seg.expr, context);
             if (localVars != context.localVarCount) {
               code += `sub rsp ${localVars - context.localVarCount}\n`;
               code += `add rsp 1\n` //Account for the push rd we did back there
               context.localVarCount = localVars;
             }
-            if(sym.type == 'object_array')
+            code += `state popi\n`;
+            if (sym.type & (ESymbolType.object | ESymbolType.array))
               code += `mul ra ${sym.size / sym.num_elements}\nadd ri ra\nadd ri 1\n`
             else
               code += `add ri ra\nadd ri 1\n`;
 
-            if(sym.type == 'string_array')
-              context.arrayExpr = context.stringExpr = true;
+            if (sym.type & (ESymbolType.string | ESymbolType.array))
+              context.curExpr = ESymbolType.string | ESymbolType.array;
+
+            if(assignment)
+              code += `state pop\n`;
 
             continue;
           }
 
           if (seg.kind == 'property') {
-            if(seg.name == 'length' && sym.type.includes('array')) {
+            if (seg.name == 'length' && sym.type & ESymbolType.array) {
               code += `set ri flat[ri]\n`;
-              context.arrayExpr = context.stringExpr = false;
+              context.curExpr = ESymbolType.number;
               break;
             }
 
@@ -1986,7 +2204,8 @@ set rb ra
 
             sym = sym.children[seg.name];
 
-            code += `add ri ${sym.offset}\n`;
+            if(sym.offset != 0)
+              code += `add ri ${sym.offset}\n`;
             continue;
           }
         }
@@ -2039,7 +2258,7 @@ set rb ra
               code += `set ri ra\n`;
             }
           } else {
-            if(context.curClass)
+            if (context.curClass)
               code += `set ri flat[rbp]\n`;
             else code += `set ri THISACTOR\n`;
 
@@ -2066,53 +2285,65 @@ set rb ra
           }
 
           if (seg.kind == 'property') {
-            if(obj.name == 'this' && context.curClass) {
-              if(context.curClass.num_elements == 0) {
+            if (obj.name == 'this' && context.curClass) {
+              if (context.curClass.num_elements == 0) {
                 addDiagnostic(expr, context, 'error', `Class ${context.curClass.name} has no properties`);
                 return '';
               }
 
-              if(!Object.keys(context.curClass.children).find(e => e == seg.name)) {
+              if (!Object.keys(context.curClass.children).find(e => e == seg.name)) {
                 addDiagnostic(expr, context, 'error', `Undefined property ${seg.name} in class ${context.curClass.name}`);
                 return '';
               }
 
               let pSym = context.curClass.children[seg.name];
 
-              code += `add ri ${pSym.offset}\n`;
+              if(pSym.offset != 0)
+                code += `add ri ${pSym.offset}\n`;
 
-              for(let i = 2; i < segments.length; i++) {
+              for (let i = 2; i < segments.length; i++) {
                 const s = segments[i];
 
-                if(s.kind == 'index') {
-                  if(!pSym.type.includes('array')) {
+                if (s.kind == 'index') {
+                  if (!(pSym.type & ESymbolType.array)) {
                     addDiagnostic(expr, context, 'error', `Indexing a non-array property ${pSym.name}`);
                     return '';
                   }
 
+                  code += `set ri flat[ri]\n`;
+
                   const localVars = context.localVarCount;
                   //code += `state pushd\n`
+                  if(assignment)
+                    code += `state push\n`;
+                  code += `state pushi\n`;
                   code += this.visitExpression(s.expr, context);
                   if (localVars != context.localVarCount) {
                     code += `sub rsp ${localVars - context.localVarCount}\n`;
                     code += `add rsp 1\n` //Account for the push rd we did back there
                     context.localVarCount = localVars;
                   }
-                  if(pSym.type == 'object_array')
+
+                  code += `state popi\n`;
+
+                  if (pSym.type == (ESymbolType.object | ESymbolType.array))
                     code += `mul ra ${pSym.size / pSym.num_elements}\nadd ri ra\nadd ri 1\n`
                   else
                     code += `add ri ra\nadd ri 1\n`;
 
-                  if(pSym.type == 'string_array')
-                    context.arrayExpr = context.stringExpr = true;
+                  if (pSym.type == (ESymbolType.string | ESymbolType.array))
+                    context.curExpr = pSym.type;
+
+                  if(assignment)
+                    code += `state pop\n`;
 
                   continue;
                 }
 
-                if(s.name == 'length' && (pSym.type == 'string' || pSym.type.includes('array')))
+                if (s.name == 'length' && (pSym.type & ESymbolType.string || pSym.type & ESymbolType.array))
                   return code + (assignment ? `setarray flat[ri] ra\n` : `set ra flat[ri]\n`);
 
-                if(!Object.keys(pSym.children).find(e => e == s.name)) {
+                if (!Object.keys(pSym.children).find(e => e == s.name)) {
                   addDiagnostic(expr, context, 'error', `Undefined property ${s.name} in class ${context.curClass.name}`);
                   return '';
                 }
@@ -2121,7 +2352,8 @@ set rb ra
 
                 pSym = pSym.children[s.name];
 
-                code += `add ri ${pSym.offset}\n`;
+                if(pSym.offset != 0)
+                  code += `add ri ${pSym.offset}\n`;
               }
 
               return code + (assignment ? `setarray flat[ri] ra\n` : `set ra flat[ri]\n`);
@@ -2155,6 +2387,9 @@ set rb ra
 
             let overriden = false;
 
+            if(assignment)
+              code += `state push\n`;
+
             if (nVar.type == CON_NATIVE_FLAGS.OBJECT) {
               let v = nVar.object;
 
@@ -2171,7 +2406,7 @@ set rb ra
                   if (nVar.override_code) {
                     code += nVar.code[assignment ? 1 : 0];
                     overriden = true;
-                  }
+                  } 
 
                   if (nVar.type == CON_NATIVE_FLAGS.OBJECT) {
                     const v = nVar.object.find(e => e.name == (segments[i + 1] as SegmentProperty).name);
@@ -2218,7 +2453,7 @@ set rb ra
                   code += `${assignment ? 'state pop\nset' : 'get'}${op}[ri].`;
 
                 code += `${nVar.code} ra\n`;
-              } else code += `set ${assignment ? ('state pop\n' + nVar.code + ' ra\n')
+              } else code += `state pop\nset ${assignment ? (nVar.code + ' ra\n')
                 : ('ra ' + nVar.code + '\n')}`
             }
           }
@@ -2256,6 +2491,7 @@ set rb ra
           addDiagnostic(expr, context, "error", `Unhandled prefix op`);
           code += `set ra 0\n`;
       }
+      code += `setarray flat[ri] ra\n`;
       return code;
     } else if (expr.isKind(SyntaxKind.PostfixUnaryExpression)) {
       const post = expr as PostfixUnaryExpression;
@@ -2271,6 +2507,7 @@ set rb ra
           addDiagnostic(expr, context, "error", `Unhandled postfix op`);
           code += `set ra 0\n`;
       }
+      code += `setarray flat[ri] ra\n`;
       return code;
     }
     return code;
@@ -2293,76 +2530,80 @@ set rb ra
       localVarCount: 0,
       paramMap: {},
       isInLoop: false,
-      mainBFunc: false
+      mainBFunc: false,
+      curFunc: undefined,
     };
     let code = `${this.options.lineDetail ? `/*${fd.getText()}*/` : ''}\ndefstate ${name}\n  set ra rbp \n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
     fd.getParameters().forEach((p, i) => {
       const type = p.getType();
-      let t = '';
+      let t = ESymbolType.number;
       let children: Record<string, SymbolDefinition>;
       let con = '';
-      switch(type.getText()) {
+      switch (type.getText()) {
         case 'string':
-        case 'number':
-          t = type.getText();
+        case 'pointer':
+        case 'boolean':
+          t = ESymbolType[type.getText()];
           break;
 
         case 'constant':
-          t = 'number';
+        case 'number':
           break;
 
         case 'quote':
-          t = 'quote';
+          t = ESymbolType.quote;
           break;
 
         case 'string[]':
-          t = 'string_array';
+          t = ESymbolType.string | ESymbolType.array;
           break;
 
         case 'number[]':
         case '[]':
         case 'any[]':
-          t = 'array';
+          t = ESymbolType.array;
           break;
 
         default:
           let tText = type.getText();
 
-          if(type.getText().endsWith('[]')) {
-            t = 'object_array';
+          if (type.getText().endsWith('[]')) {
+            t = ESymbolType.object | ESymbolType.array;
             tText = tText.slice(0, tText.length - 2);
-          } else t = 'object';
+          } else t = ESymbolType.object;
 
           const alias = context.typeAliases.get(tText);
 
-          if(!alias) {
+          if (!alias) {
             addDiagnostic(fd, context, 'error', `Undeclared type alias ${tText}`);
             return '';
           }
 
           children = this.getObjectTypeLayout(tText, context);
       }
-      localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type:  t as any, children };
+      localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children };
     });
 
     context.symbolTable.set(name, {
       name: `${name}`,
-      type: 'function',
+      type: ESymbolType.function,
       offset: 0
     });
 
     localCtx.symbolTable.set(name, {
       name: `${name}`,
-      type: 'function',
+      type: ESymbolType.function,
       offset: 0
     });
 
-    if(context.currentFile.options & ECompileOptions.state_decl) {
+    localCtx.curFunc = localCtx.symbolTable.get(name);
+
+    if (context.currentFile.options & ECompileOptions.state_decl) {
       const t = fd.getReturnType();
-      if(t.getAliasSymbol().getName() == 'CON_NATIVE') {
+      if (t.getAliasSymbol().getName() == 'CON_NATIVE') {
         const args = t.getAliasTypeArguments();
 
-        if(args.length > 0) {
+        if (args.length > 0) {
           localCtx.symbolTable.get(name).CON_code = args[0].getText().replace(/[`'"]/g, "");
           context.symbolTable.get(name).CON_code = args[0].getText().replace(/[`'"]/g, "");
         }
@@ -2375,6 +2616,9 @@ set rb ra
         code += indent(this.visitStatement(st, localCtx), 1) + "\n";
       });
     }
+
+    context.symbolTable.set(name, localCtx.symbolTable.get(name));
+
     code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
     return code;
   }
@@ -2404,20 +2648,21 @@ set rb ra
       currentActorMoves: [],
       currentActorAis: [],
       mainBFunc: false,
+      curFunc: undefined,
     };
 
     let cls: SymbolDefinition;
 
-    if(type == '') {
+    if (type == '') {
       cls = context.symbolTable.get(className);
-      if(cls) {
+      if (cls) {
         addDiagnostic(cd, context, 'error', `Duplicate definition. Tried to declare as class named ${className} when there's already a ${cls.type} with the same name`);
         return '';
       }
 
       context.symbolTable.set(className, {
         name: className,
-        type: 'class',
+        type: ESymbolType.class,
         offset: 0,
         num_elements: 0,
         size: 0,
@@ -2490,51 +2735,52 @@ set rb ra
             code += `  }\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nendevent \n\n`;
           }
         }
-      } else if(type == '') {
+      } else if (type == '') {
         const pName = p.getName();
         const pType = p.getTypeNode().getText();
 
-        cls.children[pName] = { name: pName, offset: cls.num_elements, type: 'number' };
+        cls.children[pName] = { name: pName, offset: cls.num_elements, type: ESymbolType.number };
 
-        switch(pType) {
+        switch (pType) {
           case 'string':
           case 'number':
           case 'pointer':
-            cls.children[pName].type = pType;
+          case 'boolean':
+            cls.children[pName].type = ESymbolType[pType];
             break;
-          
+
           case 'string[]':
-            cls.children[pName].type = 'string_array';
+            cls.children[pName].type = ESymbolType.string | ESymbolType.array;
             break;
 
           case 'number[]':
           case '[]':
-            cls.children[pName].type = 'array';
+            cls.children[pName].type = ESymbolType.array;
             break;
 
           default:
             let t = pType;
             let isArray = false;
-            if(t.endsWith('[]')) {
+            if (t.endsWith('[]')) {
               t = pType.slice(0, t.length - 2);
               isArray = true;
             }
 
             const type = context.typeAliases.get(t);
 
-            if(!type) {
+            if (!type) {
               addDiagnostic(p, context, 'error', `Undeclared type ${pType}`);
-              return  '';
+              return '';
             }
 
-            if(type.literal) {
-              if(type.literal == 'string' && isArray)
-                cls.children[pName].type = 'string_array';
-              else if(isArray)
-                cls.children[pName].type = 'array';
+            if (type.literal) {
+              if (type.literal == 'string' && isArray)
+                cls.children[pName].type = ESymbolType.string | ESymbolType.array;
+              else if (isArray)
+                cls.children[pName].type = ESymbolType.array;
               else cls.children[pName].type = type.literal as any;
             } else {
-              cls.children[pName].type = isArray ? 'object_array' : 'object'
+              cls.children[pName].type = ESymbolType.object | (isArray ? ESymbolType.array : 0);
               cls.children[pName].children = this.getObjectTypeLayout(t, context);
               cls.children[pName].size = this.getObjectSize(t, context);
               cls.children[pName].num_elements = Object.keys(cls.children[pName].children).length;
@@ -2549,7 +2795,7 @@ set rb ra
       code = `${this.options.lineDetail ? `/*${ctors[0].getText()}*/` : ''}\ndefstate ${className}_constructor \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
       code += indent(`state pushr1\nset r0 ${cls.num_elements}\nstate alloc\nstate popr1\nstate pushb\n`, 1);
       code += this.visitConstructorDeclaration(ctors[0], context, '');
-      code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
+      code += `  state popb\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
     }
 
     // visit methods
@@ -2557,6 +2803,8 @@ set rb ra
     for (const m of methods) {
       code += this.visitMethodDeclaration(m, className, type != '' ? localCtx : context, type);
     }
+
+    context.curClass = null;
 
     return code;
   }
@@ -2569,7 +2817,7 @@ set rb ra
     context: TranspilerContext,
     type: string,
   ): string {
-    let code = this.options.lineDetail ? `// skipping actual constructor code\n` : '';
+    let code = '';
     const body = ctor.getBody() as any;
     if (body) {
       if (type == 'CActor') {
@@ -2632,55 +2880,57 @@ set rb ra
           ...context,
           localVarOffset: {},
           localVarCount: 0,
-          paramMap: {}
+          paramMap: {},
+          curFunc: undefined,
         };
         ctor.getParameters().forEach((p, i) => {
           const type = p.getType();
-          let t = '';
+          let t = ESymbolType.number;
           let children: Record<string, SymbolDefinition>;
           let con = '';
-          switch(type.getText()) {
+          switch (type.getText()) {
             case 'string':
-            case 'number':
-              t = type.getText();
+            case 'pointer':
+            case 'boolean':
+              t = ESymbolType[type.getText()];
               break;
 
             case 'constant':
-              t = 'number';
+            case 'number':
               break;
 
             case 'quote':
-              t = 'quote';
+              t = ESymbolType.quote;
               break;
 
             case 'string[]':
-              t = 'string_array';
+              t = ESymbolType.string | ESymbolType.array;
               break;
 
             case 'number[]':
             case '[]':
             case 'any[]':
-              t = 'array';
+              t |= ESymbolType.array;
               break;
 
             default:
               let tText = type.getText();
 
-              if(type.getText().endsWith('[]')) {
-                t = 'object_array';
+              if (type.getText().endsWith('[]')) {
+                t = ESymbolType.object | ESymbolType.array;
                 tText = tText.slice(0, tText.length - 2);
-              } else t = 'object';
+              } else t = ESymbolType.object;
 
               const alias = context.typeAliases.get(tText);
 
-              if(!alias) {
+              if (!alias) {
                 addDiagnostic(ctor, context, 'error', `Undeclared type alias ${tText}`);
                 return '';
               }
 
               children = this.getObjectTypeLayout(tText, context);
           }
-          localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type:  t as any, children };
+          localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children };
         });
         for (const st of statements) {
           code += indent(this.visitStatement(st, localCtx), 1);
@@ -2725,7 +2975,7 @@ set rb ra
     });
     context.symbolTable.set(decl.getName(), {
       name: actionName,
-      type: 'pointer',
+      type: ESymbolType.pointer,
       offset: 0,
       size: 1,
     });
@@ -2750,7 +3000,7 @@ set rb ra
     });
     context.symbolTable.set(decl.getName(), {
       name: moveName,
-      type: 'pointer',
+      type: ESymbolType.pointer,
       offset: 0,
       size: 1,
     });
@@ -2777,7 +3027,7 @@ set rb ra
     });
     context.symbolTable.set(decl.getName(), {
       name: aiName,
-      type: 'pointer',
+      type: ESymbolType.pointer,
       offset: 0,
       size: 1,
     });
@@ -2824,6 +3074,7 @@ set rb ra
     type: string
   ): string {
     const mName = md.getName();
+    const curFunc = context.curFunc;
     const localCtx: TranspilerContext = {
       ...context,
       localVarOffset: {},
@@ -2831,6 +3082,7 @@ set rb ra
       paramMap: {},
       isInLoop: false,
       mainBFunc: false,
+      curFunc: undefined,
     };
 
     if (type == 'CActor' && mName.toLowerCase() === "main") {
@@ -2842,51 +3094,52 @@ set rb ra
       let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
       md.getParameters().forEach((p, i) => {
         const type = p.getType();
-        let t = '';
+        let t = ESymbolType.number;
         let children: Record<string, SymbolDefinition>;
         let con = '';
-        switch(type.getText()) {
+        switch (type.getText()) {
           case 'string':
-          case 'number':
-            t = type.getText();
+          case 'boolean':
+          case 'pointer':
+            t = ESymbolType[type.getText()];
             break;
 
           case 'constant':
-            t = 'number';
+          case 'number':
             break;
 
           case 'string[]':
-            t = 'string_array';
+            t = ESymbolType.string | ESymbolType.array;
             break;
 
           case 'quote':
-            t = 'quote';
+            t = ESymbolType.quote;
             break;
 
           case 'number[]':
           case '[]':
           case 'any[]':
-            t = 'array';
+            t |= ESymbolType.array;
             break;
 
           default:
             let tText = type.getText();
 
-            if(type.getText().endsWith('[]')) {
-              t = 'object_array';
+            if (type.getText().endsWith('[]')) {
+              t = ESymbolType.object | ESymbolType.array;
               tText = tText.slice(0, tText.length - 2);
-            } else t = 'object';
+            } else t = ESymbolType.object;
 
             const alias = context.typeAliases.get(tText);
 
-            if(!alias) {
+            if (!alias) {
               addDiagnostic(md, context, 'error', `Undeclared type alias ${tText}`);
               return '';
             }
 
             children = this.getObjectTypeLayout(tText, context);
         }
-        localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type:  t as any, children };
+        localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children };
       });
       const body = md.getBody() as any;
       if (body) {
@@ -2913,64 +3166,76 @@ set rb ra
 
     md.getParameters().forEach((p, i) => {
       const type = p.getType();
-      let t = '';
+      let t = ESymbolType.number;
       let children: Record<string, SymbolDefinition>;
       let con = '';
-      switch(type.getText()) {
+      switch (type.getText()) {
         case 'string':
-        case 'number':
-          t = type.getText();
+        case 'boolean':
+        case 'pointer':
+          t = ESymbolType[type.getText()];
           break;
 
         case 'constant':
-          t = 'number';
+        case 'number':
           break;
 
         case 'string[]':
-          t = 'string_array';
+          t = ESymbolType.string | ESymbolType.array;
           break;
 
         case 'quote':
-          t = 'quote';
+          t = ESymbolType.quote;
           break;
 
         case 'number[]':
         case '[]':
         case 'any[]':
-          t = 'array';
+          t |= ESymbolType.array
           break;
 
         default:
           let tText = type.getText();
 
-          if(type.getText().endsWith('[]')) {
-            t = 'object_array';
+          if (type.getText().endsWith('[]')) {
+            t = ESymbolType.array | ESymbolType.object;
             tText = tText.slice(0, tText.length - 2);
-          } else t = 'object';
+          } else t = ESymbolType.object;
 
-          const alias = context.typeAliases.get(tText);
+          let alias = context.typeAliases.get(tText);
 
-          if(!alias) {
-            addDiagnostic(md, context, 'error', `Undeclared type alias ${tText}`);
-            return '';
+          if (!alias) {
+            //Since it's a parameter, we can try to store this type
+            const typeR = this.getTypeBase(p.getTypeNode(), context);
+
+            if(!typeR) {
+              addDiagnostic(md, context, 'error', `Undeclared type alias ${tText}`);
+              return '';
+            }
+
+            t = ESymbolType[typeR];
           }
 
-          children = this.getObjectTypeLayout(tText, context);
+          if(t & ESymbolType.object)
+            children = this.getObjectTypeLayout(tText, context);
       }
-      localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type:  t as any, children };
-    });
-
-    context.symbolTable.set(mName, {
-      name: `${className}_${mName}`,
-      type: 'function',
-      offset: 0
+      localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children };
     });
 
     localCtx.symbolTable.set(mName, {
       name: `${className}_${mName}`,
-      type: 'function',
-      offset: 0
+      type: ESymbolType.function,
+      offset: 0,
     });
+
+    localCtx.curFunc = localCtx.symbolTable.get(mName);
+    if(type == '') {
+      context.curClass.children[mName] = localCtx.symbolTable.get(mName);
+      const numParams = Object.keys(localCtx.paramMap).length;
+
+      code += indent(`setarray flat[rbp] r${numParams}\nadd rsp 1\n`, 1);
+      localCtx.localVarCount++;
+    }
 
     const body = md.getBody() as any;
     if (body) {
@@ -2978,6 +3243,8 @@ set rb ra
         code += indent(this.visitStatement(st, localCtx), 1) + "\n";
       });
     }
+
+    context.curFunc = curFunc;
     code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
     return code;
   }

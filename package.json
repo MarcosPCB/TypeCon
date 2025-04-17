@@ -14,7 +14,7 @@
     "dev-win": "ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts -c \"test/data/test.ts\" -ld",
     "dev-debug": "ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts -debug eduke32.exe",
     "parse": "IS_DEV=true ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts -c \"test/data/test.ts\" -p",
-    "debug": "IS_DEV=true ts-node-dev --inspect-brk=9500 --transpile-only --ignore-watch node_modules src/main.ts",
+    "debug": "IS_DEV=true ts-node-dev --inspect-brk --transpile-only --ignore-watch node_modules src/main.ts",
     "build": "tsc",
     "postbuild": "node postBuild.js"
   },

@@ -1,5 +1,10 @@
 import './types';
 
+export enum FileReadType {
+    binary = 0,
+    text = 1,
+}
+
 /**
  * Class for file operations (code is optimized)
  */
@@ -22,36 +27,176 @@ export class CFile {
     public length: number;
 
     /**
-     * Open and reads a file
+     * If the file has been read or not
+     */
+    private loaded: boolean;
+
+    /**
+     * Determines if it's a binary or text file
+     */
+    public type: number;
+
+    /**
+     * Open a file
      * @param path - The path of the file
      * @returns - A class object holding the file's content and method to operate it.
      */
     constructor(path: string) {
-        const pathQuote = Quote(path);
-        CONUnsafe(`
+        this.length = 0;
+        this.buffer = [];
+        this.path = path;
+        this.seek = 0;
+        this.loaded = false;
+    }
+
+    /**
+     * Reads the file as a 4 byte binary or a encoded text
+     * @param type - Binary or text @see {@link FileReadType}
+     * @param encoding - (optional) 8 by default. Only used if in text mode
+     */
+    Read(type: number, encoding: 8 | 16 | 32 = 8) {
+        if(this.loaded)
+            return;
+
+        const pathQuote = Quote(this.path);
+        if(type == FileReadType.binary) {
+            sysFrame.BufferToSourceIndex(pathQuote as any, false);
+            CONUnsafe(`
 state pushd
 getarraysize rstack rd
-readarrayfromfile rstack rssp
+qstrcpy 1022 rssp
+readarrayfromfile rstack 1022
 getarraysize rstack rb
 state pushr1
 set r0 rb
 add r0 1
 state alloc
 sub r0 1
-set flat[rb] r0
+setarray flat[rb] r0
 set ri rb
 add ri 1
 copy rstack[0] flat[ri] r0
-set ra r0
 resizearray rstack rd
+set rd r0
+set ra rb
 state popr1
 state popd
 `);
+            this.length = sysFrame.rd;
+            this.buffer = sysFrame.GetReference(sysFrame.rb) as [];
+        } else {
+            sysFrame.BufferToSourceIndex(pathQuote as any, false);
+            CONUnsafe(`
+getarraysize rstack rd
+qstrcpy 1022 rsi
+echo 1022
+readarrayfromfile rstack 1022
+getarraysize rstack rb
+al rb
+state pushr1
+set r0 rb
 
-        this.length = sysFrame.ra;
+switch r1
+  case 8:
+    mul r0 4
+    break
+  case 16:
+    mul r0 2
+    break
+endswitch
+
+add r0 1
+state alloc
+sub r0 1
+setarray flat[rb] r0
+set ri rb
+add ri 1
+
+ife r1 32
+  copy rstack[0] flat[ri] r0
+else {
+  state pushr1
+  state pushd
+  state pushc
+  set rd 0
+  set rc 0
+  getarraysize rstack r0
+
+  whilel rc r0 {
+    set ra rstack[rc]
+    ife r1 8 {
+      switch rd
+        case 3:
+          and ra 0xFF000000
+          shiftr ra 24
+          setarray flat[ri] ra
+          break
+
+        case 2:
+          and ra 0xFF0000
+          shiftr ra 16
+          setarray flat[ri] ra
+          break
+
+        case 1:
+          and ra 0xFF00
+          shiftr ra 8
+          setarray flat[ri] ra
+          break
+
+        case 0:
+          and ra 0xFF
+          setarray flat[ri] ra
+          break
+      endswitch
+
+      add rd 1
+      ife rd 4 {
+        set rd 0
+        add rc 1
+      }
+    } else {
+      switch rd
+        case 1:
+          and ra 0xFF00
+          shiftr ra 8
+          setarray flat[ri] ra
+          break
+
+        case 0:
+          and ra 0xFF
+          setarray flat[ri] ra
+          break
+      endswitch
+
+      add rd 1
+      ife rd 2 {
+        set rd 0
+        add rc 1
+      }
+    }
+
+    add ri 1
+  }
+
+  state popc
+  state popd
+  state popr1
+}
+
+resizearray rstack rd
+set rd r0
+set ra rb
+state popr1
+`)
+        }
+
         this.buffer = sysFrame.GetReference(sysFrame.rb) as [];
-        this.path = path;
+        this.length = sysFrame.rd;
+        this.type = type;
+
         this.seek = 0;
+        this.loaded = true;
     }
 
     /**
@@ -106,19 +251,13 @@ state popd
      * Reads a string from the file
      * @returns - The string
      */
-    ReadString(): string | null {
+    ReadString(): string {
         const start = this.seek;
-        let found = false;
         while(this.seek < this.length) {
-            if(this.buffer[this.seek] == 0) {
-                found = true;
+            if(this.buffer[this.seek] == 0)
                 break;
-            }
             this.seek++;
         }
-
-        if(!found)
-            return null;
 
         sysFrame.BufferToSourceIndex(this.buffer, true);
         sysFrame.rd = this.seek + sysFrame.rsi;
@@ -132,11 +271,12 @@ state alloc
 state popr1
 sub ra 1
 
-set flat[rb] ra
+setarray flat[rb] ra
 set ri rb
 add ri 1
 
 copy flat[rsi] flat[ri] ra
+set ra rb
 `);
 
         return sysFrame.GetReference(sysFrame.rb) as string;
@@ -148,17 +288,12 @@ copy flat[rsi] flat[ri] ra
      */
     ReadLine(): string {
         const start = this.seek;
-        let found = false;
         while(this.seek < this.length) {
-            if(this.buffer[this.seek] == 10) {
-                found = true;
+            if(this.buffer[this.seek] == 10)
                 break;
-            }
+
             this.seek++;
         }
-
-        if(!found)
-            return null;
 
         sysFrame.BufferToSourceIndex(this.buffer, true);
         sysFrame.rd = this.seek + sysFrame.rsi;
@@ -172,7 +307,7 @@ state alloc
 state popr1
 sub ra 1
 
-set flat[rb] ra
+setarray flat[rb] ra
 set ri rb
 add ri 1
 
