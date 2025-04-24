@@ -45,7 +45,9 @@ import {
   Type,
   TypeNode,
   TypeFlags,
-  ModuleDeclarationKind
+  ModuleDeclarationKind,
+  ArrowFunction,
+  BodyableNode
 } from "ts-morph";
 
 import {
@@ -107,6 +109,7 @@ enum EHeapType {
 }
 
 enum ESymbolType {
+  error = 0,
   number = 1,
   string = 2,
   boolean = 4,
@@ -120,7 +123,7 @@ enum ESymbolType {
   null = 1024,
   module = 2048,
   enum = 4096,
-  not_compiled = 65536
+  not_compiled = 65536,
 }
 
 /**
@@ -204,6 +207,9 @@ export interface CompilerContext {
 
   // Current function/method being declared
   curFunc: SymbolDefinition;
+
+  // Current module/namespace
+  curModule: SymbolDefinition;
 
   // New symbol table for object layouts (global or per–scope)
   symbolTable: Map<string, SymbolDefinition | EnumDefinition>;
@@ -310,6 +316,7 @@ export class TsToConCompiler {
 
       curClass: null,
       curFunc: null,
+      curModule: null,
 
       currentActorPicnum: undefined,
       currentActorExtra: undefined,
@@ -637,6 +644,50 @@ export class TsToConCompiler {
     return 1;
   }
 
+  private getSymbolType(type: string, context: CompilerContext): ESymbolType {
+      let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
+      switch (type) {
+        case 'string':
+        case 'pointer':
+        case 'boolean':
+          t = ESymbolType[type];
+          break;
+
+        case 'constant':
+        case 'number':
+          break;
+
+        case 'quote':
+          t = ESymbolType.quote;
+          break;
+
+        case 'string[]':
+          t = ESymbolType.string | ESymbolType.array;
+          break;
+
+        case 'number[]':
+        case '[]':
+        case 'any[]':
+          t = ESymbolType.array;
+          break;
+
+        default:
+          let tText = type;
+
+          if (type.endsWith('[]')) {
+            t = ESymbolType.object | ESymbolType.array;
+            tText = tText.slice(0, tText.length - 2);
+          } else t = ESymbolType.object;
+
+          const alias = context.typeAliases.get(tText);
+
+          if (!alias)
+            return ESymbolType.error;
+      }
+
+      return t;
+  }
+
   private getObjectTypeLayout(typeName: string, context: CompilerContext): { [key: string]: SymbolDefinition } {
     if (context.typeAliases.has(typeName)) {
       const typeDef = context.typeAliases.get(typeName)!;
@@ -646,32 +697,36 @@ export class TsToConCompiler {
         const t = typeDef.members[keys[i]];
         const code = typeDef.membersCode ? typeDef.membersCode[keys[i]] : undefined;
         const k = keys[i];
+        let children: Record<string, SymbolDefinition> = undefined;
         // If the member is an array type (e.g., "wow[]")
         if (t.endsWith("[]")) {
           // Strip the brackets to get the base type.
           const baseType = t.slice(0, -2).trim();
           // Recursively compute the layout for one element of the array.
           if (context.typeAliases.has(baseType)) {
-            layout = { ...this.getObjectTypeLayout(baseType, context) };
+            children = this.getObjectTypeLayout(baseType, context);
           } else {
-            // For primitive arrays, assume one slot per element.
             layout[k] = {
               name: k,
               //@ts-ignore
-              type: baseType,
+              type: this.getSymbolType(t, context),
               offset: i,
-              size: 1
+              size: 1,
+              children
             };
           }
         } else {
-          // Otherwise, assume a primitive type takes one slot.
+          if (context.typeAliases.has(t))
+            children = this.getObjectTypeLayout(t, context);
+
           layout[k] = {
             name: k,
             //@ts-ignore
-            type: t,
+            type: this.getSymbolType(t, context),
             offset: i,
             size: 1,
-            CON_code: code
+            CON_code: code,
+            children
           };
         }
       }
@@ -744,32 +799,54 @@ export class TsToConCompiler {
       case SyntaxKind.ModuleDeclaration:
         const md = stmt as ModuleDeclaration;
 
-        const b = context.currentFile.options;
-        if(md.getDeclarationKind() == ModuleDeclarationKind.Global)
-          context.currentFile.options |= ECompileOptions.no_compile;
+        const curModule = context.curModule;
 
+        const b = context.currentFile.options;
         const moduleName = md.getName();
+        const compilable = md.getDeclarationKind() != ModuleDeclarationKind.Global && !['nocompile', 'noread', 'statedecl'].includes(moduleName);
+
+        if(!compilable)
+          context.currentFile.options |= ECompileOptions.no_compile;
 
         const stmts = (stmt as ModuleDeclaration).getStatements();
 
-        const localCtx: CompilerContext = { ...context, symbolTable: new Map(context.symbolTable) };
+        if(compilable)
+          context.symbolTable.set(moduleName, {
+            name: moduleName,
+            type: ESymbolType.module,
+            offset: 0
+          });
+
+        const localCtx: CompilerContext = {
+          ...context,
+          symbolTable: new Map(context.symbolTable),
+          curModule: compilable ? context.symbolTable.get(moduleName) as SymbolDefinition : curModule
+        };
+
+        let mCode = '';
 
         stmts.forEach(st => {
           if (!st.isKind(SyntaxKind.ClassDeclaration))
-            this.visitStatement(st, localCtx);
+            mCode = this.visitStatement(st, localCtx);
         });
 
-        if(md.getDeclarationKind() != ModuleDeclarationKind.Global && !['nocompile', 'noread', 'statedecl'].includes(moduleName)) {
+        if(compilable) {
+          const children: { [k: string]: SymbolDefinition | EnumDefinition } = Object.fromEntries([...localCtx.symbolTable].filter(e => !context.symbolTable.has(e[0])));
+
           context.symbolTable.set(moduleName, {
             name: moduleName,
             type: ESymbolType.module,
             offset: 0,
-            children: Object.fromEntries([...localCtx.symbolTable].filter(e => !context.symbolTable.has(e[0])))
+            children
           });
+
+          code += mCode;
         } else {
           context.symbolTable = localCtx.symbolTable;
           context.typeAliases = localCtx.typeAliases;
         }
+
+        context.curModule = curModule;
 
         context.currentFile.options = b;
         return code;
@@ -851,6 +928,9 @@ export class TsToConCompiler {
       });
       return code;
     }
+
+    if(type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_FUNC_ALIAS')
+      return code;
 
     if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_NATIVE_OBJECT') {
       const alias = this.getObjectTypeLayout(type.getAliasTypeArguments()[0].getText().replace(/[`'"]/g, ""), context);
@@ -1117,6 +1197,9 @@ export class TsToConCompiler {
 
       case SyntaxKind.ParenthesizedExpression:
         return code + this.visitParenthesizedExpression(expr as ParenthesizedExpression, context);
+
+      case SyntaxKind.ArrowFunction:
+        return code + this.visitArrowFunctionExpression(expr as ArrowFunction, context);
 
       default:
         return code + this.visitLeafOrLiteral(expr, context);
@@ -1732,19 +1815,20 @@ set rb ra
       }
     }
 
-    const variable = context.symbolTable.get(fnObj) as SymbolDefinition;
+    let variable = context.paramMap[fnObj];
+
+    if(!variable)
+      variable = context.symbolTable.get(fnObj) as SymbolDefinition;
+
     let typeName: undefined | string = undefined;
 
     //if (variable && (!(variable.type & ESymbolType.function) && !(variable.type & ESymbolType.array) && !(variable.type & ESymbolType.object)))
     if(variable) {
-      switch(variable.type) {
-        case ESymbolType.array:
-          typeName = 'array';
-          break;
-
-        case ESymbolType.string:
+      if(variable.type & ESymbolType.array)
+        typeName = 'array';
+      else {
+        if(variable.type & ESymbolType.string)
           typeName = 'string';
-          break;
       }
     }
 
@@ -1788,7 +1872,6 @@ set rb ra
         } else if (expected & CON_NATIVE_FLAGS.FUNCTION) {
           // For FUNCTION, generate code normally and keep it at argCode
           argCode += this.visitExpression(args[i] as Expression, context);
-          argCode += `set r${j} ra\n`;
           resolvedLiterals.push(null);
         } else if (expected & (CON_NATIVE_FLAGS.OBJECT | CON_NATIVE_FLAGS.ARRAY)) {
           // For OBJECT and ARRAY, the next register sets what type of address we are dealing with
@@ -2227,7 +2310,7 @@ set rb ra
 
       if (!sym.native_pointer) {
         code += `set ri rbp\nadd ri ${sym.offset}\n`;
-        code += `set ri flat[ri]\nstate push\n`;
+        code += `set ri flat[ri]\n`;
 
         for (let i = 1; i < segments.length; i++) {
           const seg = segments[i];
@@ -2251,7 +2334,7 @@ set rb ra
             }
             code += `state popi\n`;
             if (sym.type & (ESymbolType.object | ESymbolType.array))
-              code += `mul ra ${(sym as SymbolDefinition).size / (sym as SymbolDefinition).num_elements}\nadd ri ra\nadd ri 1\n`
+              code += `mul ra ${(sym as SymbolDefinition).size / (sym as SymbolDefinition).num_elements}\nadd ri ra\nadd ri 1\nset ri flat[ri]\n`
             else
               code += `add ri ra\nadd ri 1\n`;
 
@@ -2288,6 +2371,9 @@ set rb ra
 
             if(sym.offset != 0)
               code += `add ri ${sym.offset}\n`;
+
+            if(sym.type & ESymbolType.object || sym.type & ESymbolType.array)
+              code += `set ri flat[ri]\n`;
             continue;
           }
         }
@@ -2610,7 +2696,8 @@ set rb ra
       mainBFunc: false,
       curFunc: undefined,
     };
-    let code = `${this.options.lineDetail ? `/*${fd.getText()}*/` : ''}\ndefstate ${name}\n  set ra rbp \n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+
+    let code = `${this.options.lineDetail ? `/*${fd.getText()}*/` : ''}\ndefstate ${localCtx.curModule ? `_${localCtx.curModule.name}_` : ''}${name}\n  set ra rbp \n  state push\n  set rbp rsp\n  add rbp 1\n`;
     fd.getParameters().forEach((p, i) => {
       const type = p.getType();
       let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
@@ -2662,13 +2749,13 @@ set rb ra
     });
 
     context.symbolTable.set(name, {
-      name: `${name}`,
+      name: `${localCtx.curModule ? `_${localCtx.curModule.name}_` : ''}${name}`,
       type: ESymbolType.function,
       offset: 0
     });
 
     localCtx.symbolTable.set(name, {
-      name: `${name}`,
+      name: `${localCtx.curModule ? `_${localCtx.curModule.name}_` : ''}${name}`,
       type: ESymbolType.function,
       offset: 0
     });
@@ -2687,16 +2774,121 @@ set rb ra
       }
     }
 
-    const body = fd.getBody() as any;
+    const body = fd.getBody() as Block;
+    if (body) {
+      const params = Object.keys(localCtx.paramMap).length;
+
+      if(body.getDescendantsOfKind(SyntaxKind.ArrowFunction)) {
+        if(params > 0) {
+          code += indent(`state pushr${params > 12 ? 'all' : params}\n`, 1);
+          Object.entries(localCtx.paramMap).forEach((e, i) => {
+            localCtx.symbolTable.set(e[0], {
+              ...e[1],
+              offset: i
+            });
+
+            localCtx.localVarCount++;
+          });
+        }
+      }
+
+      body.getStatements().forEach(st => {
+        code += indent(this.visitStatement(st, localCtx), 1) + "\n";
+      });
+
+      if(body.getDescendantsOfKind(SyntaxKind.ArrowFunction)) {
+        if(params > 0) {
+          code += indent(`state popr${params > 12 ? 'all' : params}\n`, 1);
+
+          Object.entries(localCtx.paramMap).forEach((e, i) => {
+            localCtx.symbolTable.delete(e[0]);
+          });
+        }
+      }
+    }
+
+    context.symbolTable.set(name, localCtx.symbolTable.get(name));
+
+    code += `  sub rbp 1\n  set rsp rbp\n  state pop\n  set rbp ra\nends \n\n`;
+    return code;
+  }
+
+  /******************************************************************************
+   * VISIT ARROW FUNCTION EXPRESSION
+   * => state <functionName> { ... }
+   ****************************************************************************/
+  private visitArrowFunctionExpression(af: ArrowFunction, context: CompilerContext): string {
+    // new local context
+    const localCtx: CompilerContext = {
+      ...context,
+      localVarOffset: {},
+      localVarCount: 0,
+      paramMap: {},
+      isInLoop: false,
+      mainBFunc: false,
+      curFunc: undefined,
+      symbolTable: new Map(context.symbolTable)
+    };
+
+    let code = `${this.options.lineDetail ? `/*${af.getText()}*/` : ''}\nset ra rbp \nstate push\nset rbp rsp\nadd rbp 1\n`;
+    af.getParameters().forEach((p, i) => {
+      const type = p.getType();
+      let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
+      let children: Record<string, SymbolDefinition>;
+      let con = '';
+      switch (type.getText()) {
+        case 'string':
+        case 'pointer':
+        case 'boolean':
+          t = ESymbolType[type.getText()];
+          break;
+
+        case 'constant':
+        case 'number':
+          break;
+
+        case 'quote':
+          t = ESymbolType.quote;
+          break;
+
+        case 'string[]':
+          t = ESymbolType.string | ESymbolType.array;
+          break;
+
+        case 'number[]':
+        case '[]':
+        case 'any[]':
+          t = ESymbolType.array;
+          break;
+
+        default:
+          let tText = type.getText();
+
+          if (type.getText().endsWith('[]')) {
+            t = ESymbolType.object | ESymbolType.array;
+            tText = tText.slice(0, tText.length - 2);
+          } else t = ESymbolType.object;
+
+          const alias = context.typeAliases.get(tText);
+
+          if (!alias) {
+            addDiagnostic(af, context, 'error', `Undeclared type alias ${tText}`);
+            return '';
+          }
+
+          children = this.getObjectTypeLayout(tText, context);
+      }
+      localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children };
+    });
+
+    const body = af.getBody() as any;
     if (body) {
       body.getStatements().forEach(st => {
         code += indent(this.visitStatement(st, localCtx), 1) + "\n";
       });
     }
 
-    context.symbolTable.set(name, localCtx.symbolTable.get(name));
-
-    code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
+    code += `sub rbp 1\nset rsp rbp\nstate pop\nset rbp ra\n\n`;
     return code;
   }
 
@@ -3239,7 +3431,7 @@ set rb ra
     }
 
     // otherwise => normal state
-    let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+    let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set rbp rsp\n  add rbp 1\n`;
 
     md.getParameters().forEach((p, i) => {
       const type = p.getType();
@@ -3322,7 +3514,7 @@ set rb ra
     }
 
     context.curFunc = curFunc;
-    code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
+    code += `  sub rbp 1\n  set rsp rbp\n  state pop\n  set rbp ra\nends \n\n`;
     return code;
   }
 }

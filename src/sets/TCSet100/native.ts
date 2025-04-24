@@ -9,6 +9,7 @@ export type CON_NATIVE_OBJECT<Type> = Type;
  * CON_FUNC_ALIAS allows you to use a function from a class or an object without having to define it locally.
  * In the next example, this will allow you to use QuoteDimension without having to be inside the CEvent class
  * Rememeber: the varaible won't have a symbol nor it will be compiled
+ * IMPORTANT: the variable name MUST BE the same name as the function
  * 
  * @example const QuoteDimension: CON_ALIAS_FUNC<typeof CEvent.prototype.QuoteDimension> = CEvent.prototype.QuoteDimension;
  */
@@ -365,7 +366,7 @@ state popd
     {
         name: 'Spawn',
         code: (args?: boolean, fn?: string) => {
-            return `set rd RETURN \nifge r2 1 eqspawn r0 \nelse espawn r0 \n${fn}set rb RETURN \nset RETURN rd `;
+            return `set rd RETURN \nifge r2 1 eqspawn r0 \nelse espawn r0 \nset r0 RETURN\nset ra RETURN\nstate push\nstate pushd\n${fn}state pop\nset rb ra\nstate popd\nset RETURN rd`;
         },
         returns: true,
         return_type: 'variable',
@@ -379,7 +380,7 @@ state popd
     {
         name: 'Shoot',
         code: (args?: boolean, fn?: string) => {
-            return `set rd RETURN \nife r2 0 eshoot r0 \nelse { \nife r4 1 { \neshoot r0 \ngeta[RETURN].zvel ra \nadd ra r3 \nseta[RETURN].zvel ra \n } else ezshoot r3 r0\n }\n${fn}set rb RETURN\nset RETURN rd `;
+            return `set rd RETURN \nife r2 0 eshoot r0 \nelse { \nife r4 1 { \neshoot r0 \ngeta[RETURN].zvel ra \nadd ra r3 \nseta[RETURN].zvel ra \n } else ezshoot r3 r0\n }\nset r0 RETURN\nset ra RETURN\nstate push\nstate pushd\n${fn}state pop\nset rb ra\nstate popd\nset RETURN rd `;
         },
         returns: true,
         return_type: 'variable',
@@ -865,17 +866,21 @@ state pop
         name: 'forEach',
         code: (args?: boolean, fn?: string) => {
             return `
-state pushr1
 set rd flat[r1]
 set rc 0
 for rc range rd {
   set rsi r1
   add rsi 1
   add rsi rc
+  state pushr2
   set r0 flat[rsi]
+  set r1 rc
   state pushc
+  state pushd
   ${fn} 
+  state popd
   state popc
+  state popr2
 }
 state popr1
 `

@@ -8,10 +8,72 @@ declare global {
     //Type for native functions
 
     /**
+     * Bit-flags accepted by the Build-engine `rotatesprite*` family of functions.
+     * Combine multiple flags with the bitwise OR (`|`) operator.
+     * @enum {number}
+     * @property {number} TRANS1              Translucency level 1 (≈ 66 % opacity).
+     * @property {number} AUTO                Enable 320 × 200 coordinate scaling (recommended for portability).
+     * @property {number} YFLIP               Flip the sprite vertically; combine with angle = 1024 for X-flip.
+     * @property {number} NOCLIP              Make sprite immune to screen-size changes (e.g. status bar).
+     * @property {number} TOPLEFT             Treat the sprite’s top-left as its origin; ignore tile offsets.
+     * @property {number} TRANS2              Translucency level 2 (≈ 33 % opacity). Requires `TRANS1`.
+     * @property {number} NOMASK              Disable masking (and translucency).
+     * @property {number} PERM                **Deprecated** “permanent” tile flag.
+     * @property {number} ALIGN_L             Align sprite to the left edge on widescreen displays.
+     * @property {number} ALIGN_R             Align sprite to the right edge on widescreen displays.
+     * @property {number} STRETCH             Stretch sprite to full resolution (pre-widescreen behaviour).
+     * @property {number} ROTATESPRITE_FULL16 Interpret coordinates as 16-bit-shifted “full-precision” values.
+     * @property {number} LERP                Interpolate position between calls (per `guniqhudid`).
+     * @property {number} FORCELERP           Force interpolation even when the tile number changes.
+     */
+    export enum EOrientationFlags {
+        /** Translucency level 1 (≈ 66 % opacity). */
+        TRANS1 = 1,
+
+        /** Enable 320 × 200 coordinate scaling (recommended for portability). */
+        AUTO = 2,
+
+        /** Flip vertically; with angle = 1024 this appears as an X-flip. */
+        YFLIP = 4,
+
+        /** Ignore screen-size changes (`+`/`−`)—useful for HUD elements. */
+        NOCLIP = 8,
+
+        /** Use the sprite’s top-left corner as its origin; ignore tile offsets. */
+        TOPLEFT = 16,
+
+        /** Translucency level 2 (≈ 33 % opacity). Requires `TRANS1`. */
+        TRANS2 = 32,
+
+        /** Disable masking and translucency entirely. */
+        NOMASK = 64,
+
+        /** @deprecated “Permanent” tile flag (no longer used). */
+        PERM = 128,
+
+        /** Left-align on widescreen displays. */
+        ALIGN_L = 256,
+
+        /** Right-align on widescreen displays. */
+        ALIGN_R = 512,
+
+        /** Stretch to full screen resolution, distorting aspect ratio. */
+        STRETCH = 1024,
+
+        /** Interpret coordinates as 16-bit-shifted full-precision values (`rotatesprite16`). */
+        ROTATESPRITE_FULL16 = 2048,
+
+        /** Interpolate coordinates between successive calls (per `guniqhudid`). */
+        LERP = 4096,
+
+        /** Force interpolation even when the tile number changes. */
+        FORCELERP = 8192,
+    }
+
+
+    /**
      * Bit‑flags that control how EDuke32 renders on‑screen strings.
-     *
      * Combine multiple flags with the bitwise OR (`|`) operator to build a render style.
-     *
      * @enum {number}
      * @property {number} XRIGHT              Right‑align text on the *x* axis.
      * @property {number} XCENTER             Center‑align text on the *x* axis.
@@ -41,82 +103,93 @@ declare global {
      */
     export enum ETextFlags {
         /** Right‑align text on the *x* axis. */
-        XRIGHT            = 1,
-    
-        /** Center‑align text on the *x* axis. */
-        XCENTER           = 2,
-    
-        /** Bottom‑align text on the *y* axis. */
-        YBOTTOM           = 4,
-    
-        /** Center‑align text on the *y* axis. */
-        YCENTER           = 8,
-    
-        /** Engine chooses `<xspace>`; your value is added. */
-        INTERNALSPACE     = 16,
-    
-        /** `<xspace>` derived from the width of the tile after `'~'`. */
-        TILESPACE         = 32,
-    
-        /** Engine chooses `<yline>`; your value is added. */
-        INTERNALLINE      = 64,
-    
-        /** `<yline>` derived from the height of the tile after `'~'`. */
-        TILELINE          = 128,
-    
-        /** Treat `<xbetween>` as a constant glyph width. */
-        XOFFSETZERO       = 256,
-    
-        /** Justify text horizontally (compatible with `XRIGHT` and `XCENTER`). */
-        XJUSTIFY          = 512,
-    
-        /** Treat `<ybetween>` as a constant line height. */
-        YOFFSETZERO       = 1024,
-    
-        /** Justify text vertically (compatible with `YBOTTOM` and `YCENTER`). */
-        YJUSTIFY          = 2048,
-    
-        /** *Reserved – do not use.* */
-        RESERVED_4096     = 4096,
-    
-        /** Force all letters to uppercase. */
-        UPPERCASE         = 8192,
-    
-        /** Swap the case of each letter (combine with `UPPERCASE` for lowercase). */
-        INVERTCASE        = 16384,
-    
-        /** Ignore palette escape sequences (`#`, `##`). */
-        IGNOREESCAPE      = 32768,
-    
-        /** Render palette escape sequences literally. */
-        LITERALESCAPE     = 65536,
-    
-        /** *Reserved – do not use.* */
-        RESERVED_131072   = 131072,
-    
-        /** Render numerals with constant width. */
-        CONSTWIDTHNUMS    = 262144,
-    
-        /** Tile order starts at `'0'`; for digital number tiles. */
-        DIGITALNUMBER     = 524288,
-    
-        /** Use the red main‑menu font tile order. */
-        BIGALPHANUM       = 1048576,
-    
-        /** Use the gray‑font tile order. */
-        GRAYFONT          = 2097152,
-    
-        /** Skip localization translation. */
-        NOLOCALE          = 4194304,
-    
-        /** Shift text by half a tile when `RS_TOPLEFT` is not set. */
-        VARHEIGHT         = 8388608,
-    
-        /** Center glyphs and respect `<xbetween>` in constant‑width mode. */
-        CENTERCONSTWIDTH  = 16777216,
-    }
-  
+        XRIGHT = 1,
 
+        /** Center‑align text on the *x* axis. */
+        XCENTER = 2,
+
+        /** Bottom‑align text on the *y* axis. */
+        YBOTTOM = 4,
+
+        /** Center‑align text on the *y* axis. */
+        YCENTER = 8,
+
+        /** Engine chooses `<xspace>`; your value is added. */
+        INTERNALSPACE = 16,
+
+        /** `<xspace>` derived from the width of the tile after `'~'`. */
+        TILESPACE = 32,
+
+        /** Engine chooses `<yline>`; your value is added. */
+        INTERNALLINE = 64,
+
+        /** `<yline>` derived from the height of the tile after `'~'`. */
+        TILELINE = 128,
+
+        /** Treat `<xbetween>` as a constant glyph width. */
+        XOFFSETZERO = 256,
+
+        /** Justify text horizontally (compatible with `XRIGHT` and `XCENTER`). */
+        XJUSTIFY = 512,
+
+        /** Treat `<ybetween>` as a constant line height. */
+        YOFFSETZERO = 1024,
+
+        /** Justify text vertically (compatible with `YBOTTOM` and `YCENTER`). */
+        YJUSTIFY = 2048,
+
+        /** *Reserved – do not use.* */
+        RESERVED_4096 = 4096,
+
+        /** Force all letters to uppercase. */
+        UPPERCASE = 8192,
+
+        /** Swap the case of each letter (combine with `UPPERCASE` for lowercase). */
+        INVERTCASE = 16384,
+
+        /** Ignore palette escape sequences (`#`, `##`). */
+        IGNOREESCAPE = 32768,
+
+        /** Render palette escape sequences literally. */
+        LITERALESCAPE = 65536,
+
+        /** *Reserved – do not use.* */
+        RESERVED_131072 = 131072,
+
+        /** Render numerals with constant width. */
+        CONSTWIDTHNUMS = 262144,
+
+        /** Tile order starts at `'0'`; for digital number tiles. */
+        DIGITALNUMBER = 524288,
+
+        /** Use the red main‑menu font tile order. */
+        BIGALPHANUM = 1048576,
+
+        /** Use the gray‑font tile order. */
+        GRAYFONT = 2097152,
+
+        /** Skip localization translation. */
+        NOLOCALE = 4194304,
+
+        /** Shift text by half a tile when `RS_TOPLEFT` is not set. */
+        VARHEIGHT = 8388608,
+
+        /** Center glyphs and respect `<xbetween>` in constant‑width mode. */
+        CENTERCONSTWIDTH = 16777216,
+    }
+
+    /**
+     * Interface for declaring fonts used in the game
+     * @interface IFont
+     * @property {number} tile - The starting tile of the font
+     * @property {number} xSpace - The width of the whitespace character
+     * @property {number} yLine - the height of an empty line
+     * @property {number} xBetween - The x distance between characters
+     * @property {number} yBetween - The y distance between lines
+     * @property {vec2} offset - The xy offset
+     * @property {vec2} maxSizeChar - The maximum width/height of the alphabet characters' (used for line ending calculations)
+     * @property {ETextFlags} flags - The font's flags
+     */
     export interface IFont {
         tile: number,
         xSpace: number,
@@ -124,6 +197,7 @@ declare global {
         xBetween: number,
         yBetween: number,
         offset: vec2,
+        maxSizeChar: vec2,
         flags: ETextFlags
     }
 
@@ -174,35 +248,73 @@ declare global {
     }
 
 
-
+    /**
+     * 2D vector type
+     * @type vec2
+     * @property {number} x - X position
+     * @property {number} y - Y position
+     */
     export type vec2 = {
         x: number,
         y: number
     }
 
+    /**
+     * 3D vector type
+     * @type vec3
+     * @property {number} x - X position
+     * @property {number} y - Y position
+     * @property {number} z - Z position
+     */
     export type vec3 = {
         x: number,
         y: number,
         z: number,
     }
 
+    /**
+     * 2D Positioning type with angle and scaling
+     * @type pos2
+     * @property {vec2} xy - 2D vector for positioning
+     * @property {number} scale - Scaling factor (for screen drawing 65536 is the regular size)
+     * @property {number} ang - Angle (0 to 2048)
+     */
     export type pos2 = {
         xy: vec2,
         scale: number,
         ang: number
     }
 
+    /**
+     * 3D Positioning type with angle and scaling
+     * @type pos3
+     * @property {vec3} xyz - 3D vector for positioning
+     * @property {number} ang - Angle (0 to 2048)
+     */
     export type pos3 = {
         xyz: vec3,
         ang: number
     }
 
+    /**
+     * Style type used for screen drawing
+     * @type TStyle
+     * @property {number} shade - Shading value
+     * @property {number} pal - Palette swap value
+     * @property {EOrientationFlags} orientation - Drawing flags
+     */
     export type TStyle = {
         shade: number,
         pal: number,
-        orientation: number
+        orientation: EOrientationFlags
     }
 
+    /**
+     * Tagging system used inside Build Engine
+     * @interface tag
+     * @property {number} lotag - Lower tag
+     * @property {number} hitag - Higher tag
+     */
     export interface tag {
         lotag: CON_NATIVE<number>;
         hitag: CON_NATIVE<number>;
@@ -284,11 +396,11 @@ declare global {
          * @param array - If true, it adds 1 to the ri (first slot is the length)
          */
         BufferToIndex(buffer: any[], array: boolean): void;
-         /**
-         * Returns the reference from the buffer to rsi register
-         * @param buffer - The buffer reference
-         * @param array - If true, it adds 1 to the ri (first slot is the length)
-         */
+        /**
+        * Returns the reference from the buffer to rsi register
+        * @param buffer - The buffer reference
+        * @param array - If true, it adds 1 to the ri (first slot is the length)
+        */
         BufferToSourceIndex(buffer: any[], array: boolean): void;
     }
 
@@ -499,17 +611,17 @@ declare global {
     }
 
     /**
- * Interface for declaring moves.
- *
- * Use this interface to define moves within the system.
- *
- * Available properties:
- * @property {TLabel} name - Unique label for the move.
- * @property {number} horizontal_vel - Horizontal velocity.
- * @property {number} vertical_vel - Vertical velocity (use negative values for up).
- *
- * @interface IMove
- */
+     * Interface for declaring moves.
+     *
+     * Use this interface to define moves within the system.
+     *
+     * Available properties:
+     * @property {TLabel} name - Unique label for the move.
+     * @property {number} horizontal_vel - Horizontal velocity.
+     * @property {number} vertical_vel - Vertical velocity (use negative values for up).
+     *
+     * @interface IMove
+     */
     export interface IMove {
         /**
          * Unique label for the move.
@@ -764,7 +876,7 @@ declare global {
          * @param queued - (optional) Set this to true if you want it to become part of the queue system
          * @returns - the ID of the actor spawned
          */
-        protected Spawn(picnum: number | CActor, initFn?: ((RETURN: number) => void), queued?: boolean): CON_NATIVE<number>
+        protected Spawn(picnum: number | CActor, initFn?: ((id: number) => void), queued?: boolean): CON_NATIVE<number>
         /**
          * Shoots a projectile
          * @param picnum - The projectile's tile number
@@ -773,7 +885,7 @@ declare global {
          * @param zvel - (optional) the vertical velocity - must set @param use_zvel to true
          * @param additive_zvel - (optional) Set this to true to add your vertical velocity to the actor's already set
          */
-        protected Shoot(picnum: number | CActor, initFn?: ((RETURN: number) => void), use_zvel?: boolean, zvel?: number, additive_zvel?: boolean): CON_NATIVE<number>
+        protected Shoot(picnum: number | CActor, initFn?: ((id: number) => void), use_zvel?: boolean, zvel?: number, additive_zvel?: boolean): CON_NATIVE<number>
         /**
          * Damages all actors and sectors in a radius (divided into 4 ranges)
          * @param radius - The maximum radius
@@ -1026,6 +1138,7 @@ declare global {
         public ScreenText(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
 
         public QuoteDimension(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<vec2>;
+        
         /**
          * Use append if you want to append this event to the others of the same type
          */

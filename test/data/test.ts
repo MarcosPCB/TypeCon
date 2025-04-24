@@ -118,7 +118,10 @@ class newEnemy extends CActor {
         }
 
         if(this.HitByWeapon()) {
-            this.Spawn(DN3D.ENames.BLOOD);
+            this.Spawn(DN3D.ENames.BLOOD, (e) => {
+                console.debug('worked');
+                console.debug(e);
+            });
 
             this.Guts(DN3D.ENames.JIBS6, 2);
 

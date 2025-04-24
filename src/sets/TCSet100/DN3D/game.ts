@@ -802,6 +802,10 @@ export namespace DN3D {
             yLine: 8,
             xBetween: 0,
             yBetween: 0,
+            maxSizeChar: {
+                x: 10,
+                y: 10
+            },
             offset: {
                 x: 0,
                 y: 0
