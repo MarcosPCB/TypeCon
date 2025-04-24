@@ -4,7 +4,15 @@ namespace noread {}
 export type CON_NATIVE<Type> = Type;
 export type CON_NATIVE_GAMEVAR<Code, Type> = Type;
 export type CON_NATIVE_OBJECT<Type> = Type;
-export type CON_ALIAS<Class> = Class; 
+
+/**
+ * CON_FUNC_ALIAS allows you to use a function from a class or an object without having to define it locally.
+ * In the next example, this will allow you to use QuoteDimension without having to be inside the CEvent class
+ * Rememeber: the varaible won't have a symbol nor it will be compiled
+ * 
+ * @example const QuoteDimension: CON_ALIAS_FUNC<typeof CEvent.prototype.QuoteDimension> = CEvent.prototype.QuoteDimension;
+ */
+export type CON_FUNC_ALIAS<F extends (...args: any[]) => any> = (...args: Parameters<F>) => ReturnType<F>;
 
 export class CON_NATIVE_POINTER { }
 
