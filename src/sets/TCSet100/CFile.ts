@@ -62,9 +62,8 @@ export class CFile {
         if(type == FileReadType.binary) {
             sysFrame.BufferToSourceIndex(pathQuote as any, false);
             CONUnsafe(`
-state pushd
 getarraysize rstack rd
-qstrcpy 1022 rssp
+qstrcpy 1022 rsi
 readarrayfromfile rstack 1022
 getarraysize rstack rb
 state pushr1
@@ -80,7 +79,6 @@ resizearray rstack rd
 set rd r0
 set ra rb
 state popr1
-state popd
 `);
             this.length = sysFrame.rd;
             this.buffer = sysFrame.GetReference(sysFrame.rb) as [];
@@ -89,10 +87,8 @@ state popd
             CONUnsafe(`
 getarraysize rstack rd
 qstrcpy 1022 rsi
-echo 1022
 readarrayfromfile rstack 1022
 getarraysize rstack rb
-al rb
 state pushr1
 set r0 rb
 
@@ -197,6 +193,122 @@ state popr1
 
         this.seek = 0;
         this.loaded = true;
+    }
+
+    /**
+     * Write the contents of buffer to the path
+     * @param type binary or text
+     * @param encoding text enconding
+     */
+    Write(type: FileReadType, encoding: 8 | 16 | 32 = 8) {
+      if(!this.loaded)
+        return;
+
+      const pathQuote = Quote(this.path);
+      if(type == FileReadType.binary) {
+        sysFrame.BufferToSourceIndex(pathQuote as any, false);
+        sysFrame.rc = this.length;
+        sysFrame.BufferToIndex(this.buffer, true);
+        CONUnsafe(`
+getarraysize rstack rd
+resizearray rstack rc
+copy flat[ri] rstack[0] rc
+qstrcpy 1022 rsi
+writearraytofile rstack 1022
+getarraysize rstack rb
+resizearray rstack rd
+`);
+    } else {
+        sysFrame.BufferToSourceIndex(pathQuote as any, false);
+        sysFrame.rc = this.length;
+        sysFrame.BufferToIndex(this.buffer, true);
+        CONUnsafe(`
+getarraysize rstack rd
+set ra rc
+
+switch r1
+  case 8
+    div ra 4
+    break
+  
+  case 16
+    div ra 2
+    break
+endswitch
+
+ife r1 32
+  copy flat[ri] rstack[0] rc
+else {
+  resizearray rstack ra
+  state pushr1
+  state pushd
+
+  set rd 0
+  set r0 rc
+  set rc 0
+  whilel rc ra {
+    set rb flat[ri]
+    ife r1 8 {
+      switch rd
+        case 3:
+          shiftl rb 24
+          setarray rstack[rc] rb
+          break
+
+        case 2:
+          shiftl rb 16
+          or rb flat[ri]
+          setarray rstack[rc] rb
+          break
+
+        case 1:
+          shiftl rb 8
+          or rb flat[ri]
+          setarray rstack[rc] rb
+          break
+
+        case 0:
+          or rb flat[ri]
+          setarray rstack[rc] rb
+          break
+      endswitch
+
+      add rd 1
+      ife rd 4 {
+        set rd 0
+        add rc 1
+      }
+    } else {
+      switch rd
+        case 1:
+          shiftl rb 8
+          or rb flat[ri]
+          setarray rstack[rc] rb
+          break
+
+        case 0:
+          or rb flat[ri]
+          setarray rstack[rc] rb
+          break
+      endswitch
+
+      add rd 1
+      ife rd 2 {
+        set rd 0
+        add rc 1
+      }
+    }
+
+    add ri 1
+  }
+
+  state popd
+  state popr1
+}
+
+resizearray rstack rd
+`)
+      }
     }
 
     /**
@@ -312,8 +424,27 @@ set ri rb
 add ri 1
 
 copy flat[rsi] flat[ri] ra
+set ra rb
 `);
 
         return sysFrame.GetReference(sysFrame.rb) as string;
+    }
+
+    /**
+     * Returns the buffer witht eh file content
+     * @returns an array or string
+     */
+    GetBuffer(): [] | string {
+      sysFrame.BufferToSourceIndex(this.buffer, true);
+      return sysFrame.GetReference(sysFrame.rsi);
+    }
+
+    /**
+     * Sets the current buffer to the one provided
+     * @param buffer the buffer that's gonna replace
+     */
+    SetBuffer(buffer: []) {
+      sysFrame.BufferToSourceIndex(buffer as any, true);
+      this.buffer = sysFrame.GetReference(sysFrame.rsi) as [];
     }
 }

@@ -4,6 +4,7 @@ namespace noread {}
 export type CON_NATIVE<Type> = Type;
 export type CON_NATIVE_GAMEVAR<Code, Type> = Type;
 export type CON_NATIVE_OBJECT<Type> = Type;
+export type CON_ALIAS<Class> = Class; 
 
 export class CON_NATIVE_POINTER { }
 
@@ -519,6 +520,47 @@ state pop
         ]
     },
     {
+        name: 'QuoteDimension',
+        code: (args: boolean) => {
+            return `
+state push
+state pushd
+qstrdim ra rd r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18
+add rsp 1
+setarray flat[rsp] ra
+add rsp 1
+setarray flat[rsp] rd
+set rb rsp
+sub rb 3
+`
+        },
+        returns: true,
+        return_type: 'object',
+        return_size: 2,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+        ]
+    },
+    {
         name: 'log',
         code: 'echo',
         returns: false,
@@ -810,6 +852,32 @@ state pop
             0, -1, 0
         ],
         type_belong: ['string']
+    },
+    {
+        name: 'forEach',
+        code: (args?: boolean, fn?: string) => {
+            return `
+state pushr1
+set rd flat[r1]
+set rc 0
+for rc range rd {
+  set rsi r1
+  add rsi 1
+  add rsi rc
+  set r0 flat[rsi]
+  state pushc
+  ${fn} 
+  state popc
+}
+state popr1
+`
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.FUNCTION
+        ],
+        type_belong: ['array']
     },
     {
         name: 'GetReference',

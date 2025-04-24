@@ -1,5 +1,5 @@
 import '../../src/sets/TCSet100/types';
-import '../../src/sets/TCSet100/DN3D_game';
+import DN3D from '../../include/TCSet100/DN3D/game';
 import { CFile, FileReadType } from '../../src/sets/TCSet100/CFile';
 
 type wow = {
@@ -74,7 +74,7 @@ class newEnemy extends CActor {
             if(this.CanShootTarget()) {
                 if(this.playerDist < 4096) {
                     if(this.Count() >= 16) {
-                        this.Shoot(Names.FIRELASER);
+                        this.Shoot(DN3D.ENames.FIRELASER);
                         this.Count(0);
                     }
                 } else {
@@ -118,12 +118,12 @@ class newEnemy extends CActor {
         }
 
         if(this.HitByWeapon()) {
-            this.Spawn(Names.BLOOD);
+            this.Spawn(DN3D.ENames.BLOOD);
 
-            this.Guts(Names.JIBS6, 2);
+            this.Guts(DN3D.ENames.JIBS6, 2);
 
             if(this.IsDead()) {
-                TroopBodyJibs();
+                DN3D.states.TroopBodyJibs();
                 const f = new CFile('test.txt');
                 console.debug(1);
                 f.Read(FileReadType.text, 8);

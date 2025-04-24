@@ -2,10 +2,10 @@
 
 import fs from 'fs';
 import path = require('path');
-import { compiledFiles, CONInit } from './modules/transpiler/helper/translation';
+import { compiledFiles, CONInit } from './modules/transpiler/helper/framework';
 import GDBDebugger from './modules/debugger/services/GDBDebugger';
 //import { CONDebugger } from './modules/debugger/debugger';
-import { TsToConTranspiler } from './modules/transpiler/services/Transpiler2';
+import { TsToConCompiler } from './modules/transpiler/services/Compiler';
 import * as readline from 'readline';
 import inquirer from 'inquirer';
 const fsExtra = require("fs-extra");
@@ -314,7 +314,7 @@ if(debug_mode) {
     if(stack_size < 1024)
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
-    const transpiler = new TsToConTranspiler({lineDetail});
+    const compiler = new TsToConCompiler({lineDetail});
 
     let code = '';
 
@@ -323,7 +323,7 @@ if(debug_mode) {
     if(fileName != '') {
         const file = fs.readFileSync(fileName);
 
-        const result = transpiler.transpile(file.toString(), fileName);
+        const result = compiler.compile(file.toString(), fileName);
 
         for(let i = compiledFiles.size - 1; i >= 0; i--) {
             const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
@@ -356,7 +356,7 @@ if(debug_mode) {
         for(const f of files) {
             const file = fs.readFileSync(f);
 
-            transpiler.transpile(file.toString(), f);
+            compiler.compile(file.toString(), f);
         }
 
         if(compile_options & 8) {

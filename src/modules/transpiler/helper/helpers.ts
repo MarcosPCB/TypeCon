@@ -10,7 +10,7 @@ import {
     NumericLiteral,
     PrefixUnaryExpression
   } from "ts-morph";
-  import { TranspilerContext, addDiagnostic } from '../services/Transpiler2'
+  import { CompilerContext, addDiagnostic } from '../services/Compiler'
   // The line above is hypothetical; adapt to your actual imports.
   
   import { CON_NATIVE_FUNCTION, CON_NATIVE_VAR, EMoveFlags, nativeFunctions, nativeVars_Sprites } from "../../../sets/TCSet100/native"; 
@@ -21,7 +21,7 @@ import {
    * e.g. EMoveFlags.faceplayer | EMoveFlags.randomangle,
    * disallowing call expressions and other unsupported constructs.
    */
-  export function evalMoveFlags(expr: Expression, context: TranspilerContext): number {
+  export function evalMoveFlags(expr: Expression, context: CompilerContext): number {
     switch (expr.getKind()) {
       // A direct numeric literal => parse
       case SyntaxKind.NumericLiteral:

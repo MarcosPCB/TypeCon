@@ -44,7 +44,8 @@ import {
   WhileStatement,
   Type,
   TypeNode,
-  TypeFlags
+  TypeFlags,
+  ModuleDeclarationKind
 } from "ts-morph";
 
 import {
@@ -58,10 +59,10 @@ import {
   nativeVarsList
 } from '../../../sets/TCSet100/native';
 
-import { EventList, Names, TEvents } from "../types";
+import { EventList, TEvents } from "../types";
 
 import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../helper/helpers";
-import { compiledFiles, ECompileOptions, ICompiledFile, pageSize } from "../helper/translation";
+import { compiledFiles, ECompileOptions, ICompiledFile, pageSize } from "../helper/framework";
 
 
 type DiagnosticSeverity = "error" | "warning";
@@ -87,15 +88,22 @@ interface SegmentIndex {
 
 type MemberSegment = SegmentIdentifier | SegmentProperty | SegmentIndex;
 
-interface TranspileDiagnostic {
+interface CompileDiagnostic {
   line: number;
   message: string;
   severity: DiagnosticSeverity;
 }
 
-interface TranspilerOptions {
+interface CompilerOptions {
   debug?: boolean;
   lineDetail?: boolean;
+}
+
+enum EHeapType {
+  array = 1,
+  string = 2,
+  object = 4,
+  string_array = 8,
 }
 
 enum ESymbolType {
@@ -110,6 +118,9 @@ enum ESymbolType {
   class = 256,
   array = 512,
   null = 1024,
+  module = 2048,
+  enum = 4096,
+  not_compiled = 65536
 }
 
 /**
@@ -129,7 +140,7 @@ enum ESymbolType {
  */
 interface SymbolDefinition {
   name: string;
-  type: ESymbolType;
+  type: Exclude<ESymbolType, ESymbolType.enum>;
   offset: number;        // Delta from the object's base pointer.
   size?: number;         // How many slots this symbol occupies.
   num_elements?: number;
@@ -138,9 +149,10 @@ interface SymbolDefinition {
   //This is only used IF we do something like 'const s = sprites[2]', 
   //otherwise, the compiler treats like a pointer to the complete array structure: 'const s = sprites'
   native_pointer_index?: boolean,
-  children?: { [key: string]: SymbolDefinition }; // For nested objects.
+  children?: { [key: string]: SymbolDefinition | EnumDefinition }; // For nested objects.
   CON_code?: string,
-  returns?: ESymbolType | null;
+  returns?: Exclude<ESymbolType, ESymbolType.enum> | null;
+  literal?: string | number | null;
 }
 
 interface TypeAliasDefinition {
@@ -153,23 +165,24 @@ interface TypeAliasDefinition {
 
 interface EnumDefinition {
   name: string,
-  members: Record<string, number>
+  type: ESymbolType.enum,
+  children: Record<string, number>
 }
 
 /** 
- * The transpiler context, storing local var offsets, param maps, 
+ * The compiler context, storing local var offsets, param maps, 
  * plus info about CActor if we are in one, etc.
  */
-export interface TranspilerContext {
+export interface CompilerContext {
   localVarOffset: Record<string, number>;
   localVarCount: number;
   localVarNativePointer: 'sprites' | 'sectors' | 'walls' | 'players' | 'projectiles' | undefined, //Only true if you're passing a native pointer to a local variable
   localVarNativePointerIndexed: boolean,
   paramMap: Record<string, SymbolDefinition>;
 
-  diagnostics: TranspileDiagnostic[];
+  diagnostics: CompileDiagnostic[];
 
-  options: TranspilerOptions;
+  options: CompilerOptions;
 
   // For CActor:
   currentActorPicnum?: number;
@@ -186,8 +199,6 @@ export interface TranspilerContext {
   // New field to store type aliases:
   typeAliases: Map<string, TypeAliasDefinition>;
 
-  enums: Map<string, EnumDefinition>;
-
   // Current custom class
   curClass: SymbolDefinition;
 
@@ -195,12 +206,12 @@ export interface TranspilerContext {
   curFunc: SymbolDefinition;
 
   // New symbol table for object layouts (global or per–scope)
-  symbolTable: Map<string, SymbolDefinition>;
+  symbolTable: Map<string, SymbolDefinition | EnumDefinition>;
 
   currentFile: ICompiledFile;
 
   // Last expression
-  curExpr: ESymbolType;
+  curExpr: Exclude<ESymbolType, ESymbolType.enum>;
 
   // Last symbol returned
   curSymRet: SymbolDefinition;
@@ -209,9 +220,9 @@ export interface TranspilerContext {
   mainBFunc: boolean;
 }
 
-interface TranspileResult {
+interface CompileResult {
   conOutput: string;
-  diagnostics: TranspileDiagnostic[];
+  diagnostics: CompileDiagnostic[];
 }
 
 function resolveImport(baseFile: string, importPath: string): string | null {
@@ -249,7 +260,7 @@ function resolveImport(baseFile: string, importPath: string): string | null {
  *****************************************************************************/
 export function addDiagnostic(
   node: Node,
-  context: TranspilerContext,
+  context: CompilerContext,
   severity: DiagnosticSeverity,
   message: string
 ) {
@@ -274,21 +285,21 @@ function indent(text: string, level: number): string {
 /******************************************************************************
  * MAIN COMPILER CLASS
  *****************************************************************************/
-export class TsToConTranspiler {
+export class TsToConCompiler {
   private project: Project;
-  private options: TranspilerOptions;
+  private options: CompilerOptions;
 
-  constructor(options: TranspilerOptions = {}) {
+  constructor(options: CompilerOptions = {}) {
     this.options = options;
     this.project = new Project({ useInMemoryFileSystem: true });
   }
 
-  public transpile(sourceCode: string, file: string, prvContext?: TranspilerContext): TranspileResult {
+  public compile(sourceCode: string, file: string, prvContext?: CompilerContext): CompileResult {
     const sf = this.project.createSourceFile(`temp_${Buffer.from(file).toString('base64url')}.ts`, sourceCode, {
       overwrite: true
     });
 
-    const context: TranspilerContext = prvContext ? prvContext : {
+    const context: CompilerContext = prvContext ? prvContext : {
       localVarOffset: {},
       localVarCount: 0,
       localVarNativePointer: undefined,
@@ -309,7 +320,6 @@ export class TsToConTranspiler {
       currentActorAis: [],
       currentEventName: undefined,
       typeAliases: new Map(),
-      enums: new Map(),
       symbolTable: new Map(),
       currentFile: undefined,
       curExpr: ESymbolType.number,
@@ -354,7 +364,7 @@ export class TsToConTranspiler {
           //context.currentFile.dependency.push(Buffer.from(resolved).toString('base64url'));
           const prvFile = context.currentFile;
           const sCode = fs.readFileSync(resolved);
-          this.transpile(sCode.toString(), resolved, context);
+          this.compile(sCode.toString(), resolved, context);
           context.currentFile = prvFile;
           context.diagnostics.length = 0;
         } catch (err) {
@@ -384,6 +394,10 @@ export class TsToConTranspiler {
           console.log(`Reading functions as states...`);
           context.currentFile.options |= ECompileOptions.state_decl;
         }
+
+        if(!(context.currentFile.options & ECompileOptions.state_decl)
+          || !(context.currentFile.options & ECompileOptions.no_compile))
+          console.log(`Compiling ${file}...`);
       }
     } else console.log(`Compiling ${file}...`);
 
@@ -432,7 +446,7 @@ export class TsToConTranspiler {
  * – When the type cannot be reduced to one of the four bases we emit a
  *   diagnostic and return `null`.
  */
-  private getTypeBase(tn: TypeNode, ctx: TranspilerContext): string | null {
+  private getTypeBase(tn: TypeNode, ctx: CompilerContext): string | null {
     const type = tn.getType();
   
     /* ────────────────────────────────────────────────────────────────────
@@ -510,7 +524,7 @@ export class TsToConTranspiler {
   /* -------------------------------------------------------------------- */
   /* Helper for reducing a ts-morph Type when we don’t have its node      */
   /* -------------------------------------------------------------------- */
-  private baseFromType(t: Type, ctx: TranspilerContext): string | null {
+  private baseFromType(t: Type, ctx: CompilerContext): string | null {
     const node = t.getSymbol()?.getDeclarations()?.find(Node.isTypeNode);
     if (node) return this.getTypeBase(node, ctx);
   
@@ -522,7 +536,7 @@ export class TsToConTranspiler {
     return base;
   }
 
-  private storeTypeAlias(ta: TypeAliasDeclaration, context: TranspilerContext): void {
+  private storeTypeAlias(ta: TypeAliasDeclaration, context: CompilerContext): void {
     const aliasName = ta.getName();
     const typeNode = ta.getTypeNode();
 
@@ -560,7 +574,7 @@ export class TsToConTranspiler {
       context.typeAliases.set(aliasName, { name: aliasName, literal: 'string', members: {} });
   }
 
-  private storeInterface(id: InterfaceDeclaration, context: TranspilerContext): void {
+  private storeInterface(id: InterfaceDeclaration, context: CompilerContext): void {
     const aliasName = id.getName();
 
     const members: Record<string, string> = {};
@@ -579,7 +593,7 @@ export class TsToConTranspiler {
     context.typeAliases.set(aliasName, { name: aliasName, members, membersCode });
   }
 
-  private storeEnum(ed: EnumDeclaration, context: TranspilerContext): void {
+  private storeEnum(ed: EnumDeclaration, context: CompilerContext): void {
     const name = ed.getName();
 
     const members: Record<string, number> = {};
@@ -589,10 +603,10 @@ export class TsToConTranspiler {
         members[prop.getName()] = prop.getValue() as number;
       }
     });
-    context.enums.set(name, { name: name, members });
+    context.symbolTable.set(name, { name: name, type: ESymbolType.enum, children: members } as EnumDefinition);
   }
 
-  private getObjectSize(typeName: string, context: TranspilerContext): number {
+  private getObjectSize(typeName: string, context: CompilerContext): number {
     // If typeName is defined as a type alias, compute its size by summing the sizes of its members.
     if (context.typeAliases.has(typeName)) {
       const typeDef = context.typeAliases.get(typeName)!;
@@ -623,7 +637,7 @@ export class TsToConTranspiler {
     return 1;
   }
 
-  private getObjectTypeLayout(typeName: string, context: TranspilerContext): { [key: string]: SymbolDefinition } {
+  private getObjectTypeLayout(typeName: string, context: CompilerContext): { [key: string]: SymbolDefinition } {
     if (context.typeAliases.has(typeName)) {
       const typeDef = context.typeAliases.get(typeName)!;
       let layout: { [key: string]: SymbolDefinition } = {};
@@ -676,7 +690,7 @@ export class TsToConTranspiler {
   /******************************************************************************
    * visitStatement
    *****************************************************************************/
-  private visitStatement(stmt: Statement, context: TranspilerContext): string {
+  private visitStatement(stmt: Statement, context: CompilerContext): string {
     let code = ''//`/* ${stmt.getText()} */\n`;
     switch (stmt.getKind()) {
       case SyntaxKind.VariableStatement:
@@ -728,14 +742,35 @@ export class TsToConTranspiler {
       }
 
       case SyntaxKind.ModuleDeclaration:
+        const md = stmt as ModuleDeclaration;
+
         const b = context.currentFile.options;
-        context.currentFile.options |= ECompileOptions.no_compile;
+        if(md.getDeclarationKind() == ModuleDeclarationKind.Global)
+          context.currentFile.options |= ECompileOptions.no_compile;
+
+        const moduleName = md.getName();
+
         const stmts = (stmt as ModuleDeclaration).getStatements();
+
+        const localCtx: CompilerContext = { ...context, symbolTable: new Map(context.symbolTable) };
 
         stmts.forEach(st => {
           if (!st.isKind(SyntaxKind.ClassDeclaration))
-            this.visitStatement(st, context);
+            this.visitStatement(st, localCtx);
         });
+
+        if(md.getDeclarationKind() != ModuleDeclarationKind.Global && !['nocompile', 'noread', 'statedecl'].includes(moduleName)) {
+          context.symbolTable.set(moduleName, {
+            name: moduleName,
+            type: ESymbolType.module,
+            offset: 0,
+            children: Object.fromEntries([...localCtx.symbolTable].filter(e => !context.symbolTable.has(e[0])))
+          });
+        } else {
+          context.symbolTable = localCtx.symbolTable;
+          context.typeAliases = localCtx.typeAliases;
+        }
+
         context.currentFile.options = b;
         return code;
 
@@ -748,8 +783,11 @@ export class TsToConTranspiler {
       case SyntaxKind.WhileStatement:
         return code + this.visitWhileStatement(stmt as WhileStatement, context);
 
+      case SyntaxKind.ExportAssignment:
+        return '';
+
       default:
-        addDiagnostic(stmt, context, "warning", `Unhandled statement kind: ${stmt.getKindName()}`);
+        addDiagnostic(stmt, context, "warning", `Unhandled statement kind: ${stmt.getKindName()} - ${stmt.getText()}`);
         return code;
     }
   }
@@ -757,7 +795,7 @@ export class TsToConTranspiler {
   /******************************************************************************
    * while statements
    *****************************************************************************/
-  private visitWhileStatement(ws: WhileStatement, context: TranspilerContext): string {
+  private visitWhileStatement(ws: WhileStatement, context: CompilerContext): string {
     let code = this.options.lineDetail ? `/*${ws.getText()}*/\n` : '';
 
     context.isInLoop = true;
@@ -770,7 +808,7 @@ export class TsToConTranspiler {
       : (this.visitExpression(pattern.left, context) + `set rb ra\n`);
 
     const ifCode = `${right}\n${left}\nset ra 1\n${pattern.op} rb rd\n  set ra 0\n`;
-    code += ifCode + 'set rc 0\nwhilen ra 1 {\n' + indent('al rc\nstate pushc\n', 1);
+    code += ifCode + 'set rc 0\nwhilen ra 1 {\n' + indent('state pushc\n', 1);
     const block = ws.getStatement();
     if (block.isKind(SyntaxKind.Block)) {
       const stmts = block.getStatements();
@@ -789,7 +827,7 @@ export class TsToConTranspiler {
   /******************************************************************************
    * variable statements => local var
    *****************************************************************************/
-  private visitVariableStatement(node: VariableStatement, context: TranspilerContext): string {
+  private visitVariableStatement(node: VariableStatement, context: CompilerContext): string {
     let code = '';
     if (!(context.currentFile.options & ECompileOptions.no_compile))
       code = this.options.lineDetail ? `/*${node.getText()}*/\n` : '';
@@ -801,7 +839,7 @@ export class TsToConTranspiler {
     return code;
   }
 
-  private visitVariableDeclaration(decl: VariableDeclaration, context: TranspilerContext): string {
+  private visitVariableDeclaration(decl: VariableDeclaration, context: CompilerContext): string {
     const varName = decl.getName();
     let code = "";
 
@@ -827,12 +865,13 @@ export class TsToConTranspiler {
       return code;
     }
 
-    if (context.currentFile.options & ECompileOptions.no_compile)
-      return code;
-
     const init = decl.getInitializer();
     if (init && init.isKind(SyntaxKind.ObjectLiteralExpression)) {
       code += this.visitObjectLiteral(init as ObjectLiteralExpression, context);
+
+      if (context.currentFile.options & ECompileOptions.no_compile)
+        return code;
+
       context.localVarCount++;
       // Store in symbol table that varName is an object.
       //const aliasName = this.getTypeAliasNameForObjectLiteral(init as ObjectLiteralExpression);
@@ -840,6 +879,8 @@ export class TsToConTranspiler {
 
       //context.symbolTable.set(varName, { name: varName, type: "object", offset: 0, size: size });
     } else {
+      if (context.currentFile.options & ECompileOptions.no_compile)
+        return code;
       // Process non-object initializers as before.
       //const localVars = context.localVarCount;
       if (init)
@@ -865,14 +906,14 @@ export class TsToConTranspiler {
   /******************************************************************************
    * expression statement => just visit expression
    *****************************************************************************/
-  private visitExpressionStatement(stmt: ExpressionStatement, context: TranspilerContext): string {
+  private visitExpressionStatement(stmt: ExpressionStatement, context: CompilerContext): string {
     return this.visitExpression(stmt.getExpression(), context);
   }
 
   /******************************************************************************
    * return => evaluate => set rb ra
    *****************************************************************************/
-  private visitReturnStatement(rs: ReturnStatement, context: TranspilerContext): string {
+  private visitReturnStatement(rs: ReturnStatement, context: CompilerContext): string {
     let code = "";
     const expr = rs.getExpression();
     if (expr) {
@@ -898,7 +939,7 @@ export class TsToConTranspiler {
   /******************************************************************************
    * if => must be (A && B), (A || B), or !(A || B)
    *****************************************************************************/
-  private visitIfStatement(is: IfStatement, context: TranspilerContext): string {
+  private visitIfStatement(is: IfStatement, context: CompilerContext): string {
     let code = this.options.lineDetail ? `/*${is.getText()}*/\n` : '';
     const pattern = this.parseIfCondition(is.getExpression(), context);
     const thenPart = this.visitBlockOrStmt(is.getThenStatement(), context);
@@ -932,7 +973,7 @@ export class TsToConTranspiler {
     return code;
   }
 
-  private visitSwitchStatement(sw: SwitchStatement, context: TranspilerContext) {
+  private visitSwitchStatement(sw: SwitchStatement, context: CompilerContext) {
     let code = (this.options.lineDetail ? `/*${sw.getText()}*/\n` : '') + this.visitExpression(sw.getExpression(), context);
     const cases = sw.getCaseBlock().getClauses();
     code += `switch ra\n`;
@@ -965,7 +1006,7 @@ export class TsToConTranspiler {
     return code;
   }
 
-  private visitBlockOrStmt(s: Statement, context: TranspilerContext): string {
+  private visitBlockOrStmt(s: Statement, context: CompilerContext): string {
     if (s.isKind(SyntaxKind.Block)) {
       const blk = s as Block;
       return blk.getStatements().map(st => this.visitStatement(st, context)).join("\n");
@@ -973,7 +1014,7 @@ export class TsToConTranspiler {
     return this.visitStatement(s, context);
   }
 
-  private parseIfCondition(expr: Expression, context: TranspilerContext): IfCondition | undefined {
+  private parseIfCondition(expr: Expression, context: CompilerContext): IfCondition | undefined {
     if (expr.isKind(SyntaxKind.BinaryExpression)) {
       const bin = expr as BinaryExpression;
       const op = bin.getOperatorToken().getText();
@@ -1051,7 +1092,7 @@ export class TsToConTranspiler {
   /******************************************************************************
    * Expression
    *****************************************************************************/
-  private visitExpression(expr: Expression, context: TranspilerContext): string {
+  private visitExpression(expr: Expression, context: CompilerContext): string {
     let code = ''//`/* ${expr.getText()} */\n`;
     context.curExpr = ESymbolType.number;
     context.curSymRet = null;
@@ -1082,7 +1123,7 @@ export class TsToConTranspiler {
     }
   }
 
-  private visitLeafOrLiteral(expr: Expression, context: TranspilerContext): string {
+  private visitLeafOrLiteral(expr: Expression, context: CompilerContext): string {
     let code = "";
     context.curSymRet = null;
 
@@ -1117,7 +1158,7 @@ export class TsToConTranspiler {
       }*/
 
       if (context.symbolTable.has(name)) {
-        const off = context.symbolTable.get(name)
+        const off = context.symbolTable.get(name) as SymbolDefinition;
         if (off.type & ESymbolType.native)
           return code + `set ra ${off.CON_code}\n`;
 
@@ -1144,7 +1185,7 @@ export class TsToConTranspiler {
     }
     if (expr.isKind(SyntaxKind.StringLiteral) || expr.isKind(SyntaxKind.NoSubstitutionTemplateLiteral)) {
       let text = expr.getText().replace(/[`'"]/g, "");
-      code += `state pushr1\nset r0 ${text.length + 1}\nstate alloc\nstate popr1\nsetarray flat[rb] ${text.length}\nset ri rb\n`;
+      code += `state pushr2\nset r0 ${text.length + 1}\nset r1 ${EHeapType.string}\nstate alloc\nstate popr2\nsetarray flat[rb] ${text.length}\nset ri rb\n`;
       //code += `add rsp 1\nset rd rsp\nadd rsp 1\nsetarray flat[rsp] ${text.length}\n`;
       for (let i = 0; i < text.length; i++)
         code += `add ri 1\nsetarray flat[ri] ${text.charCodeAt(i)}\n`;
@@ -1168,7 +1209,7 @@ export class TsToConTranspiler {
       context.curExpr |= ESymbolType.array;
 
       if (args.length == 0) {
-        code += `state pushr1\nset r0 ${pageSize}\nstate alloc\nstate popr1\nset ra rb\n`;
+        code += `state pushr2\nset r0 ${pageSize}\nset r1 ${EHeapType.array}\nstate alloc\nstate popr2\nset ra rb\n`;
         return code;
       }
 
@@ -1176,7 +1217,7 @@ export class TsToConTranspiler {
         code += this.visitExpression(a as Expression, context);
       });
 
-      return code + `state pushr1\nset r0 ra\nstate alloc\nstate popr1\nset ra rb\n`;
+      return code + `state pushr2\nset r0 ra\nset r1 ${EHeapType.array}\nstate alloc\nstate popr2\nset ra rb\n`;
     }
 
     if (expr.isKind(SyntaxKind.AsExpression)) {
@@ -1230,7 +1271,7 @@ export class TsToConTranspiler {
     return code;
   }
 
-  private visitBinaryExpression(bin: BinaryExpression, context: TranspilerContext): string {
+  private visitBinaryExpression(bin: BinaryExpression, context: CompilerContext): string {
     const left = bin.getLeft();
     const right = bin.getRight();
     const opText = bin.getOperatorToken().getText();
@@ -1378,7 +1419,7 @@ export class TsToConTranspiler {
     return code;
   }
 
-  private storeLeftSideOfAssignment(left: Expression, context: TranspilerContext): string {
+  private storeLeftSideOfAssignment(left: Expression, context: CompilerContext): string {
     let code = "";
     if (left.isKind(SyntaxKind.Identifier)) {
       const name = left.getText();
@@ -1393,7 +1434,7 @@ export class TsToConTranspiler {
         return code;
       }
 
-      const v = context.symbolTable.get(name);
+      const v = context.symbolTable.get(name) as SymbolDefinition;
 
       if (v) {
         if (v.type & ESymbolType.native)
@@ -1421,7 +1462,7 @@ export class TsToConTranspiler {
     return code;
   }
 
-  private resolveNativeArgument(arg: Expression, expected: number, context: TranspilerContext): string {
+  private resolveNativeArgument(arg: Expression, expected: number, context: CompilerContext): string {
     // If expected type is LABEL:
     if (expected & CON_NATIVE_FLAGS.LABEL) {
       // If it's a call to Label, extract its argument:
@@ -1468,7 +1509,7 @@ export class TsToConTranspiler {
   }
 
 
-  private visitCallExpression(call: CallExpression, context: TranspilerContext): string {
+  private visitCallExpression(call: CallExpression, context: CompilerContext): string {
     let code = this.options.lineDetail ? `/* ${call.getText()} */\n` : '';
     const args = call.getArguments();
     let resolvedLiterals: (string | null)[] = [];
@@ -1492,7 +1533,7 @@ export class TsToConTranspiler {
           //Assume it's greater than 2
           //In this case, we know this is not a native function
           //Search in the context for any objects/classes that contain the function
-          let o: SymbolDefinition;
+          let o: SymbolDefinition | EnumDefinition;
 
           if (!context.curClass) {
             obj = segments[1] as SegmentProperty;
@@ -1520,7 +1561,7 @@ export class TsToConTranspiler {
               return '';
             }
 
-            o = o.children[obj.name];
+            o = o.children[obj.name] as SymbolDefinition;
             if (i != segments.length - 1) {
               if (o.type & ESymbolType.function) {
                 //Function properties are not yet supported
@@ -1528,7 +1569,7 @@ export class TsToConTranspiler {
                 return '';
               }
 
-              if (!(o.type & ESymbolType.object) && !(o.type & ESymbolType.array)) {
+              if (!(o.type & ESymbolType.object) && !(o.type & ESymbolType.array) && !(o.type & ESymbolType.module)) {
                 addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
                 return '';
               }
@@ -1602,7 +1643,7 @@ export class TsToConTranspiler {
               return '';
             }
 
-            o = o.children[obj.name];
+            o = o.children[obj.name] as SymbolDefinition;
             if (i != segments.length - 1) {
               if (o.type & ESymbolType.function) {
                 //Function properties are not yet supported
@@ -1610,7 +1651,7 @@ export class TsToConTranspiler {
                 return '';
               }
 
-              if (!(o.type & ESymbolType.object) && !(o.type & ESymbolType.array)) {
+              if (!(o.type & ESymbolType.object) && !(o.type & ESymbolType.array) && !(o.type & ESymbolType.module)) {
                 addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
                 return '';
               }
@@ -1622,7 +1663,7 @@ export class TsToConTranspiler {
             //If not native, assume it's a user function state.
             //TO-DO: SETUP THE STACK WITH THE HEAP ELEMENTS OF THE INSTANTIATED CLASS
             const totalArgs = args.length + (isClass ? 1 : 0);
-            const objSym = context.symbolTable.get((segments[0] as SegmentIdentifier).name);
+            const objSym = context.symbolTable.get((segments[0] as SegmentIdentifier).name) as SymbolDefinition;
 
             if (args.length > 0) {
               code += `state pushr${totalArgs > 12 ? 'all' : totalArgs}\n`;
@@ -1691,11 +1732,21 @@ set rb ra
       }
     }
 
-    const variable = context.symbolTable.get(fnObj);
+    const variable = context.symbolTable.get(fnObj) as SymbolDefinition;
     let typeName: undefined | string = undefined;
 
     //if (variable && (!(variable.type & ESymbolType.function) && !(variable.type & ESymbolType.array) && !(variable.type & ESymbolType.object)))
-    typeName = (variable && variable.type == ESymbolType.string) ? 'string' : undefined;
+    if(variable) {
+      switch(variable.type) {
+        case ESymbolType.array:
+          typeName = 'array';
+          break;
+
+        case ESymbolType.string:
+          typeName = 'string';
+          break;
+      }
+    }
 
     const nativeFn = findNativeFunction(fnNameRaw, fnObj, typeName);
     if (nativeFn) {
@@ -1762,6 +1813,9 @@ set rb ra
       if (nativeFn.return_type == 'array')
         context.curExpr |= ESymbolType.array;
 
+      if(nativeFn.return_type == 'object')
+        context.curExpr |= ESymbolType.object;
+
       // For simple native functions (code is a string), concatenate the command with the arguments.
       if (typeof nativeFn.code === "string") {
         code += nativeFn.code; // e.g., "rotatesprite "
@@ -1785,10 +1839,15 @@ set rb ra
           code += `state popr${argsLen > 12 ? 'all' : argsLen}\n`;
           context.localVarCount -= argsLen;
         }
+        if(nativeFn.return_type == 'object') {
+          code += `set rd ${nativeFn.return_size}\nadd rsp 1\nset ri rsp\ncopy flat[rsp] flat[rb] rd\n`;
+          code += `add rsp ${nativeFn.return_size - 1}\nset rb ri\n`
+          context.localVarCount += nativeFn.return_size;
+        }
       }
     } else {
       const fnName = fnNameRaw.startsWith("this.") ? fnNameRaw.substring(5) : fnNameRaw;
-      const func = context.symbolTable.get(fnObj ? fnObj : fnName);
+      const func = context.symbolTable.get(fnObj ? fnObj : fnName) as SymbolDefinition;
 
       if (!func) {
         addDiagnostic(call, context, 'error', `Invalid ${fnObj ? 'class/object' : 'function'} ${fnNameRaw}`);
@@ -1825,7 +1884,7 @@ set rb ra
       }
 
 
-      context.curExpr = isClass ? func.children[fnName].returns : func.returns;
+      context.curExpr = isClass ? (func.children[fnName] as SymbolDefinition).returns : func.returns;
     }
     if (nativeFn && nativeFn.returns) {
       code += `set ra rb\n`;
@@ -1854,7 +1913,7 @@ set rb ra
     return undefined;
   }
 
-  private processObjectLiteral(objLit: ObjectLiteralExpression, context: TranspilerContext): { code: string, layout: { [key: string]: SymbolDefinition }, size: number } {
+  private processObjectLiteral(objLit: ObjectLiteralExpression, context: CompilerContext): { code: string, layout: { [key: string]: SymbolDefinition }, size: number } {
     let code = this.options.lineDetail ? `/* Object literal: ${objLit.getText()} */\n` : '';
 
     // Reserve one slot for the object's base pointer.
@@ -1939,9 +1998,18 @@ set rb ra
             totalSlots += nestedSize - 1; // already counted one slot for the property
           } else {
             // For a primitive property.
-            code += this.visitExpression(pa.getInitializerOrThrow(), context);
+            const init = pa.getInitializerOrThrow();
+            code += this.visitExpression(init, context);
             code += `add rsp 1\nsetarray flat[rsp] ra\n`;
-            layout[propName] = { name: propName, type: ESymbolType.number, offset: totalSlots, size: 1 };
+            layout[propName] = {
+              name: propName,
+              type: ESymbolType.number,
+              offset: totalSlots,
+              size: 1, 
+              literal: init.isKind(SyntaxKind.NumericLiteral)
+                ? (init as NumericLiteral).getLiteralValue()
+                : undefined
+            };
           }
         } else {
           // Property not provided: default to 0.
@@ -1993,7 +2061,15 @@ set rb ra
             // For a primitive property.
             code += this.visitExpression(init, context);
             code += `add rsp 1\nsetarray flat[rsp] ra\n`;
-            layout[propName] = { name: propName, type: ESymbolType.number, offset: totalSlots, size: 1 };
+            layout[propName] = {
+              name: propName,
+              type: ESymbolType.number,
+              offset: totalSlots,
+              size: 1,
+              literal: init.isKind(SyntaxKind.NumericLiteral)
+                ? (init as NumericLiteral).getLiteralValue()
+                : undefined
+            };
           }
         } else
           addDiagnostic(objLit, context, "error", `No property assignmetn found during object declaration: ${objLit.getText()}`);
@@ -2011,7 +2087,7 @@ set rb ra
   }
 
 
-  private visitObjectLiteral(objLit: ObjectLiteralExpression, context: TranspilerContext): string {
+  private visitObjectLiteral(objLit: ObjectLiteralExpression, context: CompilerContext): string {
     const result = this.processObjectLiteral(objLit, context);
     // If the object literal is assigned to a variable, retrieve its name.
     const varName = this.getVarNameForObjectLiteral(objLit);
@@ -2019,6 +2095,9 @@ set rb ra
       // Store the layout in the global symbol table.
       context.symbolTable.set(varName, { name: varName, type: ESymbolType.object, offset: context.localVarCount + 1, size: result.size, children: result.layout });
     }
+    if(context.currentFile.options & ECompileOptions.no_compile)
+      return '';
+
     context.localVarCount += result.size + 1;
     return result.code + `set ra rbp\nadd ra ${context.localVarCount - result.size}\nset rf 0\n`;
   }
@@ -2077,7 +2156,7 @@ set rb ra
     return segments;
   }
 
-  private visitMemberExpression(expr: Expression, context: TranspilerContext, assignment?: boolean, direct?: boolean): string {
+  private visitMemberExpression(expr: Expression, context: CompilerContext, assignment?: boolean, direct?: boolean): string {
     let code = this.options.lineDetail ? `/* ${expr.getText()} */\n` : '';
     const segments = this.unrollMemberExpression(expr);
 
@@ -2088,20 +2167,20 @@ set rb ra
 
     // Handle the object
     const obj = segments[0] as SegmentIdentifier;
-    let sym: SymbolDefinition | null = null;
-    if (obj.kind == 'identifier' && ['sprites', 'sectors', 'walls', 'players', 'Names', 'EMoveFlags'].indexOf(obj.name) == -1) {
-      const eSym = context.enums.get(obj.name);
+    let sym: SymbolDefinition | EnumDefinition | null = null;
+    if (obj.kind == 'identifier' && ['sprites', 'sectors', 'walls', 'players', 'EMoveFlags'].indexOf(obj.name) == -1) {
+      const eSym = context.symbolTable.get(obj.name);
 
-      if (eSym) {
+      if (eSym && eSym.type == ESymbolType.enum) {
         const seg = segments[1] as SegmentProperty
         if (direct)
-          return String(eSym.members[seg.name]);
+          return String(eSym.children[seg.name]);
 
-        code += `set ra ${eSym.members[seg.name]}\n`;
+        code += `set ra ${eSym.children[seg.name]}\n`;
         return code;
       }
 
-      sym = context.symbolTable.get(obj.name);
+      sym = context.symbolTable.get(obj.name) as SymbolDefinition;
       if (!sym) {
         sym = context.paramMap[obj.name];
 
@@ -2137,7 +2216,7 @@ set rb ra
               return "set ra 0\n";
             }
 
-            sym = sym.children[seg.name];
+            sym = sym.children[seg.name] as SymbolDefinition;
             continue;
           }
         }
@@ -2172,7 +2251,7 @@ set rb ra
             }
             code += `state popi\n`;
             if (sym.type & (ESymbolType.object | ESymbolType.array))
-              code += `mul ra ${sym.size / sym.num_elements}\nadd ri ra\nadd ri 1\n`
+              code += `mul ra ${(sym as SymbolDefinition).size / (sym as SymbolDefinition).num_elements}\nadd ri ra\nadd ri 1\n`
             else
               code += `add ri ra\nadd ri 1\n`;
 
@@ -2202,7 +2281,10 @@ set rb ra
               return "set ra 0\n";
             }
 
-            sym = sym.children[seg.name];
+            sym = sym.children[seg.name] as SymbolDefinition | EnumDefinition;
+
+            if(sym.type == ESymbolType.enum)
+              return code + `set ra ${sym.children[(segments[i + 1] as SegmentProperty).name]}\n`;
 
             if(sym.offset != 0)
               code += `add ri ${sym.offset}\n`;
@@ -2220,16 +2302,9 @@ set rb ra
 
     if (obj.kind == 'identifier' || obj.kind == 'this') {
       switch (obj.name) {
-        case 'Names':
-          if (direct)
-            return Names[(segments[1] as SegmentProperty).name];
-
-          code += `set ra ${Names[(segments[1] as SegmentProperty).name]}\n`;
-          return code;
-
         case 'EMoveFlags':
           if (direct)
-            return Names[(segments[1] as SegmentProperty).name];
+            return EMoveFlags[(segments[1] as SegmentProperty).name];
 
           code += `set ra ${EMoveFlags[(segments[1] as SegmentProperty).name]}\n`;
           return code;
@@ -2238,18 +2313,18 @@ set rb ra
           if (obj.kind != 'this') {
             //Check if it's a enum
 
-            const e = context.enums.get(obj.name);
+            const e = context.symbolTable.get(obj.name);
 
-            if (e) {
+            if (e && e.type == ESymbolType.enum) {
               const seg = segments[1] as SegmentProperty
               if (direct)
-                return String(e.members[seg.name]);
+                return String(e.children[seg.name]);
 
-              code += `set ra ${e.members[seg.name]}\n`;
+              code += `set ra ${e.children[seg.name]}\n`;
               return code;
             }
 
-            if (segments[1].kind != 'index' && (sym && !sym.native_pointer_index)) {
+            if (segments[1].kind != 'index' && (sym && !(sym as SymbolDefinition).native_pointer_index)) {
               addDiagnostic(expr, context, "error", `Missing index for ${obj.name}: ${expr.getText()}`);
               return "set ra 0\n";
             }
@@ -2274,6 +2349,8 @@ set rb ra
             return code;
           }
 
+          sym = sym as SymbolDefinition;
+
           const seg = segments[obj.kind == 'this' || (sym && sym.native_pointer_index) ? 1 : 2];
           let op = '';
 
@@ -2296,7 +2373,7 @@ set rb ra
                 return '';
               }
 
-              let pSym = context.curClass.children[seg.name];
+              let pSym = context.curClass.children[seg.name] as SymbolDefinition;
 
               if(pSym.offset != 0)
                 code += `add ri ${pSym.offset}\n`;
@@ -2350,7 +2427,7 @@ set rb ra
 
                 code += `set ri flat[ri]\n`;
 
-                pSym = pSym.children[s.name];
+                pSym = pSym.children[s.name] as SymbolDefinition;
 
                 if(pSym.offset != 0)
                   code += `add ri ${pSym.offset}\n`;
@@ -2468,7 +2545,7 @@ set rb ra
   }
 
 
-  private visitUnaryExpression(expr: Expression, context: TranspilerContext): string {
+  private visitUnaryExpression(expr: Expression, context: CompilerContext): string {
     let code = this.options.lineDetail ? `// unary: ${expr.getText()}\n` : '';
     if (expr.isKind(SyntaxKind.PrefixUnaryExpression)) {
       const pre = expr as PrefixUnaryExpression;
@@ -2513,7 +2590,7 @@ set rb ra
     return code;
   }
 
-  private visitParenthesizedExpression(expr: ParenthesizedExpression, context: TranspilerContext): string {
+  private visitParenthesizedExpression(expr: ParenthesizedExpression, context: CompilerContext): string {
     return this.visitExpression(expr.getExpression(), context);
   }
 
@@ -2521,10 +2598,10 @@ set rb ra
    * VISIT FUNCTION DECL
    * => state <functionName> { ... }
    ****************************************************************************/
-  private visitFunctionDeclaration(fd: FunctionDeclaration, context: TranspilerContext): string {
+  private visitFunctionDeclaration(fd: FunctionDeclaration, context: CompilerContext): string {
     const name = fd.getName() || "anonFn";
     // new local context
-    const localCtx: TranspilerContext = {
+    const localCtx: CompilerContext = {
       ...context,
       localVarOffset: {},
       localVarCount: 0,
@@ -2536,7 +2613,7 @@ set rb ra
     let code = `${this.options.lineDetail ? `/*${fd.getText()}*/` : ''}\ndefstate ${name}\n  set ra rbp \n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
     fd.getParameters().forEach((p, i) => {
       const type = p.getType();
-      let t = ESymbolType.number;
+      let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
       let children: Record<string, SymbolDefinition>;
       let con = '';
       switch (type.getText()) {
@@ -2596,7 +2673,7 @@ set rb ra
       offset: 0
     });
 
-    localCtx.curFunc = localCtx.symbolTable.get(name);
+    localCtx.curFunc = localCtx.symbolTable.get(name) as SymbolDefinition;
 
     if (context.currentFile.options & ECompileOptions.state_decl) {
       const t = fd.getReturnType();
@@ -2604,8 +2681,8 @@ set rb ra
         const args = t.getAliasTypeArguments();
 
         if (args.length > 0) {
-          localCtx.symbolTable.get(name).CON_code = args[0].getText().replace(/[`'"]/g, "");
-          context.symbolTable.get(name).CON_code = args[0].getText().replace(/[`'"]/g, "");
+          (localCtx.symbolTable.get(name) as SymbolDefinition).CON_code = (localCtx.symbolTable.get(name) as SymbolDefinition).name = args[0].getText().replace(/[`'"]/g, "");
+          (context.symbolTable.get(name) as SymbolDefinition).CON_code = (context.symbolTable.get(name) as SymbolDefinition).name = args[0].getText().replace(/[`'"]/g, "");
         }
       }
     }
@@ -2626,7 +2703,7 @@ set rb ra
   /******************************************************************************
    * VISIT CLASS DECL => if extends CActor => parse constructor => skip code => gather actions
    ****************************************************************************/
-  private visitClassDeclaration(cd: ClassDeclaration, context: TranspilerContext): string {
+  private visitClassDeclaration(cd: ClassDeclaration, context: CompilerContext): string {
     const className = cd.getName() || "AnonClass";
     let code = this.options.lineDetail ? `// class ${className}\n` : '';
 
@@ -2635,7 +2712,7 @@ set rb ra
     // const isEvent = base === "CEvent"; // demonstration if needed
 
     // We'll create a local context for parsing this class
-    const localCtx: TranspilerContext = {
+    const localCtx: CompilerContext = {
       ...context,
       localVarOffset: {},
       localVarCount: 0,
@@ -2654,7 +2731,7 @@ set rb ra
     let cls: SymbolDefinition;
 
     if (type == '') {
-      cls = context.symbolTable.get(className);
+      cls = context.symbolTable.get(className) as SymbolDefinition;
       if (cls) {
         addDiagnostic(cd, context, 'error', `Duplicate definition. Tried to declare as class named ${className} when there's already a ${cls.type} with the same name`);
         return '';
@@ -2670,7 +2747,7 @@ set rb ra
         children: {}
       });
 
-      cls = context.symbolTable.get(className);
+      cls = context.symbolTable.get(className) as SymbolDefinition;
     }
 
     // visit constructor(s)
@@ -2715,7 +2792,7 @@ set rb ra
               return '';
             }
 
-            const evntLocalCtx: TranspilerContext = {
+            const evntLocalCtx: CompilerContext = {
               ...localCtx,
               localVarOffset: {},
               localVarCount: 0,
@@ -2793,7 +2870,7 @@ set rb ra
     if (ctors.length > 0 && type == '') {
       context.curClass = cls;
       code = `${this.options.lineDetail ? `/*${ctors[0].getText()}*/` : ''}\ndefstate ${className}_constructor \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
-      code += indent(`state pushr1\nset r0 ${cls.num_elements}\nstate alloc\nstate popr1\nstate pushb\n`, 1);
+      code += indent(`state pushr2\nset r0 ${cls.num_elements}\nset r1 ${EHeapType.object}\nstate alloc\nstate popr2\nstate pushb\n`, 1);
       code += this.visitConstructorDeclaration(ctors[0], context, '');
       code += `  state popb\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
     }
@@ -2814,7 +2891,7 @@ set rb ra
    ****************************************************************************/
   private visitConstructorDeclaration(
     ctor: ConstructorDeclaration,
-    context: TranspilerContext,
+    context: CompilerContext,
     type: string,
   ): string {
     let code = '';
@@ -2876,7 +2953,7 @@ set rb ra
         }
       } else {
         const statements = body.getStatements();
-        const localCtx: TranspilerContext = {
+        const localCtx: CompilerContext = {
           ...context,
           localVarOffset: {},
           localVarCount: 0,
@@ -2885,7 +2962,7 @@ set rb ra
         };
         ctor.getParameters().forEach((p, i) => {
           const type = p.getType();
-          let t = ESymbolType.number;
+          let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
           let children: Record<string, SymbolDefinition>;
           let con = '';
           switch (type.getText()) {
@@ -2940,7 +3017,7 @@ set rb ra
     return code;
   }
 
-  private parseVarForActionsMovesAi(decl: VariableDeclaration, context: TranspilerContext) {
+  private parseVarForActionsMovesAi(decl: VariableDeclaration, context: CompilerContext) {
     // check type => if IAction, IMove, IAi => parse
     const typeNode = decl.getTypeNode();
     if (!typeNode) return;
@@ -2954,7 +3031,7 @@ set rb ra
     }
   }
 
-  private parseIAction(decl: VariableDeclaration, context: TranspilerContext) {
+  private parseIAction(decl: VariableDeclaration, context: CompilerContext) {
     const init = decl.getInitializer();
     if (!init || !init.isKind(SyntaxKind.ObjectLiteralExpression)) return;
     const obj = init as ObjectLiteralExpression;
@@ -2982,7 +3059,7 @@ set rb ra
     context.currentActorActions.push(`action ${actionName} ${start} ${length} ${viewType} ${incValue} ${delay}`);
   }
 
-  private parseIMove(decl: VariableDeclaration, context: TranspilerContext) {
+  private parseIMove(decl: VariableDeclaration, context: CompilerContext) {
     const init = decl.getInitializer();
     if (!init || !init.isKind(SyntaxKind.ObjectLiteralExpression)) return;
     const obj = init as ObjectLiteralExpression;
@@ -3007,7 +3084,7 @@ set rb ra
     context.currentActorMoves.push(`move ${moveName} ${hv} ${vv}`);
   }
 
-  private parseIAi(decl: VariableDeclaration, context: TranspilerContext) {
+  private parseIAi(decl: VariableDeclaration, context: CompilerContext) {
     const init = decl.getInitializer();
     if (!init || !init.isKind(SyntaxKind.ObjectLiteralExpression)) return;
     const obj = init as ObjectLiteralExpression;
@@ -3034,7 +3111,7 @@ set rb ra
     context.currentActorAis.push(`ai ${aiName} ${actionLabel} ${moveLabel} ${flags}`);
   }
 
-  private parseActorSuperCall(call: CallExpression, context: TranspilerContext) {
+  private parseActorSuperCall(call: CallExpression, context: CompilerContext) {
     // super(picnum, isEnemy, extra, actions, firstAction, moves, ais)
     const args = call.getArguments();
     if (args.length >= 1) {
@@ -3070,12 +3147,12 @@ set rb ra
   private visitMethodDeclaration(
     md: MethodDeclaration,
     className: string,
-    context: TranspilerContext,
+    context: CompilerContext,
     type: string
   ): string {
     const mName = md.getName();
     const curFunc = context.curFunc;
-    const localCtx: TranspilerContext = {
+    const localCtx: CompilerContext = {
       ...context,
       localVarOffset: {},
       localVarCount: 0,
@@ -3094,7 +3171,7 @@ set rb ra
       let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
       md.getParameters().forEach((p, i) => {
         const type = p.getType();
-        let t = ESymbolType.number;
+        let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
         let children: Record<string, SymbolDefinition>;
         let con = '';
         switch (type.getText()) {
@@ -3166,7 +3243,7 @@ set rb ra
 
     md.getParameters().forEach((p, i) => {
       const type = p.getType();
-      let t = ESymbolType.number;
+      let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
       let children: Record<string, SymbolDefinition>;
       let con = '';
       switch (type.getText()) {
@@ -3228,7 +3305,7 @@ set rb ra
       offset: 0,
     });
 
-    localCtx.curFunc = localCtx.symbolTable.get(mName);
+    localCtx.curFunc = localCtx.symbolTable.get(mName) as SymbolDefinition;
     if(type == '') {
       context.curClass.children[mName] = localCtx.symbolTable.get(mName);
       const numParams = Object.keys(localCtx.paramMap).length;

@@ -8,13 +8,123 @@ declare global {
     //Type for native functions
 
     /**
-     * DN3D/Build native names
+     * Bit‑flags that control how EDuke32 renders on‑screen strings.
+     *
+     * Combine multiple flags with the bitwise OR (`|`) operator to build a render style.
+     *
+     * @enum {number}
+     * @property {number} XRIGHT              Right‑align text on the *x* axis.
+     * @property {number} XCENTER             Center‑align text on the *x* axis.
+     * @property {number} YBOTTOM             Bottom‑align text on the *y* axis.
+     * @property {number} YCENTER             Center‑align text on the *y* axis.
+     * @property {number} INTERNALSPACE       Engine chooses `<xspace>`; your value is added.
+     * @property {number} TILESPACE           `<xspace>` derived from the width of the tile after `'~'`.
+     * @property {number} INTERNALLINE        Engine chooses `<yline>`; your value is added.
+     * @property {number} TILELINE            `<yline>` derived from the height of the tile after `'~'`.
+     * @property {number} XOFFSETZERO         Treat `<xbetween>` as a constant glyph width.
+     * @property {number} XJUSTIFY            Justify text horizontally (compatible with `XRIGHT` and `XCENTER`).
+     * @property {number} YOFFSETZERO         Treat `<ybetween>` as a constant line height.
+     * @property {number} YJUSTIFY            Justify text vertically (compatible with `YBOTTOM` and `YCENTER`).
+     * @property {number} RESERVED_4096       *Reserved – do not use.*
+     * @property {number} UPPERCASE           Force all letters to uppercase.
+     * @property {number} INVERTCASE          Swap the case of each letter (combine with `UPPERCASE` for lowercase).
+     * @property {number} IGNOREESCAPE        Ignore palette escape sequences (`#`, `##`).
+     * @property {number} LITERALESCAPE       Render palette escape sequences literally.
+     * @property {number} RESERVED_131072     *Reserved – do not use.*
+     * @property {number} CONSTWIDTHNUMS      Render numerals with constant width.
+     * @property {number} DIGITALNUMBER       Tile order starts at `'0'`; for digital number tiles.
+     * @property {number} BIGALPHANUM         Use the red main‑menu font tile order.
+     * @property {number} GRAYFONT            Use the gray‑font tile order.
+     * @property {number} NOLOCALE            Skip localization translation.
+     * @property {number} VARHEIGHT           Shift by half a tile when `RS_TOPLEFT` is not set.
+     * @property {number} CENTERCONSTWIDTH    Center glyphs and respect `<xbetween>` in constant‑width mode.
      */
-    export enum Names {
-        APLAYER = 1405,
-        BLOOD = 1620,
-        FIRELASER = 1625,
-        JIBS6 = 2286
+    export enum ETextFlags {
+        /** Right‑align text on the *x* axis. */
+        XRIGHT            = 1,
+    
+        /** Center‑align text on the *x* axis. */
+        XCENTER           = 2,
+    
+        /** Bottom‑align text on the *y* axis. */
+        YBOTTOM           = 4,
+    
+        /** Center‑align text on the *y* axis. */
+        YCENTER           = 8,
+    
+        /** Engine chooses `<xspace>`; your value is added. */
+        INTERNALSPACE     = 16,
+    
+        /** `<xspace>` derived from the width of the tile after `'~'`. */
+        TILESPACE         = 32,
+    
+        /** Engine chooses `<yline>`; your value is added. */
+        INTERNALLINE      = 64,
+    
+        /** `<yline>` derived from the height of the tile after `'~'`. */
+        TILELINE          = 128,
+    
+        /** Treat `<xbetween>` as a constant glyph width. */
+        XOFFSETZERO       = 256,
+    
+        /** Justify text horizontally (compatible with `XRIGHT` and `XCENTER`). */
+        XJUSTIFY          = 512,
+    
+        /** Treat `<ybetween>` as a constant line height. */
+        YOFFSETZERO       = 1024,
+    
+        /** Justify text vertically (compatible with `YBOTTOM` and `YCENTER`). */
+        YJUSTIFY          = 2048,
+    
+        /** *Reserved – do not use.* */
+        RESERVED_4096     = 4096,
+    
+        /** Force all letters to uppercase. */
+        UPPERCASE         = 8192,
+    
+        /** Swap the case of each letter (combine with `UPPERCASE` for lowercase). */
+        INVERTCASE        = 16384,
+    
+        /** Ignore palette escape sequences (`#`, `##`). */
+        IGNOREESCAPE      = 32768,
+    
+        /** Render palette escape sequences literally. */
+        LITERALESCAPE     = 65536,
+    
+        /** *Reserved – do not use.* */
+        RESERVED_131072   = 131072,
+    
+        /** Render numerals with constant width. */
+        CONSTWIDTHNUMS    = 262144,
+    
+        /** Tile order starts at `'0'`; for digital number tiles. */
+        DIGITALNUMBER     = 524288,
+    
+        /** Use the red main‑menu font tile order. */
+        BIGALPHANUM       = 1048576,
+    
+        /** Use the gray‑font tile order. */
+        GRAYFONT          = 2097152,
+    
+        /** Skip localization translation. */
+        NOLOCALE          = 4194304,
+    
+        /** Shift text by half a tile when `RS_TOPLEFT` is not set. */
+        VARHEIGHT         = 8388608,
+    
+        /** Center glyphs and respect `<xbetween>` in constant‑width mode. */
+        CENTERCONSTWIDTH  = 16777216,
+    }
+  
+
+    export interface IFont {
+        tile: number,
+        xSpace: number,
+        yLine: number,
+        xBetween: number,
+        yBetween: number,
+        offset: vec2,
+        flags: ETextFlags
     }
 
     /**
@@ -913,8 +1023,9 @@ declare global {
          * @param sound - the sound ID to be played
          */
         public ScreenSound(sound: number): CON_NATIVE<void>;
-        public ScreenText(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: number, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
+        public ScreenText(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
 
+        public QuoteDimension(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<vec2>;
         /**
          * Use append if you want to append this event to the others of the same type
          */

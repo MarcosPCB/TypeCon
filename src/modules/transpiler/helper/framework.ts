@@ -1,4 +1,4 @@
-import { TranspilerContext } from "../services/Transpiler2";
+import { CompilerContext } from "../services/Compiler";
 
 export enum ECompileOptions {
     none = 0,
@@ -11,7 +11,7 @@ export interface ICompiledFile {
     path: string,
     code: string,
     declaration: boolean,
-    context: TranspilerContext,
+    context: CompilerContext,
     options: ECompileOptions,
     dependents?: string[],
     dependency?: string[]
@@ -217,7 +217,12 @@ var playerDist 0 2
 //Internal size of the heap pages - for every X entries, 1 page, this way we can optimize the free and allocation systems
 define PAGE_SIZE ${heapPageSize}
 
-//This is where we store if a page is free or not.
+//This is where we store if a page is free or not and its type
+//0 -> free;
+//1 -> regular array;
+//2 -> string
+//4 -> object
+//1024 -> marked to be freed
 array allocTable ${heapNumPages} 0
 
 //Holds the starting addresses of the a allocated pages.
@@ -524,7 +529,7 @@ defstate alloc
     add _HEAPj _HEAPi
     whilel _HEAPi _HEAPj {
         setarray lookupHeap[_HEAPi] _HEAP_pointer
-        setarray allocTable[_HEAPi] 1
+        setarray allocTable[_HEAPi] r1
         add _HEAPi 1
     }
 
@@ -555,7 +560,10 @@ defstate free
 ends
 
 defstate realloc
+    set ra r1
+    set r1 r2
     state alloc
+    set r1 ra
 
     set _HEAPi r1
     sub _HEAPi ${stackSize}
@@ -580,8 +588,7 @@ defstate realloc
 ends
 
 defstate _GC
-    set _HEAPi 1
-
+    set _HEAPi 0
     whilel _HEAPi heaptables {
         ife allocTable[_HEAPi] 0 {
             add _HEAPi 1
@@ -601,28 +608,83 @@ defstate _GC
             add _HEAPj 1
         }
 
-        ife _HEAPk 1
-        ife allocTable[_HEAPi] 2 {
-            setarray allocTable[_HEAPi] 1
+        ife _HEAPk 0 {
+            set _HEAPj _HEAPi
+            add _HEAPj 1
 
-            whilel _HEAPi heaptables {
-                ifn lookupHeap[_HEAPi] _HEAP_pointer
-                    exit
+            whilel _HEAPj heaptables {
+                set _HEAPl 0
+                ifand allocTable[_HEAPj] 1
+                    set _HEAPl 1
 
-                setarray allocTable[_HEAPi] 1
-                add _HEAPi 1
+                ifand allocTable[_HEAPj] 4
+                    set _HEAPl 1
+
+                ife _HEAPl 1 {
+                    set _HEAPl lookupHeap[_HEAPj]
+                    set ra _HEAPl
+                    set rc 0
+
+                    whilee lookupHeap[_HEAPj] ra {
+                        ife flat[_HEAPl] _HEAP_pointer {
+                            set _HEAPk 1
+                            exit
+                        }
+
+                        ife rc PAGE_SIZE {
+                            add _HEAPj 1
+                            set rc 0
+                            ifge _HEAPj heaptables
+                                exit
+
+                            set ra lookupHeap[_HEAPj]
+                        } else
+                            add rc 1
+
+                        add _HEAPl 1
+                    }
+                }
+
+                add _HEAPj 1
             }
 
-            add _HEAPi 1
-            continue
-        }
+            ife _HEAPk 1 {
+                ifand allocTable[_HEAPi] 1024 {
+                    set ra allocTable[_HEAPi]
+                    and ra 1024
+                    setarray allocTable[_HEAPi] ra
 
-        ife _HEAPk 0 {
-            ife allocTable[_HEAPi] 2 {
+                    whilel _HEAPi heaptables {
+                        ifn lookupHeap[_HEAPi] _HEAP_pointer
+                            exit
+
+                        setarray allocTable[_HEAPi] ra
+                        add _HEAPi 1
+                    }
+
+                    add _HEAPi 1
+                    continue
+                }
+
+                whilel _HEAPi heaptables {
+                    ifn lookupHeap[_HEAPi] _HEAP_pointer
+                        exit
+
+                    add _HEAPi 1
+                }
+
+                add _HEAPi 1
+                continue
+            }
+
+            ifand allocTable[_HEAPi] 1024 {
                 setarray allocTable[_HEAPi] 0
                 setarray lookupHeap[_HEAPi] 0
-            } else 
-                setarray allocTable[_HEAPi] 2
+            } else {
+                set ra allocTable[_HEAPi]
+                or ra 1024
+                setarray allocTable[_HEAPi] ra
+            }
             
             add _HEAPi 1
 
@@ -630,11 +692,14 @@ defstate _GC
                 ifn lookupHeap[_HEAPi] _HEAP_pointer
                     exit
 
-                ife allocTable[_HEAPi] 2 {
+                ifand allocTable[_HEAPi] 1024 {
                     setarray allocTable[_HEAPi] 0
                     setarray lookupHeap[_HEAPi] 0
-                } else 
-                    setarray allocTable[_HEAPi] 2
+                } else {
+                    set ra allocTable[_HEAPi]
+                    or ra 1024
+                    setarray allocTable[_HEAPi] ra
+                }
 
                 add _HEAPi 1
             }
@@ -792,6 +857,9 @@ defstate _convertString2Quote
         }
 
         add ri flat[ra]
+        ife ri 0
+            exit
+
         sub ri 32
         ifl ri 900 {
             qputs 1022 ERROR: %d is not a valid ASCII character
