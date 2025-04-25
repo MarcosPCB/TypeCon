@@ -8,3 +8,4 @@ test
 *.cache
 texturecache
 *.index
+src/sets/TCSet100/precompile/CON/*.con

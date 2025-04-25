@@ -16,12 +16,13 @@
     "parse": "IS_DEV=true ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts -c \"test/data/test.ts\" -p",
     "debug": "IS_DEV=true ts-node-dev --inspect-brk --transpile-only --ignore-watch node_modules src/main.ts",
     "build": "tsc",
+    "start": "node dist/main.js",
     "postbuild": "node postBuild.js"
   },
   "dependencies": {
     "fs-extra": "^11.3.0",
     "inquirer": "^12.5.0",
-    "ts-morph": "^25.0.1"
+    "ts-morph": "^25.0.1",
   },
   "devDependencies": {
     "@types/node": "^22.13.11",

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import fs from 'fs';
+import fs, { Dirent } from 'fs';
 import path = require('path');
-import { compiledFiles, CONInit } from './modules/compiler/helper/framework';
+import { compiledFiles, CONInit, ECompileOptions } from './modules/compiler/helper/framework';
 import GDBDebugger from './modules/debugger/services/GDBDebugger';
 //import { CONDebugger } from './modules/debugger/debugger';
 import { TsToConCompiler } from './modules/compiler/services/Compiler';
@@ -13,6 +13,7 @@ import { spawnSync } from 'child_process';
 const packConfig = require('../package.json');
 
 let fileName = '';
+let input_folder = '';
 let lineDetail = false;
 let parse_only = false;
 let stack_size = 1024;
@@ -30,6 +31,35 @@ let PID = false;
 let gdb_log = false;
 let gdb_err = false;
 let initFunc = false;
+let precompiled_modules = true;
+let heap_page_size = 8;
+let heap_page_number = 64;
+
+function GetAllFilesFromPath(iPath: string) {
+    let iFiles: Dirent[];
+
+    try {
+        iFiles = fs.readdirSync(iPath, {
+            withFileTypes: true
+        });
+    } catch(err) {
+        console.log(`Path ${iPath} is not valid or is not a folder`);
+        return;
+    }
+
+    if(iFiles.length == 0)
+        return;
+
+    for(const f of iFiles) {
+        if(f.isFile()) {
+            files.push(path.join(f.parentPath, f.name));
+            console.log(`Added ${path.join(f.parentPath, f.name)} to compile list`);
+        }
+
+        if(f.isDirectory())
+            GetAllFilesFromPath(path.join(f.parentPath, f.name));
+    }
+}
 
 /** 
  * Helper function that wraps readline.question into a Promise.
@@ -179,6 +209,7 @@ async function Setup() {
     2 - don't create header file
     4 - create header file once
     8 - output all to one file
+    16 - don't link pre-compiled modules
 */
 let compile_options = 0;
 
@@ -211,8 +242,29 @@ for(let i = 0; i < process.argv.length; i++) {
     if(a == '--input' || a == '-i') {
         fileName = process.argv[i + 1];
 
+        if(input_folder != '') {
+            console.log(`Input folder already defined`);
+            process.exit(1);
+        }
+
         if(!fs.existsSync(fileName))
             process.exit(1);
+    }
+
+    if(a == '--input_folder' || a == '-if') {
+        input_folder = process.argv[i + 1];
+
+        if(fileName != '') {
+            console.log(`Input file already defined`);
+            process.exit(1);
+        }
+
+        if(!fs.existsSync(input_folder) || !fs.readdirSync(input_folder)) {
+            console.log(`Path: ${input_folder} is not a folder or do not exist.`);
+            process.exit(1);
+        }
+
+        GetAllFilesFromPath(input_folder);
     }
 
     if(a == '--detail_lines' || a == '-dl')
@@ -220,6 +272,12 @@ for(let i = 0; i < process.argv.length; i++) {
 
     if(a == '--stack_size' || a == '-ss')
         stack_size = Number(process.argv[i + 1]);
+
+    if(a == '--page_size' || a == '-ps')
+        heap_page_size = Number(process.argv[i + 1]);
+
+    if(a == '--page_number' || a == '-pn')
+        heap_page_number = Number(process.argv[i + 1]);
 
     if(a == '--output_folder' || a == '-of')
         output_folder = process.argv[i + 1];
@@ -237,6 +295,9 @@ for(let i = 0; i < process.argv.length; i++) {
         }
         compile_options |= 4 + 1;
     }
+
+    if(a == '--no_precompiled' || a == '-np')
+        precompiled_modules = false;
 
     if(a == '--one_file' || a == '-1f') {
         if(compile_options & 4) {
@@ -290,13 +351,17 @@ for(let i = 0; i < process.argv.length; i++) {
 Usage:
     Compile options:
     \x1b[31m-i or --input\x1b[0m:  for the file path to be compiled
+    \x1b[37m-if or --input_folder\x1b[0m:  for the path folder to be compiled (compiles all files inside)
     \x1b[32m-il or --input_list\x1b[0m: for a list of files to be compiled
     \x1b[33m-o or --output\x1b[0m:  for the output file name
     \x1b[34m-of or --output_folder\x1b[0m: for the output folder path 
     \x1b[35m-dl or --detail_lines\x1b[0m: to write the TS lines inside the CON code 
     \x1b[36m-ss or --stack_size\x1b[0m: to define the stack size 
+    \x1b[38m-ps or --page_size\x1b[0m: to define the heap page's size 
+    \x1b[39m-pn or --page_number\x1b[0m: to define the default number of heap pages
     \x1b[91m-hl or --headerless\x1b[0m: Don't insert the header code (init code and states) inside the output CON 
     \x1b[92m-h or --header\x1b[0m: Create the header file 
+    \x1b[96m-np or --no_precompiled\x1b[0m: Don't link pre-compiled modules
     \x1b[93m-l or --link\x1b[0m: Create the header and the init files with the following list of CON files (separated by "")
     \x1b[96m-1f or --one_file\x1b[0m: Compile all the code into one file (must be used with -o)
     \x1b[94m-di or --default_inclusion\x1b[0m: Default inclusion (GAME.CON) 
@@ -318,7 +383,7 @@ if(debug_mode) {
 
     let code = '';
 
-    const initSys = new CONInit(stack_size);
+    const initSys = new CONInit(stack_size, heap_page_size, heap_page_number, precompiled_modules);
 
     if(fileName != '') {
         const file = fs.readFileSync(fileName);
@@ -373,6 +438,8 @@ if(debug_mode) {
             fs.writeFileSync(`${output_folder}/${output_file}.con`, code);
         } else {
             compiledFiles.forEach(c => {
+                if(c.options != 0)
+                    return;
                 const name = GetOutputName(c.path);
                 console.log(`Writing ${output_folder}/${name}.con`);
                 fs.writeFileSync(`${output_folder}/${name}.con`, c.code);

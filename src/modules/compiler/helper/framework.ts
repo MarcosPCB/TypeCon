@@ -1,4 +1,6 @@
+import { Dirent, readdirSync, readFileSync } from "fs";
 import { CompilerContext } from "../services/Compiler";
+import path from 'path';
 
 export enum ECompileOptions {
     none = 0,
@@ -28,7 +30,8 @@ export class CONInit {
 
     constructor(public readonly stackSize = 1024,
         public readonly heapPageSize = 8,
-        public readonly heapNumPages = 64) {
+        public readonly heapNumPages = 64,
+        public readonly precompiled = true) {
             this.heapSize = heapNumPages * heapPageSize;
             pageSize = heapPageSize;
 
@@ -884,11 +887,59 @@ ends
 `
         }
 
+    GetPrecompiledCode() {
+        let dir: Dirent[];
+        try {
+            dir = readdirSync(`./include/TCSet100/precompile/CON`, {
+                withFileTypes: true
+            });
+        } catch(err) {
+            console.log(`Include folder or pre-compiled folder not set yet`);
+            console.log(`Rebuild the folder so the compilation can proceed`);
+            return null
+        }
+
+        let code = '';
+
+        for(const f of dir) {
+            if(f.isFile() && f.name.endsWith('.con')) {
+                try {
+                    const module = readFileSync(path.join(f.parentPath, f.name));
+                    code += module.toString();
+                } catch(err) {
+                    console.log(`Unable to read/open pre-compiled module ${path.join(f.parentPath, f.name)}`);
+                    return null;
+                }
+            }
+        }
+
+        return code;
+    }
+
     BuildFullCodeFile(code: string) {
-        return this.initCode + this.initStates + code;
+        let preCompCode: string | null;
+        if(this.precompiled)  {
+            preCompCode = this.GetPrecompiledCode();
+
+            if(!preCompCode) {
+                console.log(`Failed to link pre-compiled code. Stopping...`);
+                process.exit(1);
+            }
+        }
+        return this.initCode + this.initStates + (this.precompiled ? preCompCode : '')  + code;
     }
 
     BuildInitFile() {
-        return this.initCode + this.initStates;
+        let preCompCode: string | null;
+        if(this.precompiled)  {
+            preCompCode = this.GetPrecompiledCode();
+
+            if(!preCompCode) {
+                console.log(`Failed to link pre-compiled code. Stopping...`);
+                process.exit(1);
+            }
+        }
+
+        return this.initCode + this.initStates + (this.precompiled ? preCompCode : '');
     }
 }

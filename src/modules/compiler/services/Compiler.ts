@@ -402,7 +402,7 @@ export class TsToConCompiler {
           context.currentFile.options |= ECompileOptions.state_decl;
         }
 
-        if(!(context.currentFile.options & ECompileOptions.state_decl)
+        if (!(context.currentFile.options & ECompileOptions.state_decl)
           || !(context.currentFile.options & ECompileOptions.no_compile))
           console.log(`Compiling ${file}...`);
       }
@@ -455,7 +455,7 @@ export class TsToConCompiler {
  */
   private getTypeBase(tn: TypeNode, ctx: CompilerContext): string | null {
     const type = tn.getType();
-  
+
     /* ────────────────────────────────────────────────────────────────────
      * 1.  Unions – every member must collapse to the same base
      * ──────────────────────────────────────────────────────────────────── */
@@ -463,10 +463,10 @@ export class TsToConCompiler {
       const bases = type.getUnionTypes()
         .map(u => this.baseFromType(u, ctx))
         .filter((b): b is string => !!b);
-  
+
       const first = bases[0];
       const allSame = bases.every(b => b === first);
-  
+
       if (!allSame) {
         addDiagnostic(tn, ctx, "error",
           `Union members must share the same base: ${type.getText()}`);
@@ -474,14 +474,14 @@ export class TsToConCompiler {
       }
       return first;
     }
-  
+
     /* ────────────────────────────────────────────────────────────────────
      * 2.  Primitives & literal primitives
      * ──────────────────────────────────────────────────────────────────── */
-    if (type.isString()  || type.isStringLiteral())  return "string";
-    if (type.isNumber()  || type.isNumberLiteral())  return "number";
+    if (type.isString() || type.isStringLiteral()) return "string";
+    if (type.isNumber() || type.isNumberLiteral()) return "number";
     if (type.isBoolean() || type.isBooleanLiteral()) return "boolean";
-  
+
     /* ────────────────────────────────────────────────────────────────────
      * 3.  Inline object literal  { a: string }
      * ──────────────────────────────────────────────────────────────────── */
@@ -489,7 +489,7 @@ export class TsToConCompiler {
       this.storeTypeAlias(tn as unknown as TypeAliasDeclaration, ctx);   // unnamed literal
       return "object";
     }
-  
+
     /* ────────────────────────────────────────────────────────────────────
      * 4.  Type references  Foo, Bar<Baz>, SomeInterface
      *     (includes aliases, interfaces, classes, generics…)
@@ -499,7 +499,7 @@ export class TsToConCompiler {
       if (aliSym) {
         const aliasDecl = aliSym.getDeclarations()
           .find(Node.isTypeAliasDeclaration) as TypeAliasDeclaration | undefined;
-  
+
         if (aliasDecl) {
           const aliasedNode = aliasDecl.getTypeNode();
           if (aliasedNode) {
@@ -514,12 +514,12 @@ export class TsToConCompiler {
       // Any other reference (interface, class, generic instantiation…)
       return "object";
     }
-  
+
     /* ────────────────────────────────────────────────────────────────────
      * 5.  Fallback for plain object types
      * ──────────────────────────────────────────────────────────────────── */
     if (type.isObject()) return "object";
-  
+
     /* ────────────────────────────────────────────────────────────────────
      * 6.  Unsupported
      * ──────────────────────────────────────────────────────────────────── */
@@ -527,14 +527,14 @@ export class TsToConCompiler {
       `Unsupported parameter type: ${type.getText()}`);
     return null;
   }
-  
+
   /* -------------------------------------------------------------------- */
   /* Helper for reducing a ts-morph Type when we don’t have its node      */
   /* -------------------------------------------------------------------- */
   private baseFromType(t: Type, ctx: CompilerContext): string | null {
     const node = t.getSymbol()?.getDeclarations()?.find(Node.isTypeNode);
     if (node) return this.getTypeBase(node, ctx);
-  
+
     // Literal types (`"foo"`, `42`) don’t have declarations; create one on‑the‑fly
     const sf = this.project.createSourceFile("__temp.ts", `type __T = ${t.getText()};`);
     const litNode = sf.getTypeAliasOrThrow("__T").getTypeNodeOrThrow();
@@ -645,47 +645,47 @@ export class TsToConCompiler {
   }
 
   private getSymbolType(type: string, context: CompilerContext): ESymbolType {
-      let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
-      switch (type) {
-        case 'string':
-        case 'pointer':
-        case 'boolean':
-          t = ESymbolType[type];
-          break;
+    let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
+    switch (type) {
+      case 'string':
+      case 'pointer':
+      case 'boolean':
+        t = ESymbolType[type];
+        break;
 
-        case 'constant':
-        case 'number':
-          break;
+      case 'constant':
+      case 'number':
+        break;
 
-        case 'quote':
-          t = ESymbolType.quote;
-          break;
+      case 'quote':
+        t = ESymbolType.quote;
+        break;
 
-        case 'string[]':
-          t = ESymbolType.string | ESymbolType.array;
-          break;
+      case 'string[]':
+        t = ESymbolType.string | ESymbolType.array;
+        break;
 
-        case 'number[]':
-        case '[]':
-        case 'any[]':
-          t = ESymbolType.array;
-          break;
+      case 'number[]':
+      case '[]':
+      case 'any[]':
+        t = ESymbolType.array;
+        break;
 
-        default:
-          let tText = type;
+      default:
+        let tText = type;
 
-          if (type.endsWith('[]')) {
-            t = ESymbolType.object | ESymbolType.array;
-            tText = tText.slice(0, tText.length - 2);
-          } else t = ESymbolType.object;
+        if (type.endsWith('[]')) {
+          t = ESymbolType.object | ESymbolType.array;
+          tText = tText.slice(0, tText.length - 2);
+        } else t = ESymbolType.object;
 
-          const alias = context.typeAliases.get(tText);
+        const alias = context.typeAliases.get(tText);
 
-          if (!alias)
-            return ESymbolType.error;
-      }
+        if (!alias)
+          return ESymbolType.error;
+    }
 
-      return t;
+    return t;
   }
 
   private getObjectTypeLayout(typeName: string, context: CompilerContext): { [key: string]: SymbolDefinition } {
@@ -815,12 +815,12 @@ export class TsToConCompiler {
         const moduleName = md.getName();
         const compilable = md.getDeclarationKind() != ModuleDeclarationKind.Global && !['nocompile', 'noread', 'statedecl'].includes(moduleName);
 
-        if(!compilable)
+        if (!compilable)
           context.currentFile.options |= ECompileOptions.no_compile;
 
         const stmts = (stmt as ModuleDeclaration).getStatements();
 
-        if(compilable)
+        if (compilable)
           context.symbolTable.set(moduleName, {
             name: moduleName,
             type: ESymbolType.module,
@@ -840,7 +840,7 @@ export class TsToConCompiler {
             mCode = this.visitStatement(st, localCtx);
         });
 
-        if(compilable) {
+        if (compilable) {
           const children: { [k: string]: SymbolDefinition | EnumDefinition } = Object.fromEntries([...localCtx.symbolTable].filter(e => !context.symbolTable.has(e[0])));
 
           context.symbolTable.set(moduleName, {
@@ -939,7 +939,7 @@ export class TsToConCompiler {
       return code;
     }
 
-    if(type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_FUNC_ALIAS')
+    if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_FUNC_ALIAS')
       return code;
 
     if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_NATIVE_OBJECT') {
@@ -1134,7 +1134,7 @@ export class TsToConCompiler {
       return { op: "ifge", left: pExpr, right: 1 };
     }
 
-    if(expr.isKind(SyntaxKind.Identifier)) {
+    if (expr.isKind(SyntaxKind.Identifier)) {
       return { op: "ifge", left: expr as Identifier, right: 1 };
     }
 
@@ -1331,16 +1331,16 @@ export class TsToConCompiler {
       return code + 'set ra 0\n';
     }
 
-    if(expr.isKind(SyntaxKind.NewExpression)) {
+    if (expr.isKind(SyntaxKind.NewExpression)) {
       const className = expr.getExpression().getText();
       const sym = context.symbolTable.get(className);
 
-      if(!sym) {
+      if (!sym) {
         addDiagnostic(expr, context, 'error', `Undeclared class ${className}`);
         return '';
       }
 
-      if(sym.type != ESymbolType.class) {
+      if (sym.type != ESymbolType.class) {
         addDiagnostic(expr, context, 'error', `Onyl classes are supported by a New Expression: ${expr.getText()}`);
         return '';
       }
@@ -1827,17 +1827,17 @@ set rb ra
 
     let variable = context.paramMap[fnObj];
 
-    if(!variable)
+    if (!variable)
       variable = context.symbolTable.get(fnObj) as SymbolDefinition;
 
     let typeName: undefined | string = undefined;
 
     //if (variable && (!(variable.type & ESymbolType.function) && !(variable.type & ESymbolType.array) && !(variable.type & ESymbolType.object)))
-    if(variable) {
-      if(variable.type & ESymbolType.array)
+    if (variable) {
+      if (variable.type & ESymbolType.array)
         typeName = 'array';
       else {
-        if(variable.type & ESymbolType.string)
+        if (variable.type & ESymbolType.string)
           typeName = 'string';
       }
     }
@@ -1906,7 +1906,7 @@ set rb ra
       if (nativeFn.return_type == 'array')
         context.curExpr |= ESymbolType.array;
 
-      if(nativeFn.return_type == 'object')
+      if (nativeFn.return_type == 'object')
         context.curExpr |= ESymbolType.object;
 
       // For simple native functions (code is a string), concatenate the command with the arguments.
@@ -1932,7 +1932,7 @@ set rb ra
           code += `state popr${argsLen > 12 ? 'all' : argsLen}\n`;
           context.localVarCount -= argsLen;
         }
-        if(nativeFn.return_type == 'object') {
+        if (nativeFn.return_type == 'object') {
           code += `set rd ${nativeFn.return_size}\nadd rsp 1\nset ri rsp\ncopy flat[rsp] flat[rb] rd\n`;
           code += `add rsp ${nativeFn.return_size - 1}\nset rb ri\n`
           context.localVarCount += nativeFn.return_size;
@@ -1950,7 +1950,7 @@ set rb ra
       const isClass = Boolean(func.type & ESymbolType.class);
       const totalArgs = args.length + (isClass ? 1 : 0);
 
-      if(isClass && (!func.children || (func.children && !func.children[fnName]))) {
+      if (isClass && (!func.children || (func.children && !func.children[fnName]))) {
         addDiagnostic(call, context, 'error', `Undefined method ${fnName} in class ${func.name}`)
         return '';
       }
@@ -2126,7 +2126,7 @@ set rb ra
               name: propName,
               type: ESymbolType.number,
               offset: totalSlots,
-              size: 1, 
+              size: 1,
               literal: init.isKind(SyntaxKind.NumericLiteral)
                 ? (init as NumericLiteral).getLiteralValue()
                 : undefined
@@ -2218,7 +2218,7 @@ set rb ra
       // Store the layout in the global symbol table.
       context.symbolTable.set(varName, { name: varName, type: ESymbolType.object, offset: context.localVarCount + 1, size: result.size, children: result.layout });
     }
-    if(context.currentFile.options & ECompileOptions.no_compile)
+    if (context.currentFile.options & ECompileOptions.no_compile)
       return '';
 
     context.localVarCount += result.size + 1;
@@ -2362,7 +2362,7 @@ set rb ra
 
             const localVars = context.localVarCount;
             //code += `state pushd\n`
-            if(assignment)
+            if (assignment)
               code += `state push\n`;
 
             code += `state pushi\n`;
@@ -2381,7 +2381,7 @@ set rb ra
             if (sym.type & (ESymbolType.string | ESymbolType.array))
               context.curExpr = ESymbolType.string | ESymbolType.array;
 
-            if(assignment)
+            if (assignment)
               code += `state pop\n`;
 
             continue;
@@ -2406,13 +2406,13 @@ set rb ra
 
             sym = sym.children[seg.name] as SymbolDefinition | EnumDefinition;
 
-            if(sym.type == ESymbolType.enum)
+            if (sym.type == ESymbolType.enum)
               return code + `set ra ${sym.children[(segments[i + 1] as SegmentProperty).name]}\n`;
 
-            if(sym.offset != 0)
+            if (sym.offset != 0)
               code += `add ri ${sym.offset}\n`;
 
-            if(sym.type & ESymbolType.object || sym.type & ESymbolType.array)
+            if (sym.type & ESymbolType.object || sym.type & ESymbolType.array)
               code += `set ri flat[ri]\n`;
             continue;
           }
@@ -2501,7 +2501,7 @@ set rb ra
 
               let pSym = context.curClass.children[seg.name] as SymbolDefinition;
 
-              if(pSym.offset != 0)
+              if (pSym.offset != 0)
                 code += `add ri ${pSym.offset}\n`;
 
               for (let i = 2; i < segments.length; i++) {
@@ -2517,7 +2517,7 @@ set rb ra
 
                   const localVars = context.localVarCount;
                   //code += `state pushd\n`
-                  if(assignment)
+                  if (assignment)
                     code += `state push\n`;
                   code += `state pushi\n`;
                   code += this.visitExpression(s.expr, context);
@@ -2537,7 +2537,7 @@ set rb ra
                   if (pSym.type == (ESymbolType.string | ESymbolType.array))
                     context.curExpr = pSym.type;
 
-                  if(assignment)
+                  if (assignment)
                     code += `state pop\n`;
 
                   continue;
@@ -2555,7 +2555,7 @@ set rb ra
 
                 pSym = pSym.children[s.name] as SymbolDefinition;
 
-                if(pSym.offset != 0)
+                if (pSym.offset != 0)
                   code += `add ri ${pSym.offset}\n`;
               }
 
@@ -2590,7 +2590,7 @@ set rb ra
 
             let overriden = false;
 
-            if(assignment)
+            if (assignment)
               code += `state push\n`;
 
             if (nVar.type == CON_NATIVE_FLAGS.OBJECT) {
@@ -2609,7 +2609,7 @@ set rb ra
                   if (nVar.override_code) {
                     code += nVar.code[assignment ? 1 : 0];
                     overriden = true;
-                  } 
+                  }
 
                   if (nVar.type == CON_NATIVE_FLAGS.OBJECT) {
                     const v = nVar.object.find(e => e.name == (segments[i + 1] as SegmentProperty).name);
@@ -2818,8 +2818,8 @@ set rb ra
     if (body) {
       const params = Object.keys(localCtx.paramMap).length;
 
-      if(body.getDescendantsOfKind(SyntaxKind.ArrowFunction)) {
-        if(params > 0) {
+      if (body.getDescendantsOfKind(SyntaxKind.ArrowFunction)) {
+        if (params > 0) {
           code += indent(`state pushr${params > 12 ? 'all' : params}\n`, 1);
           Object.entries(localCtx.paramMap).forEach((e, i) => {
             localCtx.symbolTable.set(e[0], {
@@ -2836,8 +2836,8 @@ set rb ra
         code += indent(this.visitStatement(st, localCtx), 1) + "\n";
       });
 
-      if(body.getDescendantsOfKind(SyntaxKind.ArrowFunction)) {
-        if(params > 0) {
+      if (body.getDescendantsOfKind(SyntaxKind.ArrowFunction)) {
+        if (params > 0) {
           code += indent(`state popr${params > 12 ? 'all' : params}\n`, 1);
 
           Object.entries(localCtx.paramMap).forEach((e, i) => {
@@ -3249,99 +3249,111 @@ set rb ra
     return code;
   }
 
-  private parseVarForActionsMovesAi(decl: VariableDeclaration, context: CompilerContext) {
-    // check type => if IAction, IMove, IAi => parse
+  private parseVarForActionsMovesAi(decl: VariableDeclaration, ctx: CompilerContext) {
     const typeNode = decl.getTypeNode();
     if (!typeNode) return;
-    const typeStr = typeNode.getText();
-    if (typeStr === "IAction") {
-      this.parseIAction(decl, context);
-    } else if (typeStr === "IMove") {
-      this.parseIMove(decl, context);
-    } else if (typeStr === "IAi") {
-      this.parseIAi(decl, context);
+
+    // ── 1. figure out *base* type & whether it's an array ────────────────────
+    let typeStr = typeNode.getText().trim();
+    let isArray = false;
+
+    if (typeStr.endsWith("[]")) {
+      isArray = true;
+      typeStr = typeStr.slice(0, -2).trim();        // IAction[] → IAction
+    } else {
+      const m = /^Array<\s*(.+?)\s*>$/.exec(typeStr);
+      if (m) {                                      // Array<IAction> → IAction
+        isArray = true;
+        typeStr = m[1];
+      }
     }
+
+    // ── 2. grab the initializer ──────────────────────────────────────────────
+    const init = decl.getInitializer();
+    if (!init) return;
+
+    // ── 3. route to the right parser(s) ──────────────────────────────────────
+    const handleObj = (obj: ObjectLiteralExpression) => {
+      switch (typeStr) {
+        case "IAction": this.parseIActionLiteral(obj, ctx); break;
+        case "IMove": this.parseIMoveLiteral(obj, ctx); break;
+        case "IAi": this.parseIAiLiteral(obj, ctx); break;
+      }
+    };
+
+    if (!isArray) {
+      if (init.isKind(SyntaxKind.ObjectLiteralExpression))
+        handleObj(init as ObjectLiteralExpression);
+      return;
+    }
+
+    // array case ─ iterate every element
+    if (!init.isKind(SyntaxKind.ArrayLiteralExpression)) return;
+    (init as ArrayLiteralExpression).getElements().forEach(el => {
+      if (el.isKind(SyntaxKind.ObjectLiteralExpression))
+        handleObj(el as ObjectLiteralExpression);
+    });
   }
 
-  private parseIAction(decl: VariableDeclaration, context: CompilerContext) {
-    const init = decl.getInitializer();
-    if (!init || !init.isKind(SyntaxKind.ObjectLiteralExpression)) return;
-    const obj = init as ObjectLiteralExpression;
-    let actionName = "", start = 0, length = 0, viewType = 0, incValue = 0, delay = 0;
+
+  /* --------------------------------------------------------------
+ * turn parseIAction / parseIMove / parseIAi into “object” helpers
+ * -------------------------------------------------------------- */
+
+  private parseIActionLiteral(obj: ObjectLiteralExpression, ctx: CompilerContext) {
+    let name = "", start = 0, length = 0, viewType = 0, inc = 0, delay = 0;
     obj.getProperties().forEach(p => {
-      if (p.isKind(SyntaxKind.PropertyAssignment)) {
-        const key = p.getName();
-        const val = p.getInitializerOrThrow();
-        switch (key) {
-          case "name": actionName = val.getText().replace(/[`'"]/g, ""); break;
-          case "start": start = parseInt(val.getText(), 10); break;
-          case "length": length = parseInt(val.getText(), 10); break;
-          case "viewType": viewType = parseInt(val.getText(), 10); break;
-          case "incValue": incValue = parseInt(val.getText(), 10); break;
-          case "delay": delay = parseInt(val.getText(), 10); break;
-        }
+      if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
+      const key = p.getName();
+      const val = p.getInitializerOrThrow().getText();
+      switch (key) {
+        case "name": name = val.replace(/[`'"]/g, ""); break;
+        case "start": start = +val; break;
+        case "length": length = +val; break;
+        case "viewType": viewType = +val; break;
+        case "incValue": inc = +val; break;
+        case "delay": delay = +val; break;
       }
     });
-    context.symbolTable.set(decl.getName(), {
-      name: actionName,
-      type: ESymbolType.pointer,
-      offset: 0,
-      size: 1,
-    });
-    context.currentActorActions.push(`action ${actionName} ${start} ${length} ${viewType} ${incValue} ${delay}`);
+
+    ctx.currentActorActions.push(
+      `action ${name} ${start} ${length} ${viewType} ${inc} ${delay}`,
+    );
   }
 
-  private parseIMove(decl: VariableDeclaration, context: CompilerContext) {
-    const init = decl.getInitializer();
-    if (!init || !init.isKind(SyntaxKind.ObjectLiteralExpression)) return;
-    const obj = init as ObjectLiteralExpression;
-    let moveName = "", hv = 0, vv = 0;
+  private parseIMoveLiteral(obj: ObjectLiteralExpression, ctx: CompilerContext) {
+    let name = "", hv = 0, vv = 0;
     obj.getProperties().forEach(p => {
-      if (p.isKind(SyntaxKind.PropertyAssignment)) {
-        const key = p.getName();
-        const val = p.getInitializerOrThrow();
-        switch (key) {
-          case "name": moveName = val.getText().replace(/[`'"]/g, ""); break;
-          case "horizontal_vel": hv = parseInt(val.getText(), 10); break;
-          case "vertical_vel": vv = parseInt(val.getText(), 10); break;
-        }
+      if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
+      const key = p.getName();
+      const val = +p.getInitializerOrThrow().getText();
+      switch (key) {
+        case "name": name = p.getInitializerOrThrow().getText().replace(/[`'"]/g, ""); break;
+        case "horizontal_vel": hv = val; break;
+        case "vertical_vel": vv = val; break;
       }
     });
-    context.symbolTable.set(decl.getName(), {
-      name: moveName,
-      type: ESymbolType.pointer,
-      offset: 0,
-      size: 1,
-    });
-    context.currentActorMoves.push(`move ${moveName} ${hv} ${vv}`);
+
+    ctx.currentActorMoves.push(`move ${name} ${hv} ${vv}`);
   }
 
-  private parseIAi(decl: VariableDeclaration, context: CompilerContext) {
-    const init = decl.getInitializer();
-    if (!init || !init.isKind(SyntaxKind.ObjectLiteralExpression)) return;
-    const obj = init as ObjectLiteralExpression;
-    let aiName = "", actionLabel = "", moveLabel = "";
-    let flags = 0;
+  private parseIAiLiteral(obj: ObjectLiteralExpression, ctx: CompilerContext) {
+    let name = "", action = "", move = ""; let flags = 0;
     obj.getProperties().forEach(p => {
-      if (p.isKind(SyntaxKind.PropertyAssignment)) {
-        const key = p.getName();
-        const val = p.getInitializerOrThrow();
-        switch (key) {
-          case "name": aiName = val.getText().replace(/[`'"]/g, ""); break;
-          case "action": actionLabel = val.getText().replace(/[`'"]/g, ""); break;
-          case "move": moveLabel = val.getText().replace(/[`'"]/g, ""); break;
-          case "flags": flags = evalMoveFlags(val, context); break;
-        }
+      if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
+      const key = p.getName();
+      const valNode = p.getInitializerOrThrow();
+      switch (key) {
+        case "name": name = valNode.getText().replace(/[`'"]/g, ""); break;
+        case "action": action = valNode.getText().replace(/[`'"]/g, ""); break;
+        case "move": move = valNode.getText().replace(/[`'"]/g, ""); break;
+        case "flags": flags = evalMoveFlags(valNode, ctx); break;
       }
     });
-    context.symbolTable.set(decl.getName(), {
-      name: aiName,
-      type: ESymbolType.pointer,
-      offset: 0,
-      size: 1,
-    });
-    context.currentActorAis.push(`ai ${aiName} ${actionLabel} ${moveLabel} ${flags}`);
+
+    ctx.currentActorAis.push(`ai ${name} ${action} ${move} ${flags}`);
   }
+
 
   private parseActorSuperCall(call: CallExpression, context: CompilerContext) {
     // super(picnum, isEnemy, extra, actions, firstAction, moves, ais)
@@ -3369,7 +3381,17 @@ set rb ra
     if (args.length >= 5) {
       // first_action
       const fa = args[4];
-      context.currentActorFirstAction = context.symbolTable.get(fa.getText()).name.replace(/[`'"]/g, "");
+
+      if(fa && (fa.getText() != 'undefined' && fa.getText() != 'null')) {
+        const sym = context.symbolTable.get(fa.getText());
+
+        if(!sym) {
+          addDiagnostic(call, context, 'error', `Action ${fa.getText()} is not declared`);
+          return;
+        }
+
+        context.currentActorFirstAction = sym.name.replace(/[`'"]/g, "");
+      }
     }
   }
 
@@ -3517,7 +3539,7 @@ set rb ra
             //Since it's a parameter, we can try to store this type
             const typeR = this.getTypeBase(p.getTypeNode(), context);
 
-            if(!typeR) {
+            if (!typeR) {
               addDiagnostic(md, context, 'error', `Undeclared type alias ${tText}`);
               return '';
             }
@@ -3525,7 +3547,7 @@ set rb ra
             t = ESymbolType[typeR];
           }
 
-          if(t & ESymbolType.object)
+          if (t & ESymbolType.object)
             children = this.getObjectTypeLayout(tText, context);
       }
       localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children };
@@ -3538,7 +3560,7 @@ set rb ra
     });
 
     localCtx.curFunc = localCtx.symbolTable.get(mName) as SymbolDefinition;
-    if(type == '') {
+    if (type == '') {
       context.curClass.children[mName] = localCtx.symbolTable.get(mName);
       const numParams = Object.keys(localCtx.paramMap).length;
 
