@@ -22,7 +22,7 @@
   "dependencies": {
     "fs-extra": "^11.3.0",
     "inquirer": "^12.5.0",
-    "ts-morph": "^25.0.1",
+    "ts-morph": "^25.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.11",
