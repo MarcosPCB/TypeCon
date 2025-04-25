@@ -705,6 +705,15 @@ export class TsToConCompiler {
           // Recursively compute the layout for one element of the array.
           if (context.typeAliases.has(baseType)) {
             children = this.getObjectTypeLayout(baseType, context);
+            layout[k] = {
+              name: k,
+              //@ts-ignore
+              type: this.getSymbolType(t, context),
+              offset: i,
+              size: this.getObjectSize(baseType, context),
+              num_elements: Object.keys(children).length,
+              children
+            };
           } else {
             layout[k] = {
               name: k,
@@ -724,7 +733,8 @@ export class TsToConCompiler {
             //@ts-ignore
             type: this.getSymbolType(t, context),
             offset: i,
-            size: 1,
+            size: context.typeAliases.has(t) ? this.getObjectSize(t, context) : 1,
+            num_elements: context.typeAliases.has(t) ? Object.keys(children).length : 1,
             CON_code: code,
             children
           };
@@ -2003,17 +2013,42 @@ set rb ra
     code += `add rsp 1\nset ri rsp\nadd ri 1\nsetarray flat[rsp] ri\n`;
     // The object's base pointer is now stored at flat[rsp].
 
+    //We will store the code for nested objects and arrays here
+    //After definining all the root properties, then we add the instance code
+    let instanceCode = '';
+
+    /*
+      Any object, literal or typed, will follow this structure example:
+        [0x00000400] Object address: 0x00000401
+        [0x00000401]  - Property 0 (integer) value = 0
+        [0x00000402]  - Property 1 (stack array with 3 elements) address = 0x00000404
+        [0x00000403]  - Property 2 (stack object with 2 properties) address = 0x00000408
+
+        [0x00000404]    - Property 1 length = 3
+        [0x00000405]    - Property 1 element 0 = 0
+        [0x00000406]    - Property 1 element 1 = 5
+        [0x00000407]    - Property 1 element 2 = 90
+
+        [0x00000408]    - Property 2 property 0 (integer) value = 3
+        [0x00000409]    - Property 2 property 1 (integer) value = 7
+
+        So the contents of objects/arrays will come after the properties
+    */
+
     // Build the layout as a plain object.
     let layout: { [key: string]: SymbolDefinition } = {};
     let totalSlots = 0; // count of property slots allocated
+
+    let curTotalSize = 0;
 
     const aliasName = this.getTypeAliasNameForObjectLiteral(objLit);
     if (aliasName && context.typeAliases.has(aliasName)) {
       const typeDef = context.typeAliases.get(aliasName)!;
       // Process each expected property (in declared order from the type alias).
+      const totalProps = Object.keys(typeDef.members).length;
+      curTotalSize = totalProps;
       for (const [propName, propType] of Object.entries(typeDef.members)) {
         totalSlots++; // Reserve one slot for this property (or the start for arrays/nested objects)
-
         // Find the property assignment in the object literal by comparing names (ignoring quotes).
         const prop = objLit.getProperties().find(p => {
           if (p.isKind(SyntaxKind.PropertyAssignment)) {
@@ -2025,27 +2060,28 @@ set rb ra
         if (prop && prop.isKind(SyntaxKind.PropertyAssignment)) {
           const pa = prop as PropertyAssignment;
           if (propType.endsWith("[]")) {
-            totalSlots++;
+            curTotalSize++;
+            code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
             // For an array property (e.g., low: wow[])
             const baseType = propType.slice(0, -2).trim();
             const initText = pa.getInitializerOrThrow().getText();
             const count = this.getArraySize(initText);
             const instanceSize = this.getObjectSize(baseType, context);
             const instanceType = context.typeAliases.get(baseType);
-            code += `add rsp 1\nsetarray flat[rsp] ${count}\n`;
+            instanceCode += `add rsp 1\nsetarray flat[rsp] ${count}\n`;
             if (instanceType) {
               const result = this.getObjectTypeLayout(baseType, context);
               for (let j = 0; j < count; j++) {
                 for (let k = 0; k < instanceSize; k++) {
-                  code += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
-                  totalSlots++;
+                  instanceCode += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
+                  curTotalSize++;
                 }
               }
 
               layout[propName] = {
                 name: propName,
                 type: ESymbolType.object | ESymbolType.array,
-                offset: totalSlots - (count * instanceSize),
+                offset: totalSlots,
                 size: count * instanceSize,
                 num_elements: count,
                 children: { ...result }  // clone children as plain object
@@ -2054,23 +2090,26 @@ set rb ra
               // For each element, allocate instanceSize slots.
               for (let j = 0; j < count; j++) {
                 for (let k = 0; k < instanceSize; k++) {
-                  code += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
-                  totalSlots++;
+                  instanceCode += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
+                  curTotalSize++;
                 }
               }
               layout[propName] = {
                 name: propName,
                 type: ESymbolType.array,
-                offset: totalSlots - (count * instanceSize),
+                offset: totalSlots,
                 size: count * instanceSize,
                 num_elements: count,
               };
             }
           } else if (context.typeAliases.has(propType)) {
+            curTotalSize++;
+            code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
             // For a nested object property.
             const result = this.processObjectLiteral(pa.getInitializerOrThrow() as ObjectLiteralExpression, context);
-            code += result.code;
+            instanceCode += result.code;
             const nestedSize = result.size;
+            curTotalSize += result.size;
             layout[propName] = {
               name: propName,
               type: ESymbolType.object,
@@ -2078,7 +2117,6 @@ set rb ra
               size: nestedSize,
               children: { ...result.layout }  // clone children as plain object
             };
-            totalSlots += nestedSize - 1; // already counted one slot for the property
           } else {
             // For a primitive property.
             const init = pa.getInitializerOrThrow();
@@ -2110,28 +2148,32 @@ set rb ra
           const init = p.getInitializerOrThrow();
           const propName = p.getName().replace(/[`'"]/g, "");
           if (init.isKind(SyntaxKind.ArrayLiteralExpression)) {
-            totalSlots++;
+            curTotalSize++;
+            code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize}\nsetarray flat[rsp] ri\n`
             const initText = init.getText();
             const count = this.getArraySize(initText);
             //const instanceSize = this.getObjectSize(baseType, context);
             // For each element, allocate instanceSize slots.
-            code += `add rsp 1\nsetarray flat[rsp] ${count}\n`;
+            instanceCode += `add rsp 1\nsetarray flat[rsp] ${count}\n`;
             for (let j = 0; j < count; j++) {
-              code += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
-              totalSlots++;
+              instanceCode += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
+              curTotalSize++;
             }
             layout[propName] = {
               name: propName,
               type: ESymbolType.object | ESymbolType.array,
-              offset: totalSlots - (count),
+              offset: totalSlots,
               size: count,
               num_elements: count,
             };
           } else if (init.isKind(SyntaxKind.ObjectLiteralExpression)) {
             // For a nested object property.
+            curTotalSize++;
+            code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
             const result = this.processObjectLiteral(init, context);
-            code += result.code;
+            instanceCode += result.code;
             const nestedSize = result.size;
+            curTotalSize += result.size;
             layout[p.getName()] = {
               name: propName,
               type: ESymbolType.object,
@@ -2139,7 +2181,6 @@ set rb ra
               size: nestedSize,
               children: { ...result.layout }  // clone children as plain object
             };
-            totalSlots += nestedSize - 1; // already counted one slot for the property
           } else {
             // For a primitive property.
             code += this.visitExpression(init, context);
@@ -2163,10 +2204,9 @@ set rb ra
     // The object's base pointer is at: flat[rsp - (totalSlots + 1)]
     //code += `set ri rbp\nadd ri ${totalSlots + 1}\nset ra flat[ri]\n`;
 
-    // Optionally freeze the layout to avoid accidental modification.
-    const frozenLayout = Object.freeze({ ...layout });
+    code += instanceCode;
 
-    return { code, layout: frozenLayout, size: totalSlots };
+    return { code, layout: layout, size: totalSlots };
   }
 
 
