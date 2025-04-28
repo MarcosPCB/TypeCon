@@ -1018,7 +1018,7 @@ export class TsToConCompiler {
       code += `sub rbp 1\nset rsp rbp\nset rssp rsbp\nstate pop\nset rsbp ra\nstate pop\nset rbp ra\n`;
       code += `break\n`
     } else {
-      code += `sub rbp 1\nset rsp rbp\nset rssp rsbp\nstate pop\nset rsbp ra\nstate pop\nset rbp ra\n`;
+      code += `sub rbp 1\nset rsp rbp\n\nstate pop\nset rbp ra\n`;
       code += `terminate\n`;
       context.curFunc.returns |= context.curExpr;
     }
@@ -1601,6 +1601,9 @@ export class TsToConCompiler {
       if (arg.isKind(SyntaxKind.StringLiteral)) {
         return arg.getText().replace(/[`'"]/g, "");
       }
+
+      if(arg.isKind(SyntaxKind.NullKeyword))
+        return '0';
 
       if(arg.isKind(SyntaxKind.Identifier)) {
         const vName = (arg as Identifier).getText();

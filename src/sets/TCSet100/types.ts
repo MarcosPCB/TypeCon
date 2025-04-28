@@ -179,6 +179,129 @@ declare global {
     }
 
     /**
+     * **ESpriteFlags** – per-sprite runtime flags (the “SFLAG_” bits from EDuke 32).
+     *
+     * @property {number} SHADOW              - Generate a shadow (`spriteshadow`).
+     * @property {number} NVG                 - Switch to palette 6 when night-vision goggles are active (`spritenvg`).
+     * @property {number} NOSHADE             - Ignore sector shade (`spritenoshade`).
+     * @property {number} PROJECTILE          - Was created with `defineprojectile`.
+     * @property {number} DECAL               - Prevents teleporting; not entered into the decal-deletion queue.
+     * @property {number} BADGUY              - Marks the sprite as an enemy (`useractor`).
+     * @property {number} NOPAL               - Immune to floor palette (`spritenopal`).
+     * @property {number} NOEVENTS            - Excluded from `EVENT_GAME` and `EVENT_PREGAME`.
+     * @property {number} NOLIGHT             - Suppress hard-coded Polymer lights.
+     * @property {number} USEACTIVATOR        - Reserved flag used by `useractor` (`activate`).
+     * @property {number} NULL                - “Null sprite” placeholder in multiplayer (internal).
+     * @property {number} NOCLIP              - Calls `clipmove()` with a 0 clipmask (no sprite collisions) – useful for particles.
+     * @property {number} NOFLOORSHADOW       - Don’t draw a floor shadow.
+     * @property {number} SMOOTHMOVE          - Enable client-side interpolation (smooth movement).
+     * @property {number} NOTELEPORT          - Prevent teleportation.
+     * @property {number} BADGUYSTAYPUT       - Enemy will not leave its original sector.
+     * @property {number} CACHE               - Engine-side cache hint.
+     * @property {number} ROTFIXED            - Rotation-fixed around a pivot to avoid round-off drift.
+     * @property {number} HARDCODED_BADGUY    - Hard-coded enemy marker (internal).
+     * @property {number} DIDNOSE7WATER       - Temporary internal flag.
+     * @property {number} NODAMAGEPUSH        - Actor isn’t pushed back by damage.
+     * @property {number} NOWATERDIP          - Actor won’t dip into water sectors (lotag 1).
+     * @property {number} HURTSPAWNBLOOD      - Spawn blood when hurt (as hard-coded enemies do).
+     * @property {number} GREENSLIMEFOOD      - Can be eaten by **GREENSLIME** (Protozoid Slimer).
+     * @property {number} REALCLIPDIST        - Always use its explicit `clipdist`.
+     * @property {number} WAKEUPBADGUYS       - Wakes up nearby enemies when activated.
+     * @property {number} DAMAGEEVENT         - Fires `EVENT_(POST)DAMAGESPRITE` when damaged.
+     * @property {number} NOWATERSECTOR       - Cannot move into water sectors.
+     * @property {number} QUEUEDFORDELETE     - Marked for deletion by the engine.
+     */
+    export enum ESpriteFlags {
+        /** Generate a shadow (`spriteshadow`). */
+        SHADOW = 1,    // 0x00000001
+
+        /** Switch to palette 6 when night-vision goggles are active (`spritenvg`). */
+        NVG = 2,    // 0x00000002
+
+        /** Ignore sector shade (`spritenoshade`). */
+        NOSHADE = 4,    // 0x00000004
+
+        /** Defined with `defineprojectile`. */
+        PROJECTILE = 8,    // 0x00000008
+
+        /** Prevent teleporting; not entered into the decal-deletion queue. */
+        DECAL = 16,    // 0x00000010
+
+        /** Marks the sprite as an enemy (`useractor`). */
+        BADGUY = 32,    // 0x00000020
+
+        /** Immune to floor palette (`spritenopal`). */
+        NOPAL = 64,    // 0x00000040
+
+        /** Excluded from `EVENT_GAME` and `EVENT_PREGAME`. */
+        NOEVENTS = 128,    // 0x00000080
+
+        /** Suppress hard-coded Polymer-based lights. */
+        NOLIGHT = 256,    // 0x00000100
+
+        /** Reserved flag used by activator logic. */
+        USEACTIVATOR = 512,    // 0x00000200
+
+        /** “Null sprite” placeholder in multiplayer (internal). */
+        NULL = 1024,    // 0x00000400
+
+        /** Run `clipmove()` with 0 clipmask (no sprite collisions). */
+        NOCLIP = 2048,    // 0x00000800
+
+        /** Don’t draw a floor shadow. */
+        NOFLOORSHADOW = 4096,    // 0x00001000
+
+        /** Enable client-side interpolation (smooth movement). */
+        SMOOTHMOVE = 8192,    // 0x00002000
+
+        /** Prevent teleportation. */
+        NOTELEPORT = 16384,    // 0x00004000
+
+        /** Enemy will not leave its original sector. */
+        BADGUYSTAYPUT = 32768,    // 0x00008000
+
+        /** Engine-side cache hint. */
+        CACHE = 65536,    // 0x00010000
+
+        /** Rotation-fixed to avoid drift. */
+        ROTFIXED = 131072,    // 0x00020000
+
+        /** Hard-coded enemy marker (internal). */
+        HARDCODED_BADGUY = 262144,    // 0x00040000
+
+        /** Temporary internal flag. */
+        DIDNOSE7WATER = 524288,    // 0x00080000
+
+        /** Actor isn’t pushed back by damage. */
+        NODAMAGEPUSH = 1048576,    // 0x00100000
+
+        /** Actor won’t dip into water sectors. */
+        NOWATERDIP = 2097152,    // 0x00200000
+
+        /** Spawn blood when hurt (hard-coded enemies style). */
+        HURTSPAWNBLOOD = 4194304,    // 0x00400000
+
+        /** Can be eaten by the **GREENSLIME** actor. */
+        GREENSLIMEFOOD = 8388608,    // 0x00800000
+
+        /** Always use explicit `clipdist`. */
+        REALCLIPDIST = 16777216,    // 0x01000000
+
+        /** Wake up nearby enemies on activation. */
+        WAKEUPBADGUYS = 33554432,    // 0x02000000
+
+        /** Fire `EVENT_(POST)DAMAGESPRITE` when damaged. */
+        DAMAGEEVENT = 67108864,    // 0x04000000
+
+        /** Prevent movement into water sectors. */
+        NOWATERSECTOR = 134217728,    // 0x08000000
+
+        /** Marked for deletion by the engine. */
+        QUEUEDFORDELETE = 268435456,    // 0x10000000
+    }
+
+
+    /**
      * Interface for declaring fonts used in the game
      * @interface IFont
      * @property {number} tile - The starting tile of the font
@@ -245,6 +368,72 @@ declare global {
         alive = 16384,
         dead = 32768,
         facing = 65536,
+    }
+
+    /**
+     * SpriteCStat flags control how a sprite is rendered and interacts in the world.
+     *
+     * @property {number} BLOCK               - Make sprite blockable
+     * @property {number} TRANSLUCENT         - Make sprite transparent (first level)
+     * @property {number} XFLIP               - Flip sprite around X-axis
+     * @property {number} YFLIP               - Flip sprite around Y-axis
+     * @property {number} WALL                - Draw sprite as vertically flat (wall-aligned)
+     * @property {number} FLOOR               - Draw sprite as horizontally flat (floor-aligned)
+     * @property {number} ONE_SIDE            - Make sprite one-sided
+     * @property {number} YCENTER             - Half-submerged (Y-centered)
+     * @property {number} BLOCK_HITSCAN       - Make sprite hittable by hitscan weapons
+     * @property {number} TRANS_FLIP          - Second transparency level (combine with TRANSLUCENT)
+     * @property {number} DRAW_PRIORITY       - Draw in front of other sprites (high priority)
+     * @property {number} NOSHADE             - Ignore sector shading
+     * @property {number} NO_POLYMER_SHADOW   - Do not cast a Polymer shadow
+     * @property {number} INVISIBLE_SHADOW    - Invisible but still casts Polymer shadow
+     * @property {number} INVISIBLE           - Completely invisible (skip rendering & events)
+     */
+    export enum EStats {
+        /** Make sprite blockable */
+        BLOCK = 1,
+
+        /** Make sprite transparent (first level) */
+        TRANSLUCENT = 2,
+
+        /** Flip sprite around X-axis */
+        XFLIP = 4,
+
+        /** Flip sprite around Y-axis */
+        YFLIP = 8,
+
+        /** Draw sprite as vertically flat (wall-aligned) */
+        WALL = 16,
+
+        /** Draw sprite as horizontally flat (floor-aligned) */
+        FLOOR = 32,
+
+        /** Make sprite one-sided */
+        ONE_SIDE = 64,
+
+        /** Half-submerged (Y-centered) */
+        YCENTER = 128,
+
+        /** Make sprite hittable by hitscan weapons */
+        BLOCK_HITSCAN = 256,
+
+        /** Second transparency level (combine with TRANSLUCENT) */
+        TRANS_FLIP = 512,
+
+        /** Draw in front of other sprites (high priority) */
+        DRAW_PRIORITY = 1024,
+
+        /** Ignore sector shading */
+        NOSHADE = 2048,
+
+        /** Do not cast a Polymer shadow */
+        NO_POLYMER_SHADOW = 8192,
+
+        /** Invisible but still casts Polymer shadow */
+        INVISIBLE_SHADOW = 16384,
+
+        /** Completely invisible (skip rendering & events) */
+        INVISIBLE = 32768,
     }
 
 
@@ -600,7 +789,7 @@ declare global {
          */
         delay: number;
     }
-    
+
     export type TAction<
         K extends string    // the keys you want suggested
     > = {
@@ -781,6 +970,12 @@ declare global {
         public curAI: CON_NATIVE<IAi>;
         /** The current palette used by the actor */
         public pal: CON_NATIVE<number>;
+        /** The current sector object */
+        public curSector: CON_NATIVE<CSector>;
+        /** The current sector ID */
+        public curSectorID: CON_NATIVE<number>;
+        /** The special flags active for the sprite */
+        public flags: CON_NATIVE<number>
 
         protected index: number;
 
@@ -806,18 +1001,18 @@ declare global {
          * Play an action
          * @param action - the unique label for the action to be played: use Label() to call this function
          */
-        protected PlayAction(action: IAction): CON_NATIVE<void>
+        protected PlayAction(action: IAction | null): CON_NATIVE<void>
         /**
          * Move the actor
          * @param move - the unique label for the move: use Label() to call this function
          * @param flags - the movement flags
          */
-        protected Move(move: IMove, flags: number): CON_NATIVE<void>
+        protected Move(move: IMove | null, flags: number): CON_NATIVE<void>
         /**
          * Start the AI fir this actor
          * @param ai - the unique label for AI: use Label() to call this function
          */
-        protected StartAI(ai:IAi): CON_NATIVE<void>
+        protected StartAI(ai: IAi | null): CON_NATIVE<void>
         /**
          * Set or get the current stat for the actor
          * @param stats - The stats to be set or leave blank it to only return the current value
@@ -849,6 +1044,21 @@ declare global {
          * @returns - the current counter value
          */
         protected Count(value?: number): CON_NATIVE<number>
+        /**
+         * Gets the current distance from the ceiling
+         * @returns - the distance right shifted to 8
+         */
+        protected CeilingDist(): CON_NATIVE<number>
+        /**
+        * Gets the current distance from the floor
+        * @returns - the distance right shifted to 8
+        */
+        protected FloorDist(): CON_NATIVE<number>
+        /**
+         * Gets the current gap distance from floor to ceiling
+         * @returns - the distance right shifted to 8
+         */
+        protected GapDist(): CON_NATIVE<number>
         /**
          * Enables 'physics' for this actor
          */
@@ -1134,7 +1344,7 @@ declare global {
         public ScreenText(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
 
         public QuoteDimension(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<vec2>;
-        
+
         /**
          * Use append if you want to append this event to the others of the same type
          */

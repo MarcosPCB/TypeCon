@@ -337,7 +337,7 @@ state popd
     },
     {
         name: 'Stop',
-        code: 'set rsp rbp \nstate pop \nset rbp ra \nreturn ',
+        code: `sub rbp 1\nset rsp rbp\n\nstate pop\nset rbp ra\nbreak`,
         returns: false,
         return_type: null,
         arguments: []
@@ -951,6 +951,27 @@ state popr1
             CON_NATIVE_FLAGS.VARIABLE,
             CON_NATIVE_FLAGS.VARIABLE
         ]
+    },
+    {
+        name: 'CeilingDist',
+        code: 'geta[].z rb\ngeta[].sectnum ri\nsub rb sector[ri].ceilingz\nshiftr rb 8',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'FloorDist',
+        code: 'geta[].sectnum ri\ngetsector[ri].floorz rb\nsub rb sprite[].z\nshiftr rb 8',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'GapDist',
+        code: 'geta[].sectnum ri\ngetsector[ri].floorz rb\nsub rb sector[ri].ceilingz\nshiftr rb 8',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
     }
 ]
 
@@ -981,6 +1002,57 @@ const nativePos: CON_NATIVE_VAR[] = [
         init: 0
     },
 ];
+
+export const nativeVars_Walls: CON_NATIVE_VAR[] = [
+    {
+        name: 'pos',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: nativePos
+    }
+]
+
+export const nativeVars_Sectors: CON_NATIVE_VAR[] = [
+    {
+        name: 'ceiling',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: true,
+        init: 0,
+        code: '',
+        object: [
+            {
+                name: 'z',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                init: 0,
+                code: `ceilingz`
+            }
+        ]
+    },
+    {
+        name: 'extra',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'extra',
+        init: 0
+    },
+    {
+        name: 'walls',
+        var_type: CON_NATIVE_TYPE.array,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: true,
+        init: 0,
+        code: ['getsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \nset ri ra \nstate popc \ngetwall[ri].', 'getsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \nset ri ra \nstate popc \nstate pop\nsetwall[ri].'],
+        object: nativeVars_Walls,
+        override_code: true,
+    }
+]
 
 export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
     {
@@ -1095,59 +1167,34 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
         code: '',
         init: 0,
         object: nativePos
-    }
-];
-
-export const nativeVars_Walls: CON_NATIVE_VAR[] = [
+    },
     {
-        name: 'pos',
-        var_type: CON_NATIVE_TYPE.object,
-        type: CON_NATIVE_FLAGS.OBJECT,
-        readonly: false,
-        code: '',
-        init: 0,
-        object: nativePos
-    }
-]
-
-export const nativeVars_Sectors: CON_NATIVE_VAR[] = [
-    {
-        name: 'ceiling',
+        name: 'curSector',
         var_type: CON_NATIVE_TYPE.object,
         type: CON_NATIVE_FLAGS.OBJECT,
         readonly: true,
+        code: ['geta[ri].sectnum ri\ngetsector[ri].', 'geta[ri].sectnum ri\nsetsector[ri].'],
         init: 0,
-        code: '',
-        object: [
-            {
-                name: 'z',
-                var_type: CON_NATIVE_TYPE.native,
-                type: CON_NATIVE_FLAGS.VARIABLE,
-                readonly: false,
-                init: 0,
-                code: `ceilingz`
-            }
-        ]
+        override_code: true,
+        object: nativeVars_Sectors
     },
     {
-        name: 'extra',
+        name: 'curSectorID',
         var_type: CON_NATIVE_TYPE.native,
         type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
-        code: 'extra',
-        init: 0
+        code: 'sectnum',
+        init: -1,
     },
     {
-        name: 'walls',
-        var_type: CON_NATIVE_TYPE.array,
-        type: CON_NATIVE_FLAGS.OBJECT,
-        readonly: true,
+        name: 'flags',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
         init: 0,
-        code: ['getsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \nset ri ra \nstate popc \ngetwall[ri].', 'getsector[ri].wallptr ra \nstate pushc \nset rc 0 \nwhilel rc rd { \ngetwall[ra].nextwall ra \nadd rc 1 \n} \nset ri ra \nstate popc \nstate pop\nsetwall[ri].'],
-        object: nativeVars_Walls,
-        override_code: true,
+        code: 'htflags'
     }
-]
+];
 
 export const nativeVarsList = ['sprites', 'sectors', 'walls', 'projectiles',
     'players', 'tiledata', 'tsprites', 'paldata', 'userdef'];
