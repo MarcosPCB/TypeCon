@@ -11,4 +11,5 @@ texturecache
 dist
 include
 compiled
+*.lock
 src/sets/TCSet100/precompile/CON/*.con

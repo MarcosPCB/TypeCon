@@ -15,52 +15,47 @@ type test = {
 
 class newEnemy extends CActor {
 
+    protected AIdle: IAction = {
+        start: 0,
+        length: 1,
+        viewType: 5,
+        incValue: 1,
+        delay: 0
+    }
+
+    protected AWalk: IAction = {
+        start: 5,
+        length: 3,
+        viewType: 5,
+        incValue: 1,
+        delay: 16
+    }
+
+    protected MWalk: IMove = {
+        horizontal_vel: 64,
+        vertical_vel: 0
+    }
+
+    protected MStop: IMove = {
+        horizontal_vel: 0,
+        vertical_vel: 0
+    }
+
+    protected AIIdle: IAi = {
+        action: 'idle',
+        move: 'stop',
+        flags: EMoveFlags.faceplayerslow
+    }
+
+    protected AIWalk: IAi = {
+        action: 'walk',
+        move: 'walkvel',
+        flags: EMoveFlags.seekplayer
+    }
+
+
     constructor() {
-        const AIdle: IAction = {
-            name: 'idle',
-            start: 0,
-            length: 1,
-            viewType: 5,
-            incValue: 1,
-            delay: 0
-        }
-
-        const AWalk: IAction = {
-            name: 'walk',
-            start: 5,
-            length: 3,
-            viewType: 5,
-            incValue: 1,
-            delay: 16
-        }
-
-        const MWalk: IMove = {
-            name: 'walkvel',
-            horizontal_vel: 64,
-            vertical_vel: 0
-        }
-
-        const MStop: IMove = {
-            name: 'stop',
-            horizontal_vel: 0,
-            vertical_vel: 0
-        }
-
-        const AIIdle: IAi = {
-            name: 'idle_ai',
-            action: 'idle',
-            move: 'stop',
-            flags: EMoveFlags.faceplayerslow
-        }
-
-        const AIWalk: IAi = {
-            name: 'walk_ai',
-            action: 'walk',
-            move: 'walkvel',
-            flags: EMoveFlags.seekplayer
-        }
-
-        super(1685, true, 10, [AIdle, AWalk], AIdle, [MStop, MWalk], [AIIdle, AIWalk]);
+        super(1685, true, 10);
     }
 
     Events: OnEvent = {
@@ -78,11 +73,11 @@ class newEnemy extends CActor {
                         this.Count(0);
                     }
                 } else {
-                    this.StartAI(Label('walk_ai'));
+                    this.StartAI(this.AIWalk);
                     return;
                 }
             } else {
-                this.StartAI(Label('walk_ai'));
+                this.StartAI(this.AIWalk);
                 return;
             }
         }
@@ -93,7 +88,7 @@ class newEnemy extends CActor {
     Walk() {
         if(this.CanSee() && this.CanSeeTarget()) {
             if(this.playerDist < 4096) {
-                this.StartAI(Label('idle_ai'));
+                this.StartAI(this.AIIdle);
                 return;
             }
         }
@@ -102,17 +97,17 @@ class newEnemy extends CActor {
     Main(): void {
         this.Fall();
         this.CStat(257);
-        if(this.curAI == 0) {
-            this.StartAI(Label('walk_ai'));
+        if(this.curAI == null) {
+            this.StartAI(this.AIWalk);
             this.SizeAt(32, 34);
         }
 
         switch(this.curAI) {
-            case Label('idle_ai'):
+            case this.AIIdle:
                 this.Idle();
                 break;
 
-            case Label('walk_ai'):
+            case this.AIWalk:
                 this.Walk();
                 break;
         }

@@ -434,7 +434,7 @@ declare global {
 
     export type TLabel = string; //Use this to define constants and pointers
 
-    export interface pointer { }
+    export interface pointer<T> { }
 
     /**
      * Breaks the system for debugging and logs a value to the console.
@@ -465,83 +465,7 @@ declare global {
      * @param name - Label (can be an action, move or AI)
      * @returns the pointer of that label
     */
-    export function Label(name: string): pointer;
-
-    /**
-     * Interface representing an action.
-     *
-     * Use this interface to create actions within the system.
-     *
-     * Available properties:
-     * @property {TLabel} name - The unique action label.
-     * @property {number} start - The start point from the actor's tile number.
-     * @property {number} length - The length of the animation.
-     * @property {number} viewType - The type of sprite view. Valid values are 1, 3, 5, 7, or 8.
-     * @property {number} incValue - The incremental value per tick. Use values 1, 0, or -1.
-     * @property {number} delay - The delay for the action.
-     *   - [0,3]: Minimum delay, equal to the tic counter.
-     *   - [4,7]: 1/2 of the tic counter delay.
-     *   - [8,11]: 1/3 of the tic counter delay.
-     *   - [12,15]: 1/4 of the tic counter delay.
-     *   - [16,19]: 1/5 of the tic counter delay; etc.
-     *
-     * @interface IAction
-     */
-    export interface IAction {
-        /**
-         * The unique action label.
-         *
-         * @type {TLabel}
-         */
-        name: TLabel;
-
-        /**
-         * The start point from the actor's tile number.
-         *
-         * @type {number}
-         */
-        start: number;
-
-        /**
-         * The length of the animation.
-         *
-         * @type {number}
-         */
-        length: number;
-
-        /**
-         * The type of sprite view.
-         *
-         * Valid values are 1, 3, 5, 7, or 8.
-         *
-         * @type {number}
-         */
-        viewType: number;
-
-        /**
-         * The incremental value per tick.
-         *
-         * Use values 1, 0, or -1.
-         *
-         * @type {number}
-         */
-        incValue: number;
-
-        /**
-         * The delay for the action.
-         *
-         * Delay is defined as:
-         * - [0,3]: Minimum delay, equal to the tic counter.
-         * - [4,7]: 1/2 of the tic counter delay.
-         * - [8,11]: 1/3 of the tic counter delay.
-         * - [12,15]: 1/4 of the tic counter delay.
-         * - [16,19]: 1/5 of the tic counter delay; etc.
-         *
-         * @type {number}
-         */
-        delay: number;
-    }
-
+    export function Label(name: string): pointer<any>;
 
     /**
      * Flags for movement.
@@ -611,25 +535,92 @@ declare global {
     }
 
     /**
+     * Interface representing an action.
+     *
+     * Use this interface to create actions within the system.
+     *
+     * Available properties:
+     * @property {number} start - The start point from the actor's tile number.
+     * @property {number} length - The length of the animation.
+     * @property {number} viewType - The type of sprite view. Valid values are 1, 3, 5, 7, or 8.
+     * @property {number} incValue - The incremental value per tick. Use values 1, 0, or -1.
+     * @property {number} delay - The delay for the action.
+     *   - [0,3]: Minimum delay, equal to the tic counter.
+     *   - [4,7]: 1/2 of the tic counter delay.
+     *   - [8,11]: 1/3 of the tic counter delay.
+     *   - [12,15]: 1/4 of the tic counter delay.
+     *   - [16,19]: 1/5 of the tic counter delay; etc.
+     *
+     * @interface IAction
+     */
+    export interface IAction {
+        /**
+         * The start point from the actor's tile number.
+         *
+         * @type {number}
+         */
+        start: number;
+
+        /**
+         * The length of the animation.
+         *
+         * @type {number}
+         */
+        length: number;
+
+        /**
+         * The type of sprite view.
+         *
+         * Valid values are 1, 3, 5, 7, or 8.
+         *
+         * @type {number}
+         */
+        viewType: number;
+
+        /**
+         * The incremental value per tick.
+         *
+         * Use values 1, 0, or -1.
+         *
+         * @type {number}
+         */
+        incValue: number;
+
+        /**
+         * The delay for the action.
+         *
+         * Delay is defined as:
+         * - [0,3]: Minimum delay, equal to the tic counter.
+         * - [4,7]: 1/2 of the tic counter delay.
+         * - [8,11]: 1/3 of the tic counter delay.
+         * - [12,15]: 1/4 of the tic counter delay.
+         * - [16,19]: 1/5 of the tic counter delay; etc.
+         *
+         * @type {number}
+         */
+        delay: number;
+    }
+    
+    export type TAction<
+        K extends string    // the keys you want suggested
+    > = {
+        [P in K]: IAction;       // suggested keys
+    } & {
+        [key: string]: IAction;   // fallback for any string
+    };
+
+    /**
      * Interface for declaring moves.
      *
      * Use this interface to define moves within the system.
      *
      * Available properties:
-     * @property {TLabel} name - Unique label for the move.
      * @property {number} horizontal_vel - Horizontal velocity.
      * @property {number} vertical_vel - Vertical velocity (use negative values for up).
      *
      * @interface IMove
      */
     export interface IMove {
-        /**
-         * Unique label for the move.
-         *
-         * @type {TLabel}
-         */
-        name: TLabel;
-
         /**
          * Horizontal velocity.
          *
@@ -645,13 +636,20 @@ declare global {
         vertical_vel: number;
     }
 
+    export type TMove<
+        K extends string    // the keys you want suggested
+    > = {
+        [P in K]: IMove;       // suggested keys
+    } & {
+        [key: string]: IMove;   // fallback for any string
+    };
+
     /**
      * Interface for declaring AIs.
      *
      * Use this interface to define AI configurations within the system.
      *
      * Available properties:
-     * @property {TLabel} name - Unique label for the AI.
      * @property {TLabel} action - The action for this AI.
      * @property {TLabel} move - The move for the AI.
      * @property {EMoveFlags} flags - The move flags.
@@ -659,13 +657,6 @@ declare global {
      * @interface IAi
      */
     export interface IAi {
-        /**
-         * Unique label for the AI.
-         *
-         * @type {TLabel}
-         */
-        name: TLabel;
-
         /**
          * The action for this AI.
          *
@@ -688,6 +679,13 @@ declare global {
         flags: EMoveFlags;
     }
 
+    export type TAi<
+        K extends string    // the keys you want suggested
+    > = {
+        [P in K]: IAi;       // suggested keys
+    } & {
+        [key: string]: IAi;   // fallback for any string
+    };
 
     /**
      * Frees a memory allocation
@@ -768,11 +766,11 @@ declare global {
         public playerDist: CON_NATIVE<number>;
 
         /** The current action pointer */
-        public curAction: CON_NATIVE_POINTER;
+        public curAction: CON_NATIVE<IAction>;
         /** The current action frame */
         public curActionFrame: CON_NATIVE<number>;
         /** The current move pointer */
-        public curMove: CON_NATIVE_POINTER;
+        public curMove: CON_NATIVE<IMove>;
         /** The current velocity */
         public vel: CON_NATIVE<number>;
         /** The current actor's angle */
@@ -780,7 +778,7 @@ declare global {
         /** The current position */
         public pos: CON_NATIVE<vec3>;
         /** The current AI pointer */
-        public curAI: CON_NATIVE_POINTER;
+        public curAI: CON_NATIVE<IAi>;
         /** The current palette used by the actor */
         public pal: CON_NATIVE<number>;
 
@@ -791,37 +789,35 @@ declare global {
          * @param picnum - the current actor's tile number
          * @param isEnemy - if it's an enemy or not
          * @param extra - the health
-         * @param actions - the actions for this actor
          * @param first_action - the first action that the actor must use
-         * @param moves - the actor's moves
-         * @param ais - the actor's AIs
          */
         constructor(
             picnum: constant,
             isEnemy: boolean,
-            extra?: constant,
-            actions?: IAction[],
+            extra: constant,
             first_action?: IAction,
-            moves?: IMove[],
-            ais?: IAi[]
         )
+
+        protected actions: TAction<string>;
+        protected moves: TMove<string>;
+        protected ais: TAi<string>;
 
         /**
          * Play an action
          * @param action - the unique label for the action to be played: use Label() to call this function
          */
-        protected PlayAction(action: pointer): CON_NATIVE<void>
+        protected PlayAction(action: IAction): CON_NATIVE<void>
         /**
          * Move the actor
          * @param move - the unique label for the move: use Label() to call this function
          * @param flags - the movement flags
          */
-        protected Move(move: pointer, flags: number): CON_NATIVE<void>
+        protected Move(move: IMove, flags: number): CON_NATIVE<void>
         /**
          * Start the AI fir this actor
          * @param ai - the unique label for AI: use Label() to call this function
          */
-        protected StartAI(ai: pointer): CON_NATIVE<void>
+        protected StartAI(ai:IAi): CON_NATIVE<void>
         /**
          * Set or get the current stat for the actor
          * @param stats - The stats to be set or leave blank it to only return the current value

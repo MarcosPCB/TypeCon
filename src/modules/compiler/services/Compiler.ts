@@ -47,7 +47,8 @@ import {
   TypeFlags,
   ModuleDeclarationKind,
   ArrowFunction,
-  BodyableNode
+  BodyableNode,
+  PropertyDeclaration
 } from "ts-morph";
 
 import {
@@ -549,7 +550,7 @@ export class TsToConCompiler {
 
     if (!typeNode || !typeNode.isKind(SyntaxKind.TypeLiteral)) {
       if (typeNode) {
-        if (['OnEvent', 'constant', 'TLabel', 'CON_NATIVE', 'CON_NATIVE_POINTER', 'quote'].includes(aliasName))
+        if (['OnEvent', 'constant', 'TLabel', 'CON_NATIVE', 'CON_NATIVE_POINTER', 'quote', 'TAction', 'TMove', 'TAi'].includes(aliasName))
           return;
 
         if (typeNode.getKind() == SyntaxKind.NumberKeyword
@@ -1083,8 +1084,29 @@ export class TsToConCompiler {
           }
         } else if (clause.isKind(SyntaxKind.NumericLiteral))
           code += `case ${(clause as NumericLiteral).getText()}:\n`
-        else {
-          addDiagnostic(clause, context, "error", `Invalid case clause: ${clause.getText()}`);
+        else if (clause.isKind(SyntaxKind.PropertyAccessExpression)) {
+          const segments = this.unrollMemberExpression(clause);
+
+          if(segments[0].kind != 'this') {
+            addDiagnostic(clause, context, 'error', `Unsupported clause for label ${clause.getText()}`);
+            return code;
+          }
+
+          const sym = context.symbolTable.get((segments[1] as SegmentProperty).name);
+
+          if(!sym) {
+            addDiagnostic(clause, context, 'error', `Variable/property not declared ${clause.getText()}`);
+            return code;
+          }
+
+          if(sym.type != ESymbolType.pointer) {
+            addDiagnostic(clause, context, 'error', `Unsupported clause type ${sym.type} for label ${clause.getText()}`);
+            return code;
+          }
+
+          code += `case ${sym.name}:\n`;
+        } else {
+          addDiagnostic(clause, context, "error", `Unsupported case clause: ${clause.getText()}`);
           return code;
         }
       }
@@ -1227,7 +1249,11 @@ export class TsToConCompiler {
       // check param
       if (name in context.paramMap) {
         const i = context.paramMap[name];
-        code += `set ra r${i.offset}\n`;
+
+        if(i.type == ESymbolType.pointer)
+          code += `${i.name}\n`;
+        else
+          code += `set ra r${i.offset}\n`;
 
         if (i.type & ESymbolType.string)
           context.curExpr = ESymbolType.string
@@ -1252,6 +1278,9 @@ export class TsToConCompiler {
 
       if (context.symbolTable.has(name)) {
         const off = context.symbolTable.get(name) as SymbolDefinition;
+        if(off.type == ESymbolType.pointer)
+          return code + `set ra ${off.name}\n`;
+
         if (off.type & ESymbolType.native)
           return code + `set ra ${off.CON_code}\n`;
 
@@ -1572,6 +1601,54 @@ export class TsToConCompiler {
       if (arg.isKind(SyntaxKind.StringLiteral)) {
         return arg.getText().replace(/[`'"]/g, "");
       }
+
+      if(arg.isKind(SyntaxKind.Identifier)) {
+        const vName = (arg as Identifier).getText();
+
+        const sym = context.symbolTable.get(vName);
+
+        if(!sym) {
+          addDiagnostic(arg, context, 'error', `Variable ${vName} not declared`);
+          return '';
+        }
+
+        if(sym.type != ESymbolType.pointer) {
+          addDiagnostic(arg, context, 'error', `Variable ${vName} is not a pointer/label type`);
+          return '';
+        }
+
+        return sym.name;
+      }
+
+      if(arg.isKind(SyntaxKind.PropertyAccessExpression)) {
+        const segments = this.unrollMemberExpression(arg);
+
+        const obj = segments[0] as SegmentIdentifier;
+
+        if(obj.name != 'this') {
+          addDiagnostic(arg, context, 'error', `Action/Move/AI label/pointer cannot be outside of a class property declaration`);
+        }
+
+        if(segments.length > 2) {
+          addDiagnostic(arg, context, 'error', `Action/Move/AI label/pointer declaration must be in the class's root`);
+          return '';
+        }
+
+        const sym = context.symbolTable.get((segments[1] as SegmentIdentifier).name);
+
+        if(!sym) {
+          addDiagnostic(arg, context, 'error', `Variable ${(segments[1] as SegmentIdentifier).name} not declared`);
+          return '';
+        }
+
+        if(sym.type != ESymbolType.pointer) {
+          addDiagnostic(arg, context, 'error', `Variable ${(segments[1] as SegmentIdentifier).name} is not a pointer/label type`);
+          return '';
+        }
+
+        return sym.name;
+      }
+
       addDiagnostic(arg, context, "error", "Expected a label literal for a native LABEL argument");
       return "";
     }
@@ -2965,7 +3042,7 @@ set rb ra
     if (type == '') {
       cls = context.symbolTable.get(className) as SymbolDefinition;
       if (cls) {
-        addDiagnostic(cd, context, 'error', `Duplicate definition. Tried to declare as class named ${className} when there's already a ${cls.type} with the same name`);
+        addDiagnostic(cd, context, 'error', `Duplicate definition. Tried to declare a class named ${className} when there's already a ${cls.type} with the same name`);
         return '';
       }
 
@@ -2988,23 +3065,15 @@ set rb ra
       code += this.visitConstructorDeclaration(ctors[0], localCtx, type);
     }
 
-    // if CActor => append the actions/moves/ais lines
-    if (type == 'CActor') {
-      for (const a of localCtx.currentActorActions) {
-        code += a + "\n";
-      }
-      for (const mv of localCtx.currentActorMoves) {
-        code += mv + "\n";
-      }
-      for (const ai of localCtx.currentActorAis) {
-        code += ai + "\n";
-      }
-    }
-
     // visit properties
     const properties = cd.getProperties();
 
     for (const p of properties) {
+      if(['TAction', 'IAction', 'TMove', 'IMove', 'TAi', 'IAi'].includes(p.getTypeNode().getText())) {
+        const init = p.getInitializerOrThrow();
+
+        this.parseVarForActionsMovesAi(p, localCtx, className);
+      }
       if (p.getTypeNode().getText() == 'OnEvent') {
         const init = p.getInitializerOrThrow();
 
@@ -3099,6 +3168,19 @@ set rb ra
       }
     }
 
+    // if CActor => append the actions/moves/ais lines
+    if (type == 'CActor') {
+      for (const a of localCtx.currentActorActions) {
+        code += a + "\n";
+      }
+      for (const mv of localCtx.currentActorMoves) {
+        code += mv + "\n";
+      }
+      for (const ai of localCtx.currentActorAis) {
+        code += ai + "\n";
+      }
+    }
+
     if (ctors.length > 0 && type == '') {
       context.curClass = cls;
       code = `${this.options.lineDetail ? `/*${ctors[0].getText()}*/` : ''}\ndefstate ${className}_constructor \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
@@ -3127,30 +3209,33 @@ set rb ra
     type: string,
   ): string {
     let code = '';
-    const body = ctor.getBody() as any;
+    const body = ctor.getBody() as Block;
     if (body) {
       if (type == 'CActor') {
         const statements = body.getStatements();
+        if(statements.length > 1) {
+          addDiagnostic(ctor, context, 'warning', `Only super calls are allowed inside CActor constructors`);
+        }
         for (const st of statements) {
-          // e.g. variable statements => might define IAction, IMove, IAi
-          // expression => maybe super(...)
-          if (st.isKind(SyntaxKind.VariableStatement)) {
-            const vs = st as VariableStatement;
-            const decls = vs.getDeclarationList().getDeclarations();
-            decls.forEach(d => this.parseVarForActionsMovesAi(d, context));
-          } else if (st.isKind(SyntaxKind.ExpressionStatement)) {
+          // expression => super(...)
+          if (st.isKind(SyntaxKind.ExpressionStatement)) {
             const es = st as ExpressionStatement;
             const expr = es.getExpression();
             if (expr.isKind(SyntaxKind.CallExpression)) {
               const call = expr as CallExpression;
               if (call.getExpression().getText() === "super") {
                 this.parseActorSuperCall(call, context);
+              } else {
+                addDiagnostic(ctor, context, 'warning', `Only super calls are allowed inside CActor constructors`);
               }
             }
           }
         }
       } else if (type == 'CEvent') {
         const statements = body.getStatements();
+        if(statements.length > 1) {
+          addDiagnostic(ctor, context, 'warning', `Only super calls are allowed inside CEvent constructors`);
+        }
         for (const st of statements) {
           // e.g. variable statements => might define IAction, IMove, IAi
           // expression => maybe super(...)
@@ -3179,6 +3264,8 @@ set rb ra
 
                 context.currentEventName = eventName.toUpperCase();
                 context.currentActorPicnum = undefined;
+              } else {
+                addDiagnostic(ctor, context, 'warning', `Only super calls are allowed inside CActor constructors`);
               }
             }
           }
@@ -3249,65 +3336,103 @@ set rb ra
     return code;
   }
 
-  private parseVarForActionsMovesAi(decl: VariableDeclaration, ctx: CompilerContext) {
+  /* ------------------------------------------------------------------
+ * 1.  Top-level router that recognises both the old and new shapes
+ * ------------------------------------------------------------------ */
+  private parseVarForActionsMovesAi(
+    decl: PropertyDeclaration,
+    ctx: CompilerContext,
+    className: string
+  ) {
     const typeNode = decl.getTypeNode();
     if (!typeNode) return;
 
-    // ── 1. figure out *base* type & whether it's an array ────────────────────
-    let typeStr = typeNode.getText().trim();
+    /* ── 1. figure out declared type and “arrayness” ─────────────── */
+    let typeTxt = typeNode.getText().trim();
     let isArray = false;
 
-    if (typeStr.endsWith("[]")) {
+    if (typeTxt.endsWith("[]")) {
       isArray = true;
-      typeStr = typeStr.slice(0, -2).trim();        // IAction[] → IAction
+      typeTxt = typeTxt.slice(0, -2).trim();              //  Foo[]      → Foo
     } else {
-      const m = /^Array<\s*(.+?)\s*>$/.exec(typeStr);
-      if (m) {                                      // Array<IAction> → IAction
+      const m = /^Array<\s*(.+?)\s*>$/.exec(typeTxt);
+      if (m) {
         isArray = true;
-        typeStr = m[1];
+        typeTxt = m[1].trim();                            // Array<Foo>  → Foo
       }
     }
 
-    // ── 2. grab the initializer ──────────────────────────────────────────────
+    /* 🔥 2️⃣  NEW RULE: arrays are no longer accepted --------------- */
+  if (isArray) {
+    addDiagnostic(decl, ctx, 'error', `Array type for Action/Move/AI is not supported`);
+    return;
+  }
+
+    // strip generic parameters so we end up with IAction / TAction …
+    const baseType = typeTxt.replace(/<.*$/, "");         // TAction<'a'> → TAction
+
+    /* ── 2. grab initializer ─────────────────────────────────────── */
     const init = decl.getInitializer();
     if (!init) return;
 
-    // ── 3. route to the right parser(s) ──────────────────────────────────────
-    const handleObj = (obj: ObjectLiteralExpression) => {
-      switch (typeStr) {
-        case "IAction": this.parseIActionLiteral(obj, ctx); break;
-        case "IMove": this.parseIMoveLiteral(obj, ctx); break;
-        case "IAi": this.parseIAiLiteral(obj, ctx); break;
+    /* helper that forwards to the correct low-level parser */
+    const handleObj = (obj: ObjectLiteralExpression, propName?: string) => {
+      switch (baseType) {
+        case "IAction":
+        case "TAction":
+          this.parseIActionLiteral(obj, ctx, propName, className);   // 🔑 NEW
+          break;
+
+        case "IMove":
+        case "TMove":
+          this.parseIMoveLiteral(obj, ctx, propName, className);     // 🔑 NEW
+          break;
+
+        case "IAi":
+        case "TAi":
+          this.parseIAiLiteral(obj, ctx, propName, className);       // 🔑 NEW
+          break;
       }
     };
 
-    if (!isArray) {
+    /* ── 3. OLD SHAPES ───────────────────────────────────────────── */
+    // 3 a) single object → IAction / IMove / IAi
+    if (!isArray && !/^[T][A-Z]/.test(baseType)) {        // not TAction / …
       if (init.isKind(SyntaxKind.ObjectLiteralExpression))
-        handleObj(init as ObjectLiteralExpression);
+        handleObj(init as ObjectLiteralExpression, decl.getName());
       return;
     }
 
-    // array case ─ iterate every element
-    if (!init.isKind(SyntaxKind.ArrayLiteralExpression)) return;
-    (init as ArrayLiteralExpression).getElements().forEach(el => {
-      if (el.isKind(SyntaxKind.ObjectLiteralExpression))
-        handleObj(el as ObjectLiteralExpression);
+    /* ── 4. NEW SHAPE  (dictionary) ─────────────────────────────── */
+    // top-level object whose *properties* are the actions / moves / ais
+    if (!init.isKind(SyntaxKind.ObjectLiteralExpression)) return;
+
+    (init as ObjectLiteralExpression).getProperties().forEach(prop => {
+      if (!prop.isKind(SyntaxKind.PropertyAssignment)) return;
+
+      const propName = prop.getName().replace(/[`'"]/g, ""); // walk / run / …
+      const value = prop.getInitializer();
+      if (value && value.isKind(SyntaxKind.ObjectLiteralExpression))
+        handleObj(value as ObjectLiteralExpression, propName);
     });
   }
 
+  /* ------------------------------------------------------------------
+   * 2.  Low-level helpers – accept an *optional* fallback name
+   * ------------------------------------------------------------------ */
+  private parseIActionLiteral(
+    obj: ObjectLiteralExpression,
+    ctx: CompilerContext,
+    fallbackName = "",
+    className: string,
+  ) {
+    let start = 0, length = 0, viewType = 0, inc = 0, delay = 0;
 
-  /* --------------------------------------------------------------
- * turn parseIAction / parseIMove / parseIAi into “object” helpers
- * -------------------------------------------------------------- */
-
-  private parseIActionLiteral(obj: ObjectLiteralExpression, ctx: CompilerContext) {
-    let name = "", start = 0, length = 0, viewType = 0, inc = 0, delay = 0;
     obj.getProperties().forEach(p => {
       if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
       const key = p.getName();
       const val = p.getInitializerOrThrow().getText();
       switch (key) {
-        case "name": name = val.replace(/[`'"]/g, ""); break;
         case "start": start = +val; break;
         case "length": length = +val; break;
         case "viewType": viewType = +val; break;
@@ -3317,41 +3442,85 @@ set rb ra
     });
 
     ctx.currentActorActions.push(
-      `action ${name} ${start} ${length} ${viewType} ${inc} ${delay}`,
+      `action A_${className}_${fallbackName} ${start} ${length} ${viewType} ${inc} ${delay}`,
     );
+
+    ctx.symbolTable.set(fallbackName, {
+      name: `A_${className}_${fallbackName}`,
+      offset: 0,
+      type: ESymbolType.pointer,
+      children: {
+        start: { name: 'start', type: ESymbolType.number, offset: 0, literal: start },
+        length: { name: 'length', type: ESymbolType.number, offset: 0, literal: length },
+        viewType: { name: 'viewType', type: ESymbolType.number, offset: 0, literal: viewType },
+        incValue: { name: 'incValue', type: ESymbolType.number, offset: 0, literal: inc },
+        delay: { name: 'delay', type: ESymbolType.number, offset: 0, literal: delay },
+      }
+    });
   }
 
-  private parseIMoveLiteral(obj: ObjectLiteralExpression, ctx: CompilerContext) {
-    let name = "", hv = 0, vv = 0;
+  private parseIMoveLiteral(
+    obj: ObjectLiteralExpression,
+    ctx: CompilerContext,
+    fallbackName = "",                                // 🔑 NEW
+    className: string,
+  ) {
+    let hv = 0, vv = 0;
+
     obj.getProperties().forEach(p => {
       if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
       const key = p.getName();
       const val = +p.getInitializerOrThrow().getText();
       switch (key) {
-        case "name": name = p.getInitializerOrThrow().getText().replace(/[`'"]/g, ""); break;
         case "horizontal_vel": hv = val; break;
         case "vertical_vel": vv = val; break;
       }
     });
 
-    ctx.currentActorMoves.push(`move ${name} ${hv} ${vv}`);
+    ctx.currentActorMoves.push(`move M_${className}_${fallbackName} ${fallbackName} ${hv} ${vv}`);
+
+    ctx.symbolTable.set(fallbackName, {
+      name: `M_${className}_${fallbackName}`,
+      offset: 0,
+      type: ESymbolType.pointer,
+      children: {
+        horizontal_vel: { name: 'horizontal_vel', type: ESymbolType.number, offset: 0, literal: hv },
+        vertical_vel: { name: 'vertical_vel', type: ESymbolType.number, offset: 0, literal: vv },
+      }
+    });
   }
 
-  private parseIAiLiteral(obj: ObjectLiteralExpression, ctx: CompilerContext) {
-    let name = "", action = "", move = ""; let flags = 0;
+  private parseIAiLiteral(
+    obj: ObjectLiteralExpression,
+    ctx: CompilerContext,
+    fallbackName = "",                                // 🔑 NEW
+    className: string,
+  ) {
+    let action = "", move = ""; let flags = 0;
+
     obj.getProperties().forEach(p => {
       if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
       const key = p.getName();
       const valNode = p.getInitializerOrThrow();
       switch (key) {
-        case "name": name = valNode.getText().replace(/[`'"]/g, ""); break;
         case "action": action = valNode.getText().replace(/[`'"]/g, ""); break;
         case "move": move = valNode.getText().replace(/[`'"]/g, ""); break;
         case "flags": flags = evalMoveFlags(valNode, ctx); break;
       }
     });
 
-    ctx.currentActorAis.push(`ai ${name} ${action} ${move} ${flags}`);
+    ctx.currentActorAis.push(`ai AI_${className}_${fallbackName} ${action} ${move} ${flags}`);
+
+    ctx.symbolTable.set(fallbackName, {
+      name: `AI_${className}_${fallbackName}`,
+      offset: 0,
+      type: ESymbolType.pointer,
+      children: {
+        action: ctx.symbolTable.get(action),
+        move: ctx.symbolTable.get(move),
+        flags: { name: 'flags', type: ESymbolType.number, offset: 0, literal: flags },
+      }
+    });
   }
 
 
@@ -3382,10 +3551,10 @@ set rb ra
       // first_action
       const fa = args[4];
 
-      if(fa && (fa.getText() != 'undefined' && fa.getText() != 'null')) {
+      if (fa && (fa.getText() != 'undefined' && fa.getText() != 'null')) {
         const sym = context.symbolTable.get(fa.getText());
 
-        if(!sym) {
+        if (!sym) {
           addDiagnostic(call, context, 'error', `Action ${fa.getText()} is not declared`);
           return;
         }
