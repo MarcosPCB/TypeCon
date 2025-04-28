@@ -378,6 +378,29 @@ state popd
         arguments_default: [0, 0, 0]
     },
     {
+        name: 'Sound',
+        returns: false,
+        return_type: null,
+        code: (args: boolean) => {
+            return `
+ife r2 1
+  soundonce r0
+else ife r1 1
+  globalsound r0
+else
+  sound r0
+`
+        },
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
+        ],
+        arguments_default: [
+            0, 0, 0
+        ]
+    },
+    {
         name: 'Shoot',
         code: (args?: boolean, fn?: string) => {
             return `set rd RETURN \nife r2 0 eshoot r0 \nelse { \nife r4 1 { \neshoot r0 \ngeta[RETURN].zvel ra \nadd ra r3 \nseta[RETURN].zvel ra \n } else ezshoot r3 r0\n }\nset r0 RETURN\nset ra RETURN\nstate push\nstate pushd\n${fn}state pop\nset rb ra\nstate popd\nset RETURN rd `;

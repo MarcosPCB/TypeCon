@@ -226,7 +226,47 @@ class AssaultTrooper extends CActor {
         if(this.CanSee()) {
             if(this.curMove == this.moves.runVels && this.playerDist < 1596)
                 this.StartAI(this.ais.aiDucking);
+
+            if(IsPlayerState(EPlayerStates.higher)) {
+                if(this.CeilingDist() > 128 && !(this.flags & ESpriteFlags.BADGUYSTAYPUT))
+                    this.StartAI(this.ais.aiJetpack);
+                this.Stop();
+            } else if(this.IsRandom(2)) {
+                if(this.pal == 21 && this.playerDist >= 1596) {
+                    this.StartAI(this.ais.aiHide);
+                    this.Stop();
+                }
+
+                if(this.BulletNear()) {
+                    if(this.IsRandom(128))
+                        this.StartAI(this.ais.aiDodge);
+                    else this.StartAI(this.ais.aiDucking);
+
+                    this.Stop();
+                }
+            }
         }
+
+        if(!this.IsItMoving()) {
+            if(this.IsRandom(32))
+                this.Operate(EOperateFlags.doors)
+            else if(this.Count() >= 32
+                && IsPlayerState(EPlayerStates.alive)
+                && this.CanSee()
+                && this.CanShootTarget()
+            )
+                this.StartAI(this.ais.aiShooting);
+        }
+
+        if(this.IsRandom(1)) {
+            if(this.IsRandom(128))
+                this.Sound(DN3D.ESound.PRED_ROAM, false, true);
+            else this.Sound(DN3D.ESound.PRED_ROAM2, false, true);
+        }
+    }
+
+    Duck() {
+        
     }
 
     Main() {
