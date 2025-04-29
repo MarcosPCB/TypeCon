@@ -266,7 +266,177 @@ class AssaultTrooper extends CActor {
     }
 
     Duck() {
-        
+        if(this.curAction == this.actions.aDuck) {
+            if(this.curActionFrame >= 8) {
+                if(IsPlayerState(EPlayerStates.alive)) {
+                    if(this.IsRandom(8))
+                        this.PlayAction(this.actions.aDuckShoot)
+                } else if(this.curMove == this.moves.dontGetUp)
+                    this.Stop();
+                else this.StartAI(this.ais.aiSeekPlayer)
+            }
+        } else if(this.curAction == this.actions.aDuckShoot) {
+            if(this.Count() >= 64) {
+                if(this.curMove == this.moves.dontGetUp)
+                    this.Count(0);
+                else {
+                    if(this.playerDist < 1100)
+                        this.StartAI(this.ais.aiFleeing);
+                    else this.StartAI(this.ais.aiSeekPlayer);
+                }
+            } else if(this.curActionFrame >= 2) {
+                if(this.CanShootTarget()) {
+                    this.Sound(DN3D.ESound.PRED_ATTACK, false);
+                    this.ResetAction();
+                    this.Shoot(DN3D.ENames.FIRELASER);
+                } else this.StartAI(this.ais.aiSeekPlayer);
+            }
+        }
+    }
+
+    Shooting() {
+        if(this.curActionFrame >= 2) {
+            if(this.CanShootTarget()) {
+                this.Shoot(DN3D.ENames.FIRELASER);
+                this.Sound(DN3D.ESound.PRED_ATTACK, false);
+                this.ResetAction();
+
+                if(this.IsRandom(128))
+                    this.StartAI(this.ais.aiSeekPlayer);
+
+                if(this.Count() >= 24) {
+                    if(this.IsRandom(96) && this.playerDist >= 2048)
+                        this.StartAI(this.ais.aiSeekPlayer);
+                    else {
+                        if(this.playerDist > 1596)
+                            this.StartAI(this.ais.aiFleeing);
+                        else this.StartAI(this.ais.aiFleeingBack);
+                    }
+                }
+            } else this.StartAI(this.ais.aiSeekPlayer);
+        }
+    }
+
+    Flee() {
+        if(this.curActionFrame >= 7) {
+            if(this.playerDist >= 3084) {
+                this.StartAI(this.ais.aiSeekPlayer);
+                this.Stop();
+            } else if(this.IsRandom(32)
+                && IsPlayerState(EPlayerStates.alive)
+                && this.CanSee()
+                && this.CanShootTarget()) {
+                    if(this.IsRandom(128))
+                        this.StartAI(this.ais.aiDucking);
+                    else
+                        this.StartAI(this.ais.aiShooting);
+                    this.Stop();
+                }
+        }
+
+        if(!this.IsItMoving()) {
+            if(this.IsRandom(32))
+                this.Operate(EOperateFlags.doors);
+            else if(this.Count() >= 32
+                && IsPlayerState(EPlayerStates.alive)
+                && this.CanSee()
+                && this.CanShootTarget()) {
+                    if(this.IsRandom(128))
+                        this.StartAI(this.ais.aiDucking);
+                    else
+                        this.StartAI(this.ais.aiShooting);
+            }
+        }
+    }
+
+    Dying() {
+        if(this.FloorDist() <= 32) {
+            if(this.curActionFrame >= 5) {
+                this.CStat(0);
+                if(this.FloorDist() <= 8)
+                    this.Sound(DN3D.ESound.THUD, false);
+                if(this.IsRandom(64))
+                    this.Spawn(DN3D.ENames.BLOODPOOL);
+                DN3D.states.RF();
+                this.extra = 0;
+                this.Move(this.moves.stopped, 0);
+                this.PlayAction(this.actions.aDead);
+            }
+            this.Stop();
+        } else {
+            DN3D.states.RF();
+            this.Move(null, 0);
+            this.PlayAction(this.actions.aDying);
+        }
+    }
+
+    CheckHit() {
+        if(this.curAction == this.actions.aSuffering) {
+            this.StopSound(DN3D.ESound.LIZARD_BEG);
+            this.Sound(DN3D.ESound.PRED_DYING, false);
+            this.CStat(0);
+            this.extra = 0;
+            this.PlayAction(this.actions.aPlayDead);
+            this.Stop();
+        }
+
+        if(this.IsDead()) {
+            if(this.weaponHit == DN3D.ENames.FREEZEBLAST) {
+                this.Sound(DN3D.ESound.SOMETHINGFROZE, false);
+                this.Pal(1);
+                this.Move(null, 0);
+                this.PlayAction(this.actions.aFrozen);
+                this.extra = 0;
+                this.Stop();
+            }
+
+            DN3D.states.DropAmmo();
+            DN3D.states.RandomWallJibs();
+
+            if(this.weaponHit == DN3D.ENames.GROWSPARK) {
+                this.CStat(0);
+                this.Sound(DN3D.ESound.ACTOR_GROWING, false);
+                this.StartAI(this.ais.aiGrow);
+                this.Stop();
+            }
+
+            this.AddKills(1);
+
+            if(this.weaponHit == DN3D.ENames.RPG || this.weaponHit == DN3D.ENames.RADIUSEXPLOSION) {
+                this.Sound(DN3D.ESound.SQUISHED, false);
+                DN3D.states.TroopBodyJibs();
+                DN3D.states.StandardJibs();
+                this.KillIt();
+            } else {
+                this.Sound(DN3D.ESound.PRED_DYING, false);
+                if(this.IsRandom(32) && this.FloorDist() <= 32) {
+                    this.Sound(DN3D.ESound.LIZARD_BEG, false);
+                    this.Spawn(DN3D.ENames.BLOODPOOL);
+                    this.extra = 0;
+                    this.Move(null, 0);
+                    this.PlayAction(this.actions.aSuffering);
+                    this.Stop();
+                }
+
+                this.PlayAction(this.actions.aDying);
+                this.Stop();
+            }
+        } else {
+            DN3D.states.RandomWallJibs();
+            this.Sound(DN3D.ESound.PRED_PAIN, false);
+
+            if(this.weaponHit == DN3D.ENames.SHRINKSPARK) {
+                this.Sound(DN3D.ESound.ACTOR_SHRINKING, false);
+                this.StartAI(this.ais.aiShrunk);
+            } else if(this.weaponHit == DN3D.ENames.GROWSPARK)
+                this.Sound(DN3D.ESound.EXPANDERHIT, false);
+            else if(this.FloorDist() <= 32 && this.IsRandom(96))
+                this.PlayAction(this.actions.aFlintch);
+        }
+    }
+
+    Troop() {
+        this.Fall();
     }
 
     Main() {

@@ -401,6 +401,48 @@ else
         ]
     },
     {
+        name: 'StopSound',
+        returns: false,
+        code: `stopsound`,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ]
+    },
+    {
+        name: 'Operate',
+        code: (args: boolean) => {
+            return `
+ife r0 0
+  operate
+ifand r0 1
+  operate
+ifand r0 2
+  operateactivators r1 r2
+ifand r0 4
+  operatemasterswitches r1
+ifand r0 8
+  operaterespawns r1
+ifand r0 16
+  operatesectors r3 r4
+ifand r0 32
+  activatebysector r3 r4
+`
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL,
+        ],
+        arguments_default: [
+            0, 0, 0, 0, 0
+        ]
+    },
+    {
         name: 'Shoot',
         code: (args?: boolean, fn?: string) => {
             return `set rd RETURN \nife r2 0 eshoot r0 \nelse { \nife r4 1 { \neshoot r0 \ngeta[RETURN].zvel ra \nadd ra r3 \nseta[RETURN].zvel ra \n } else ezshoot r3 r0\n }\nset r0 RETURN\nset ra RETURN\nstate push\nstate pushd\n${fn}state pop\nset rb ra\nstate popd\nset RETURN rd `;

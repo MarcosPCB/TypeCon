@@ -1125,8 +1125,11 @@ declare global {
          * @param once (optional) - only play it again if the other instance has finished already
          */
         protected Sound(sound_id: number, global: boolean, once?: boolean): CON_NATIVE<void>
-
-
+        /**
+         * Stops playing a sound
+         * @param sound_id - the sound ID
+         */
+        protected StopSound(sound_id: number): CON_NATIVE<void>
         /**
          * Returns if the actor is away from wall
          */

@@ -1239,6 +1239,7 @@ export namespace DN3D {
         function TroopBodyJibs(): CON_NATIVE<'troop_body_jibs'>;
         function LizBodyJibs(): CON_NATIVE<'liz_body_jibs'>;
         function StandardJibs(): CON_NATIVE<'standard_pjibs'>;
+        function RF(): CON_NATIVE<'rf'>;
     }
 }
 
