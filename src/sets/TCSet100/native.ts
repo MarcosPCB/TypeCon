@@ -4,6 +4,8 @@ namespace noread {}
 export type CON_NATIVE<Type> = Type;
 export type CON_NATIVE_GAMEVAR<Code, Type> = Type;
 export type CON_NATIVE_OBJECT<Type> = Type;
+export type CON_NATIVE_STATE<Type> = Type;
+export type CON_CONSTANT<Type> = Type;
 
 /**
  * CON_FUNC_ALIAS allows you to use a function from a class or an object without having to define it locally.
@@ -14,6 +16,7 @@ export type CON_NATIVE_OBJECT<Type> = Type;
  * @example const QuoteDimension: CON_ALIAS_FUNC<typeof CEvent.prototype.QuoteDimension> = CEvent.prototype.QuoteDimension;
  */
 export type CON_FUNC_ALIAS<F extends (...args: any[]) => any> = (...args: Parameters<F>) => ReturnType<F>;
+export type CON_PROPERTY_ALIAS<F extends any> = F;
 
 export class CON_NATIVE_POINTER { }
 
@@ -264,6 +267,24 @@ state popd
         arguments: []
     },
     {
+        name: 'IsRandom',
+        code: `
+state _krand
+shiftr rb 8
+set ra rb
+sub r0 255
+abs r0
+set rb 0
+ifge ra r0
+  set rb 1
+`,
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ]
+    },
+    {
         name: 'IsInWater',
         code: 'set rb 1 \nifinwater set rb 0 ',
         returns: true,
@@ -311,6 +332,15 @@ state popd
         returns: false,
         return_type: null,
         arguments: []
+    },
+    {
+        name: 'AddKills',
+        code: 'addkills',
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.CONSTANT
+        ]
     },
     {
         name: 'KillIt',
@@ -1040,6 +1070,24 @@ state popr1
     }
 ]
 
+const nativeTag: CON_NATIVE_VAR[] = [
+    {
+        name: 'lotag',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        code: 'lotag'
+    },
+    {
+        name: 'hitag',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        code: 'hitag'
+    },
+]
 
 const nativePos: CON_NATIVE_VAR[] = [
     {
@@ -1143,6 +1191,15 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
         readonly: false,
         code: 'htg_t 5',
         init: 0,
+    },
+    {
+        name: 'tags',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: nativeTag
     },
     {
         name: 'extra',
@@ -1258,6 +1315,14 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
         readonly: false,
         init: 0,
         code: 'htflags'
+    },
+    {
+        name: 'pal',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        code: 'pal'
     }
 ];
 

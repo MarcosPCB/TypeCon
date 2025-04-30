@@ -124,6 +124,7 @@ enum ESymbolType {
   null = 1024,
   module = 2048,
   enum = 4096,
+  constant = 8192,
   not_compiled = 65536,
 }
 
@@ -227,9 +228,10 @@ export interface CompilerContext {
   mainBFunc: boolean;
 }
 
-interface CompileResult {
+export interface CompileResult {
   conOutput: string;
   diagnostics: CompileDiagnostic[];
+  context: CompilerContext
 }
 
 function resolveImport(baseFile: string, importPath: string): string | null {
@@ -425,8 +427,41 @@ export class TsToConCompiler {
       else context.currentFile.code = outputLines.join('\n');
     } else context.currentFile.code = outputLines.join('\n');
 
+    /*if(context.currentFile.code.length != 0) {
+      const str = context.currentFile.code;
+      let pushes = 0, pops = 0, pos = 0;
+
+      while(true) {
+        const cur = str.indexOf('state push', pos);
+        if(cur == -1)
+          break;
+
+        pushes++;
+        pos = cur + String('state push').length;
+      }
+
+      pos = 0;
+      while(true) {
+        const cur = str.indexOf('state pop', pos);
+        if(cur == -1)
+          break;
+
+        pops++;
+        pos = cur + String('state pop').length;
+      }
+
+      if(pushes != pops) {
+        context.diagnostics.push({
+          severity: 'warning',
+          line: 0,
+          message: `Number of pushes doesn't match the number of pops: ${pushes} pushes x ${pops} pops`
+        });
+      }
+    }*/
+
     if (context.diagnostics.length > 0) {
       console.log("\n=== DIAGNOSTICS ===");
+
       for (const diag of context.diagnostics) {
         console.log(`[${diag.severity}] line ${diag.line}: ${diag.message}`);
       }
@@ -437,7 +472,8 @@ export class TsToConCompiler {
 
     return {
       conOutput: outputLines.join("\n"),
-      diagnostics: context.diagnostics
+      diagnostics: context.diagnostics,
+      context
     };
   }
 
@@ -838,7 +874,7 @@ export class TsToConCompiler {
 
         stmts.forEach(st => {
           if (!st.isKind(SyntaxKind.ClassDeclaration))
-            mCode = this.visitStatement(st, localCtx);
+            mCode += this.visitStatement(st, localCtx);
         });
 
         if (compilable) {
@@ -940,7 +976,20 @@ export class TsToConCompiler {
       return code;
     }
 
-    if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_FUNC_ALIAS')
+    if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_CONSTANT') {
+      context.symbolTable.set(varName, {
+        name: varName,
+        type: ESymbolType.number | ESymbolType.constant,
+        offset: 0,
+        size: 1,
+        literal: type.getAliasTypeArguments()[0].getLiteralValue() as number
+      });
+      return code;
+    }
+
+    if (type && type.getAliasSymbol()
+      && (type.getAliasSymbol().getName() == 'CON_FUNC_ALIAS'
+      || type.getAliasSymbol().getName() == 'CON_PROPERTY_ALIAS'))
       return code;
 
     if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_NATIVE_OBJECT') {
@@ -1042,17 +1091,19 @@ export class TsToConCompiler {
     }
 
     // Evaluate left side normally
+    code += this.options.lineDetail ? `// 'if' left side\n` : '';
     code += this.visitExpression(pattern.left, context);
-    code += `set rd ra\n`;
+    code += `set rd ra\nstate pushd\n`;
 
     // For the right side, check if it's a number or an Expression.
+    code += this.options.lineDetail ? `// 'if' right side\n` : '';
     if (typeof pattern.right === "number") {
       code += `set ra ${pattern.right}\n`;
     } else {
       code += this.visitExpression(pattern.right, context);
     }
 
-    code += `${pattern.op} rd ra {\n`;
+    code += `state popd\n${pattern.op} rd ra {\n`;
     code += indent(thenPart, 1);
     if (elsePart != '') {
       code += `} else {\n`;
@@ -1250,10 +1301,7 @@ export class TsToConCompiler {
       if (name in context.paramMap) {
         const i = context.paramMap[name];
 
-        if(i.type == ESymbolType.pointer)
-          code += `${i.name}\n`;
-        else
-          code += `set ra r${i.offset}\n`;
+        code += `set ra r${i.offset}\n`;
 
         if (i.type & ESymbolType.string)
           context.curExpr = ESymbolType.string
@@ -1294,6 +1342,14 @@ export class TsToConCompiler {
         if (off.heap)
           code += `set rf 1\n`;
         return code;
+      }
+
+      const native = findNativeVar_Sprite(name);
+
+      if(native) {
+        if(native.var_type == CON_NATIVE_TYPE.variable) {
+          return code + `set ra ${native.code}\n`;
+        }
       }
       // fallback => unknown
       addDiagnostic(expr, context, "error", `Unknown identifier: ${name}`);
@@ -1407,7 +1463,7 @@ export class TsToConCompiler {
       return code;
     }*/
 
-    if (opText.includes("=")) {
+    if (opText.includes("=") && !['>=', '<='].includes(opText)) {
       // assignment
       code += this.visitExpression(right, context);
 
@@ -1452,6 +1508,7 @@ export class TsToConCompiler {
       return code;
     }
 
+    code += `// left side\n`
     code += this.visitExpression(left, context);
     const isQuote = Boolean(context.curExpr & ESymbolType.quote);
     const isString = Boolean(context.curExpr & ESymbolType.string);
@@ -1462,7 +1519,10 @@ export class TsToConCompiler {
     }
 
     code += `set rd ra\n`;
+    code += this.options.lineDetail ? `// right side\n` : '';
+    code += `state pushd\n`;
     code += this.visitExpression(right, context);
+    code += `state popd\n`;
 
     if (isQuote && !(context.curExpr & ESymbolType.quote))
       code += `qputs 1022 %d\nqsprintf 1023 1022 ra\nset ra 1022\n`;
@@ -1567,6 +1627,13 @@ export class TsToConCompiler {
 
         code += `set ri rbp\nadd ri ${v.offset}\nsetarray flat[ri] ra\n`;
         return code;
+      }
+
+      const native = findNativeVar_Sprite(name);
+
+      if(native) {
+        if(native.var_type == CON_NATIVE_TYPE.variable)
+          return code + `set ${native.code} ra\n`;
       }
 
       addDiagnostic(left, context, "error", `Assignment to unknown identifier: ${name}`);
@@ -2535,8 +2602,12 @@ set rb ra
               return "set ra 0\n";
             }
             if (segments[1].kind == 'index') {
+              if(assignment)
+                code += `state push\n`;
               code += this.visitExpression(segments[1].expr, context);
               code += `set ri ra\n`;
+              if(assignment)
+                code += `state pop\n`;
             }
           } else {
             if (context.curClass)
@@ -2670,8 +2741,10 @@ set rb ra
 
             let overriden = false;
 
-            if (assignment)
-              code += `state push\n`;
+            //if (assignment)
+              //code += `state push\n`;
+
+            let pushes = 0;
 
             if (nVar.type == CON_NATIVE_FLAGS.OBJECT) {
               let v = nVar.object;
@@ -2683,6 +2756,11 @@ set rb ra
                   if (s.kind != 'index') {
                     addDiagnostic(expr, context, "error", `Missing index for ${seg.name}: ${expr.getText()}`);
                     return "set ra 0\n";
+                  }
+
+                  if(assignment) {
+                    code += `state push\n`;
+                    pushes++;
                   }
 
                   code += this.visitExpression(s.expr, context);
@@ -2720,8 +2798,10 @@ set rb ra
                   }
 
                   if (v.var_type == CON_NATIVE_TYPE.native) {
+                    for(let i = 0; i < pushes; i++)
+                      code += `state pop\n`;
                     if (!overriden)
-                      code += `${assignment ? 'state pop\nset' : 'get'}${op}[ri].`;
+                      code += `${assignment ? 'set' : 'get'}${op}[ri].`;
 
                     code += `${v.code} ra\n`;
                   }
@@ -2733,10 +2813,10 @@ set rb ra
             } else if (nVar.type == CON_NATIVE_FLAGS.VARIABLE) {
               if (nVar.var_type == CON_NATIVE_TYPE.native) {
                 if (!overriden)
-                  code += `${assignment ? 'state pop\nset' : 'get'}${op}[ri].`;
+                  code += `${assignment ? 'set' : 'get'}${op}[ri].`;
 
                 code += `${nVar.code} ra\n`;
-              } else code += `state pop\nset ${assignment ? (nVar.code + ' ra\n')
+              } else code += `set ${assignment ? (nVar.code + ' ra\n')
                 : ('ra ' + nVar.code + '\n')}`
             }
           }
@@ -2767,8 +2847,8 @@ set rb ra
           code += `mul ra -1\n`;
           break;
         case SyntaxKind.ExclamationToken:
-          addDiagnostic(expr, context, "error", `"!" not allowed in normal expressions (only if patterns)`);
-          code += `set ra 0\n`;
+          //addDiagnostic(expr, context, "error", `"!" not allowed in normal expressions (only if patterns)`);
+          code += `set ra 0\nifge ra 1\nset ra 1\n`;
           break;
         default:
           addDiagnostic(expr, context, "error", `Unhandled prefix op`);
@@ -2828,6 +2908,12 @@ set rb ra
         case 'pointer':
         case 'boolean':
           t = ESymbolType[type.getText()];
+          break;
+
+        case 'IAction':
+        case 'IMove':
+        case 'IAi':
+          t = ESymbolType.pointer;
           break;
 
         case 'constant':
@@ -2894,11 +2980,22 @@ set rb ra
       }
     }
 
+    const t = fd.getReturnType();
+
+    if (t && t.getAliasSymbol() && t.getAliasSymbol().getName() == 'CON_NATIVE_STATE') {
+      const args = t.getAliasTypeArguments();
+
+      if (args.length > 0) {
+        (localCtx.symbolTable.get(name) as SymbolDefinition).CON_code = (localCtx.symbolTable.get(name) as SymbolDefinition).name = args[0].getText().replace(/[`'"]/g, "");
+        (context.symbolTable.get(name) as SymbolDefinition).CON_code = (context.symbolTable.get(name) as SymbolDefinition).name = args[0].getText().replace(/[`'"]/g, "");
+      }
+    }
+
     const body = fd.getBody() as Block;
     if (body) {
       const params = Object.keys(localCtx.paramMap).length;
 
-      if (body.getDescendantsOfKind(SyntaxKind.ArrowFunction)) {
+      if (body.getDescendantsOfKind(SyntaxKind.ArrowFunction).length > 0) {
         if (params > 0) {
           code += indent(`state pushr${params > 12 ? 'all' : params}\n`, 1);
           Object.entries(localCtx.paramMap).forEach((e, i) => {
@@ -2916,7 +3013,7 @@ set rb ra
         code += indent(this.visitStatement(st, localCtx), 1) + "\n";
       });
 
-      if (body.getDescendantsOfKind(SyntaxKind.ArrowFunction)) {
+      if (body.getDescendantsOfKind(SyntaxKind.ArrowFunction).length > 0) {
         if (params > 0) {
           code += indent(`state popr${params > 12 ? 'all' : params}\n`, 1);
 
@@ -3077,6 +3174,7 @@ set rb ra
 
         this.parseVarForActionsMovesAi(p, localCtx, className);
       }
+
       if (p.getTypeNode().getText() == 'OnEvent') {
         const init = p.getInitializerOrThrow();
 
@@ -3194,9 +3292,8 @@ set rb ra
 
     // visit methods
     const methods = cd.getInstanceMethods();
-    for (const m of methods) {
+    for (const m of methods)
       code += this.visitMethodDeclaration(m, className, type != '' ? localCtx : context, type);
-    }
 
     context.curClass = null;
 
@@ -3738,6 +3835,17 @@ set rb ra
 
       code += indent(`setarray flat[rbp] r${numParams}\nadd rsp 1\n`, 1);
       localCtx.localVarCount++;
+    }
+
+    const t = md.getReturnType();
+    const tSym = t.getAliasSymbol();
+    if(tSym && tSym.getName().includes('CON_NATIVE_STATE')) {
+      const args = t.getAliasTypeArguments();
+
+      if(args.length > 0) {
+        (localCtx.symbolTable.get(mName) as SymbolDefinition).CON_code = args[0].getText().replace(/[`'"]/g, "");
+        (context.symbolTable.get(mName) as SymbolDefinition).CON_code = args[0].getText().replace(/[`'"]/g, "");
+      };
     }
 
     const body = md.getBody() as any;

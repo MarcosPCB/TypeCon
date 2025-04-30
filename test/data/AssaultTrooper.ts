@@ -149,8 +149,7 @@ class AssaultTrooper extends CActor {
 
                     if (this.GapDist() >= 48 && this.IsAwayFromWall()) {
                         this.Spawn(DN3D.ENames.TRANSPORTERSTAR);
-                        this.PlayAction(this.actions.aReappear);
-                        this.Move(null, 0);
+                        ActionAndMove(this.actions.aReappear, null, 0);
                         this.Stop();
                     }
                 }
@@ -160,8 +159,7 @@ class AssaultTrooper extends CActor {
                 if (this.curActionFrame >= 2) {
                     this.Spawn(DN3D.ENames.TRANSPORTERSTAR);
                     this.Sound(DN3D.ESound.TELEPORTER, false);
-                    this.PlayAction(this.actions.aWalking);
-                    this.Move(this.moves.walkVels, EMoveFlags.faceplayer);
+                    ActionAndMove(this.actions.aWalking, this.moves.walkVels, EMoveFlags.faceplayer)
                     this.CStat(EStats.INVISIBLE);
                 } else {
                     this.SizeTo(41, 40, 4, 4);
@@ -179,40 +177,28 @@ class AssaultTrooper extends CActor {
     }
 
     GonnaShoot() {
-        if (IsPlayerState(EPlayerStates.alive)) {
-            if (this.playerDist < 1024)
-                this.StartAI(this.ais.aiShooting)
-            else if (!(this.flags & ESpriteFlags.BADGUYSTAYPUT)) {
-                if (this.curActionFrame >= 12
-                    && this.IsRandom(16)
-                    && this.CanShootTarget()
-                ) {
-                    if (this.pal == 21
-                        && this.IsRandom(4)
-                        && this.playerDist >= 4096
-                    )
-                        this.StartAI(this.ais.aiHide)
+        if (!IsPlayerState(EPlayerStates.alive))
+            return;
+
+        if (this.playerDist < 1024)
+            this.StartAI(this.ais.aiShooting)
+        else if (!(this.flags & ESpriteFlags.BADGUYSTAYPUT)) {
+            if (this.curActionFrame >= 12 && this.IsRandom(16) && this.CanShootTarget()) {
+                if (this.pal == 21 && this.IsRandom(4) && this.playerDist > 4096)
+                    this.StartAI(this.ais.aiHide)
+                else {
+                    if (this.playerDist < 1100)
+                        this.StartAI(this.ais.aiFleeing)
                     else {
-                        if (this.playerDist < 1100)
-                            this.StartAI(this.ais.aiFleeing)
-                        else {
-                            if (this.playerDist < 4096
-                                && this.CanSee()
-                                && this.CanShootTarget()
-                            )
-                                this.StartAI(this.ais.aiShooting)
-                            else {
-                                this.Move(this.moves.runVels, EMoveFlags.seekplayer);
-                                this.PlayAction(this.actions.aRunning);
-                            }
-                        }
+                        if (CanSeeShootInDist(4096, false))
+                            this.StartAI(this.ais.aiShooting)
+                        else
+                            ActionAndMove(this.actions.aRunning, this.moves.runVels, EMoveFlags.seekplayer);
                     }
                 }
-            } else {
-                if(this.Count() >= 26 && this.IsRandom(32))
-                    this.StartAI(this.ais.aiShooting);
             }
-        }
+        } else if(this.Count() >= 26 && this.IsRandom(32))
+                this.StartAI(this.ais.aiShooting);
     }
 
     Seek() {
@@ -230,6 +216,7 @@ class AssaultTrooper extends CActor {
             if(IsPlayerState(EPlayerStates.higher)) {
                 if(this.CeilingDist() > 128 && !(this.flags & ESpriteFlags.BADGUYSTAYPUT))
                     this.StartAI(this.ais.aiJetpack);
+
                 this.Stop();
             } else if(this.IsRandom(2)) {
                 if(this.pal == 21 && this.playerDist >= 1596) {
@@ -240,7 +227,8 @@ class AssaultTrooper extends CActor {
                 if(this.BulletNear()) {
                     if(this.IsRandom(128))
                         this.StartAI(this.ais.aiDodge);
-                    else this.StartAI(this.ais.aiDucking);
+                    else
+                        this.StartAI(this.ais.aiDucking);
 
                     this.Stop();
                 }
@@ -261,7 +249,8 @@ class AssaultTrooper extends CActor {
         if(this.IsRandom(1)) {
             if(this.IsRandom(128))
                 this.Sound(DN3D.ESound.PRED_ROAM, false, true);
-            else this.Sound(DN3D.ESound.PRED_ROAM2, false, true);
+            else
+                this.Sound(DN3D.ESound.PRED_ROAM2, false, true);
         }
     }
 
@@ -289,7 +278,8 @@ class AssaultTrooper extends CActor {
                     this.Sound(DN3D.ESound.PRED_ATTACK, false);
                     this.ResetAction();
                     this.Shoot(DN3D.ENames.FIRELASER);
-                } else this.StartAI(this.ais.aiSeekPlayer);
+                } else
+                    this.StartAI(this.ais.aiSeekPlayer);
             }
         }
     }
@@ -313,7 +303,8 @@ class AssaultTrooper extends CActor {
                         else this.StartAI(this.ais.aiFleeingBack);
                     }
                 }
-            } else this.StartAI(this.ais.aiSeekPlayer);
+            } else
+                this.StartAI(this.ais.aiSeekPlayer);
         }
     }
 
@@ -359,14 +350,12 @@ class AssaultTrooper extends CActor {
                     this.Spawn(DN3D.ENames.BLOODPOOL);
                 DN3D.states.RF();
                 this.extra = 0;
-                this.Move(this.moves.stopped, 0);
-                this.PlayAction(this.actions.aDead);
+                ActionAndMove(this.actions.aDead, null, 0);
             }
             this.Stop();
         } else {
             DN3D.states.RF();
-            this.Move(null, 0);
-            this.PlayAction(this.actions.aDying);
+            ActionAndMove(this.actions.aDying, null, 0);
         }
     }
 
@@ -384,8 +373,7 @@ class AssaultTrooper extends CActor {
             if(this.weaponHit == DN3D.ENames.FREEZEBLAST) {
                 this.Sound(DN3D.ESound.SOMETHINGFROZE, false);
                 this.Pal(1);
-                this.Move(null, 0);
-                this.PlayAction(this.actions.aFrozen);
+                ActionAndMove(this.actions.aFrozen, null, 0);
                 this.extra = 0;
                 this.Stop();
             }
@@ -413,8 +401,7 @@ class AssaultTrooper extends CActor {
                     this.Sound(DN3D.ESound.LIZARD_BEG, false);
                     this.Spawn(DN3D.ENames.BLOODPOOL);
                     this.extra = 0;
-                    this.Move(null, 0);
-                    this.PlayAction(this.actions.aSuffering);
+                    ActionAndMove(this.actions.aSuffering, null, 0);
                     this.Stop();
                 }
 

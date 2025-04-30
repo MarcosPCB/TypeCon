@@ -5,7 +5,7 @@ import path = require('path');
 import { compiledFiles, CONInit, ECompileOptions } from './modules/compiler/helper/framework';
 import GDBDebugger from './modules/debugger/services/GDBDebugger';
 //import { CONDebugger } from './modules/debugger/debugger';
-import { TsToConCompiler } from './modules/compiler/services/Compiler';
+import { CompileResult, TsToConCompiler } from './modules/compiler/services/Compiler';
 import * as readline from 'readline';
 import inquirer from 'inquirer';
 const fsExtra = require("fs-extra");
@@ -418,10 +418,11 @@ if(debug_mode) {
     }
 
     if(files.length > 0) {
+        let result: CompileResult;
         for(const f of files) {
             const file = fs.readFileSync(f);
 
-            compiler.compile(file.toString(), f);
+            result = compiler.compile(file.toString(), f, result ? result.context : undefined);
         }
 
         if(compile_options & 8) {

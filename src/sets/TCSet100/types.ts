@@ -1,4 +1,4 @@
-import { CON_NATIVE, CON_NATIVE_GAMEVAR, CON_NATIVE_OBJECT, CON_NATIVE_POINTER } from "./native"
+import { CON_CONSTANT, CON_NATIVE, CON_NATIVE_GAMEVAR, CON_NATIVE_OBJECT, CON_NATIVE_POINTER, CON_NATIVE_STATE } from "./native"
 
 //@typecon
 
@@ -436,6 +436,14 @@ declare global {
         INVISIBLE = 32768,
     }
 
+    /**
+     * One second in game ticks
+     */
+    const GOneSec: CON_CONSTANT<30>;
+    /**
+     * One second during display event ticks
+     */
+    const EOneSec: CON_CONSTANT<120>;
 
     /**
      * 2D vector type
@@ -934,6 +942,9 @@ declare global {
     /** Contains the current ID of the current actor */
     export const thisActor: CON_NATIVE_GAMEVAR<'THISACTOR', number>;
 
+    export function ActionAndMove(action: IAction | null, move: IMove | null, flags: number): CON_NATIVE_STATE<'__spriteFuncs_ActionAndMove'>;
+    export function CanSeeShootInDist(distance: number, greater: boolean): CON_NATIVE_STATE<'__spriteFuncs_CanSeeShootInDist'>;
+
     /** @class for actor declaration. Use this as extension to declare your custom actors. */
     export class CActor {
         /** The current tile number of this actor */
@@ -975,7 +986,9 @@ declare global {
         /** The current sector ID */
         public curSectorID: CON_NATIVE<number>;
         /** The special flags active for the sprite */
-        public flags: CON_NATIVE<number>
+        public flags: CON_NATIVE<number>;
+        /** The Lotag and Hitag of the sprite */
+        public tags: CON_NATIVE<tag>;
 
         protected index: number;
 
@@ -999,37 +1012,37 @@ declare global {
 
         /**
          * Play an action
-         * @param action - the unique label for the action to be played: use Label() to call this function
+         * @param action - the IAction object declared for this class
          */
-        protected PlayAction(action: IAction | null): CON_NATIVE<void>
+        public PlayAction(action: IAction | null): CON_NATIVE<void>
         /**
          * Move the actor
-         * @param move - the unique label for the move: use Label() to call this function
+         * @param move - the IMove object declared for this class
          * @param flags - the movement flags
          */
-        protected Move(move: IMove | null, flags: number): CON_NATIVE<void>
+        public Move(move: IMove | null, flags: number): CON_NATIVE<void>
         /**
-         * Start the AI fir this actor
-         * @param ai - the unique label for AI: use Label() to call this function
+         * Start the AI configuration for this actor
+         * @param ai - the IAi object declared for this class
          */
-        protected StartAI(ai: IAi | null): CON_NATIVE<void>
+        public StartAI(ai: IAi | null): CON_NATIVE<void>
         /**
          * Set or get the current stat for the actor
          * @param stats - The stats to be set or leave blank it to only return the current value
          * @returns - the current actor's stat value
          */
-        protected CStat(stats?: number): CON_NATIVE<number>
+        public CStat(stats?: number): CON_NATIVE<number>
         /**
          * OR the stat value to the actor's stat
          * @param stats - The stats to be set
          */
-        protected CStatOR(stats: number): CON_NATIVE<void>
+        public CStatOR(stats: number): CON_NATIVE<void>
         /**
          * Immediately set the size for this particular actor
          * @param w - the width (0 - 255)
          * @param h - the height(0 - 255)
          */
-        protected SizeAt(w: number, h: number): CON_NATIVE<void>
+        public SizeAt(w: number, h: number): CON_NATIVE<void>
         /**
          * Sets the size for this particular actor by incrementing the width and height by @param inc_x and @param inc_y each tick
          * @param w - the maximum width
@@ -1037,44 +1050,44 @@ declare global {
          * @param inc_x - how much to increment the width each tick
          * @param inc_y - how much to increment the height each tick
          */
-        protected SizeTo(w: number, h: number, inc_x?: number, inc_y?: number): CON_NATIVE<void>
+        public SizeTo(w: number, h: number, inc_x?: number, inc_y?: number): CON_NATIVE<void>
         /**
          * Set or gets the native counter for this actor
          * @param value - Set the counter to this value. Leave blank to just retrieve the current counter value
          * @returns - the current counter value
          */
-        protected Count(value?: number): CON_NATIVE<number>
+        public Count(value?: number): CON_NATIVE<number>
         /**
          * Gets the current distance from the ceiling
          * @returns - the distance right shifted to 8
          */
-        protected CeilingDist(): CON_NATIVE<number>
+        public CeilingDist(): CON_NATIVE<number>
         /**
         * Gets the current distance from the floor
         * @returns - the distance right shifted to 8
         */
-        protected FloorDist(): CON_NATIVE<number>
+        public FloorDist(): CON_NATIVE<number>
         /**
          * Gets the current gap distance from floor to ceiling
          * @returns - the distance right shifted to 8
          */
-        protected GapDist(): CON_NATIVE<number>
+        public GapDist(): CON_NATIVE<number>
         /**
          * Enables 'physics' for this actor
          */
-        protected Fall(): CON_NATIVE<void>
+        public Fall(): CON_NATIVE<void>
         /**
          * Returns the last pal value used before the current one
          */
-        protected GetLastPal(): CON_NATIVE<void>
+        public GetLastPal(): CON_NATIVE<void>
         /**
          * Deletes the actor from the game world
          */
-        protected KillIt(): CON_NATIVE<void>
+        public KillIt(): CON_NATIVE<void>
         /** Use this to stop the current actor's process */
-        protected Stop(): CON_NATIVE<void>
+        public Stop(): CON_NATIVE<void>
         /** Reset's the action counter */
-        protected ResetAction(): CON_NATIVE<void>
+        public ResetAction(): CON_NATIVE<void>
         /**
          * Spawn a actor
          * @param picnum - The tile number of the actor 
@@ -1082,7 +1095,7 @@ declare global {
          * @param queued - (optional) Set this to true if you want it to become part of the queue system
          * @returns - the ID of the actor spawned
          */
-        protected Spawn(picnum: number | CActor, initFn?: ((id: number) => void), queued?: boolean): CON_NATIVE<number>
+        public Spawn(picnum: number | CActor, initFn?: ((id: number) => void), queued?: boolean): CON_NATIVE<number>
         /**
          * Shoots a projectile
          * @param picnum - The projectile's tile number
@@ -1091,7 +1104,7 @@ declare global {
          * @param zvel - (optional) the vertical velocity - must set @param use_zvel to true
          * @param additive_zvel - (optional) Set this to true to add your vertical velocity to the actor's already set
          */
-        protected Shoot(picnum: number | CActor, initFn?: ((id: number) => void), use_zvel?: boolean, zvel?: number, additive_zvel?: boolean): CON_NATIVE<number>
+        public Shoot(picnum: number | CActor, initFn?: ((id: number) => void), use_zvel?: boolean, zvel?: number, additive_zvel?: boolean): CON_NATIVE<number>
         /**
          * Damages all actors and sectors in a radius (divided into 4 ranges)
          * @param radius - The maximum radius
@@ -1100,15 +1113,15 @@ declare global {
          * @param closeDmg - the close range damage
          * @param closestDmg - the closest range damage
          */
-        protected HitRadius(radius: number, furthestDmg: number, farDmg: number, closeDmg: number, closestDmg: number): CON_NATIVE<void>
+        public HitRadius(radius: number, furthestDmg: number, farDmg: number, closeDmg: number, closestDmg: number): CON_NATIVE<void>
         /**
          * Flashes for a brief second some visible sectors
          */
-        protected Flash(): CON_NATIVE<void>
+        public Flash(): CON_NATIVE<void>
         /**
          * Activates 9 or less respawn sprites with a lotag matching the current actor's hitag.
          */
-        protected RespawnHitag(): CON_NATIVE<void>
+        public RespawnHitag(): CON_NATIVE<void>
         /**
          * Causes the current actor to ope/activate a nearby door, activator, master switch, sector or sector effector.
          * @param flags - which entity to activate
@@ -1117,43 +1130,43 @@ declare global {
          * @param sector - (optional) the sector ID to be used
          * @param sprite - the sprite ID to be used
          */
-        protected Operate(flags: EOperateFlags, lotag?: number, player_id?: number, sector?: number, sprite?: number): CON_NATIVE<void>
+        public Operate(flags: EOperateFlags, lotag?: number, player_id?: number, sector?: number, sprite?: number): CON_NATIVE<void>
         /**
          * Plays a sound
          * @param sound_id - the sound ID 
          * @param global - play globally or not
          * @param once (optional) - only play it again if the other instance has finished already
          */
-        protected Sound(sound_id: number, global: boolean, once?: boolean): CON_NATIVE<void>
+        public Sound(sound_id: number, global: boolean, once?: boolean): CON_NATIVE<void>
         /**
          * Stops playing a sound
          * @param sound_id - the sound ID
          */
-        protected StopSound(sound_id: number): CON_NATIVE<void>
+        public StopSound(sound_id: number): CON_NATIVE<void>
         /**
          * Returns if the actor is away from wall
          */
-        protected IsAwayFromWall(): CON_NATIVE<boolean>
+        public IsAwayFromWall(): CON_NATIVE<boolean>
         /**
          * Returns if the actor is in the water
          */
-        protected IsInWater(): CON_NATIVE<boolean>
+        public IsInWater(): CON_NATIVE<boolean>
         /**
          * Returns if the actor is on the water
          */
-        protected IsOnWater(): CON_NATIVE<boolean>
+        public IsOnWater(): CON_NATIVE<boolean>
         /**
          * Checks if the current actor is in a sector with a parallaxed ceiling (sky).
          */
-        protected IsOutside(): CON_NATIVE<boolean>
+        public IsOutside(): CON_NATIVE<boolean>
         /**
          * Checks if the actor is in space
          */
-        protected IsInSpace(): CON_NATIVE<boolean>
+        public IsInSpace(): CON_NATIVE<boolean>
         /**
          * Checks if the actor is in outer space
          */
-        protected IsInOuterSpace(): CON_NATIVE<boolean>
+        public IsInOuterSpace(): CON_NATIVE<boolean>
         /**
          * A function condition stating the probability of it 'doin somethin!' in this case.
          * A @param value greater or equal to 255 corresponds to a 100% probability that the first block is taken.
@@ -1162,31 +1175,31 @@ declare global {
          * For display code use displayrand instead.
          * @param value - the value of chance (0 - 255)
          */
-        protected IsRandom(value: constant): CON_NATIVE<boolean>
+        public IsRandom(value: number): CON_NATIVE<boolean>
         /**
          * Checks if the current actor is dead (health is zero or below)
          */
-        protected IsDead(): CON_NATIVE<boolean>
+        public IsDead(): CON_NATIVE<boolean>
         /**
          * Checks if the actor has been suished by a sector
          */
-        protected Squished(): CON_NATIVE<boolean>
+        public Squished(): CON_NATIVE<boolean>
         /**
          * Checks if the actor is moving
          */
-        protected IsItMoving(): CON_NATIVE<boolean>
+        public IsItMoving(): CON_NATIVE<boolean>
         /**
          * Returns 'true' if a projectile is near the actor.
          * In the case of hitscan projectiles (such as SHOTSPARK1),
          * it returns true if the point of impact is near the player.
          */
-        protected BulletNear(): CON_NATIVE<boolean>
+        public BulletNear(): CON_NATIVE<boolean>
         /**
          * Checks if the current actor was struck by a weapon.
          * Built-in damage processing occurs when using @method HitByWeapon, so it must be called frequently
          * in actor code in order for the actor to be affected by projectiles.
          */
-        protected HitByWeapon(): CON_NATIVE<boolean>
+        public HitByWeapon(): CON_NATIVE<boolean>
         /**
          * If condition returning true if there is a line of sight between the current actor and the player.
          * The difference with @method CanSeeTarget is that @method CanSee actually verifies if the player
@@ -1196,91 +1209,91 @@ declare global {
          * (and in result the player is capable of viewing a arm or a litoral part of an enemy without
          * it targeting the player).
          */
-        protected CanSee(): CON_NATIVE<boolean>
+        public CanSee(): CON_NATIVE<boolean>
         /**
          * If condition returning true if the current actor can see the player.
          */
-        protected CanSeeTarget(): CON_NATIVE<boolean>
+        public CanSeeTarget(): CON_NATIVE<boolean>
         /**
          * If condition returning true if the current actor can shoot the player.
          */
-        protected CanShootTarget(): CON_NATIVE<boolean>
+        public CanShootTarget(): CON_NATIVE<boolean>
         /**
          * Checks to see if the player has pressed the open button (space by default).
          */
-        protected PlayerHitSpace(): CON_NATIVE<boolean>
+        public PlayerHitSpace(): CON_NATIVE<boolean>
         /**
          * Goes with @method HitByWeapon. Returns which projectile hit the actor.
          */
-        protected WhichWeaponHit(): CON_NATIVE<number>
+        public WhichWeaponHit(): CON_NATIVE<number>
 
         /**
          * @todo no implemented yet
          * Calculates the angle necessary for the current sprite to face whatever target is
          * or was at the coordinates htlastvx and htlastvy.
          */
-        protected AngleToTarget(): CON_NATIVE<number>
+        public AngleToTarget(): CON_NATIVE<number>
 
         /**
          * Spawns the hard-coded debris. Scraps inherit the owner palette.
          * @param tile - the tile number of the debris can be SCRAP1 through SCRAP6 (see {@link Names}).
          * @param amount - the amount of debris to spawn
          */
-        protected Debris(tile: constant, amount: constant): CON_NATIVE<void>
+        public Debris(tile: constant, amount: constant): CON_NATIVE<void>
         /**
          * Spawns the hard-coded gore.
          * @param tile - the tile number of the gut, can be JIBS1 through JIBS6, HEADJIB, LEGJIB... (See {@link Names})
          * @param amount - the amount of guts to spawn
          */
-        protected Guts(tile: constant, amount: constant): CON_NATIVE<void>
+        public Guts(tile: constant, amount: constant): CON_NATIVE<void>
         /**
          * Causes the current actor to spawn @param amount envelopes.
          * @param amount - the amount of envelopes to spawn
          */
-        protected Mail(amount: constant): CON_NATIVE<void>
+        public Mail(amount: constant): CON_NATIVE<void>
         /**
          * Attracts the ladies. Well, no, not really, at least not in the game.
          * Spawns @param amount of dollar bills.
          * @param amount - the amount of money to spawn
          */
-        protected Money(amount: constant): CON_NATIVE<void>
+        public Money(amount: constant): CON_NATIVE<void>
         /**
          * Spawns @param amount of pieces of paper to use the same type of movement of the money command.
          * @param amount - the amount of paper to spawn
          */
-        protected Paper(amount: constant): CON_NATIVE<void>
+        public Paper(amount: constant): CON_NATIVE<void>
         /**
          * Causes the current actor to spawn @param amount of broken glass pieces.
          * NOTE: If @method Pal is used right before this command, it will change the glass palette as well.
          * @param amount - the amount of glass to spawn
          */
-        protected Glass(amount: constant): CON_NATIVE<void>
+        public Glass(amount: constant): CON_NATIVE<void>
         /**
          * Changes the current actor's palette reference number to @param color.
          * @param color - the palette to change
          */
-        protected Pal(color: number): CON_NATIVE<void>
+        public Pal(color: number): CON_NATIVE<void>
 
         /**
          * Add @param amount to the kill counter
          * @param amount - how many kills to add
          */
-        protected AddKills(amount: constant): CON_NATIVE<void>
+        public AddKills(amount: constant): CON_NATIVE<void>
         /**
          * Makes the player kick
          */
-        protected PlayerKick(): CON_NATIVE<void>
+        public PlayerKick(): CON_NATIVE<void>
         /**
          * Locks the player movement by @param time amount of time
          * @param time - the amount of time to lock the player
          */
-        protected LockPlayer(time: number): CON_NATIVE<void>
+        public LockPlayer(time: number): CON_NATIVE<void>
         /**
          * Reload the map (if in Single Player) and the player loses his inventory. 
          * Also if in Single Player mode, execution of subsequent code is halted in a fashion similar to return.
          * @param flags - set to 1 to don't ask the player if they want to load the most recent save (if applicable)
          */
-        protected ResetPlayer(flags: number): CON_NATIVE<void>
+        public ResetPlayer(flags: number): CON_NATIVE<void>
 
         /**
          * You must define this function for the actor to work

@@ -884,6 +884,13 @@ defstate _convertString2Quote
     state popd
     state pop
 ends
+
+defstate _krand
+    mul randomseed 1664525
+    add randomseed 221297
+    set rb randomseed
+    abs rb
+ends
 `
         }
 
