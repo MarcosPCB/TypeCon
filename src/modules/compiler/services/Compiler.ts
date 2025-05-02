@@ -146,10 +146,12 @@ enum ESymbolType {
 interface SymbolDefinition {
   name: string;
   type: Exclude<ESymbolType, ESymbolType.enum>;
-  offset: number;        // Delta from the object's base pointer.
+  offset: number;        // Delta from the object's base pointer
   size?: number;         // How many slots this symbol occupies.
   num_elements?: number;
   heap?: boolean,
+  global?: boolean,
+  readonly?: boolean,
   native_pointer?: 'sprites' | 'sectors' | 'walls' | 'players' | 'projectiles',
   //This is only used IF we do something like 'const s = sprites[2]', 
   //otherwise, the compiler treats like a pointer to the complete array structure: 'const s = sprites'
@@ -185,6 +187,8 @@ export interface CompilerContext {
   localVarNativePointerIndexed: boolean,
   paramMap: Record<string, SymbolDefinition>;
 
+  globalVarCount: number,
+
   diagnostics: CompileDiagnostic[];
 
   options: CompilerOptions;
@@ -197,6 +201,7 @@ export interface CompilerContext {
   currentActorActions: string[];
   currentActorMoves: string[];
   currentActorAis: string[];
+  currentActorLabels: Record<string, SymbolDefinition>;
 
   // For event classes if needed
   currentEventName?: string;
@@ -226,6 +231,8 @@ export interface CompilerContext {
 
   isInLoop: boolean;
   mainBFunc: boolean;
+
+  initCode: string;
 }
 
 export interface CompileResult {
@@ -283,7 +290,7 @@ export function addDiagnostic(
 /******************************************************************************
  * INDENT UTILITY
  *****************************************************************************/
-function indent(text: string, level: number): string {
+export function indent(text: string, level: number): string {
   const pad = "  ".repeat(level);
   return text
     .split("\n")
@@ -317,6 +324,8 @@ export class TsToConCompiler {
       diagnostics: [],
       options: this.options,
 
+      globalVarCount: 0,
+
       curClass: null,
       curFunc: null,
       curModule: null,
@@ -329,6 +338,7 @@ export class TsToConCompiler {
       currentActorMoves: [],
       currentActorAis: [],
       currentEventName: undefined,
+      currentActorLabels: {},
       typeAliases: new Map(),
       symbolTable: new Map(),
       currentFile: undefined,
@@ -336,6 +346,8 @@ export class TsToConCompiler {
       curSymRet: null,
       isInLoop: false,
       mainBFunc: false,
+
+      initCode: '',
     };
 
     const outputLines: string[] = [];
@@ -1143,16 +1155,45 @@ export class TsToConCompiler {
             return code;
           }
 
-          const sym = context.symbolTable.get((segments[1] as SegmentProperty).name);
+          let sym = context.symbolTable.get((segments[1] as SegmentProperty).name);
 
           if(!sym) {
             addDiagnostic(clause, context, 'error', `Variable/property not declared ${clause.getText()}`);
             return code;
-          }
+          };
 
-          if(sym.type != ESymbolType.pointer) {
-            addDiagnostic(clause, context, 'error', `Unsupported clause type ${sym.type} for label ${clause.getText()}`);
-            return code;
+          for(let i = 1; i < segments.length; i++) {
+            if(sym.type & ESymbolType.object) {
+              if(!sym.children) {
+                addDiagnostic(clause, context, 'error', `No defined objects for ${sym.name} in ${clause.getText()}`);
+                return code;
+              }
+
+              if(i == segments.length - 1) {
+                addDiagnostic(clause, context, 'error', `Unsupported clause type ${sym.type} for label ${clause.getText()}`);
+                return code;
+              }
+
+              const seg = segments[i + 1];
+
+              if(seg.kind != 'identifier') {
+                addDiagnostic(clause, context, 'error', `Unsupported clause type segment ${seg.kind} for label ${clause.getText()}`);
+                return code;
+              }
+
+              if(!sym.children[seg.name]) {
+                addDiagnostic(clause, context, 'error', `Property ${seg.name} does not exist in ${sym.name} for label ${clause.getText()}`);
+                return code;
+              }
+
+              sym = sym.children[seg.name] as SymbolDefinition;
+              continue;
+            }
+
+            if(sym.type != (ESymbolType.pointer | ESymbolType.constant)) {
+              addDiagnostic(clause, context, 'error', `Unsupported clause type ${sym.type} for label ${clause.getText()}`);
+              return code;
+            }
           }
 
           code += `case ${sym.name}:\n`;
@@ -1682,7 +1723,7 @@ export class TsToConCompiler {
           return '';
         }
 
-        if(sym.type != ESymbolType.pointer) {
+        if(!(sym.type & ESymbolType.pointer) && !(sym.type & ESymbolType.constant)) {
           addDiagnostic(arg, context, 'error', `Variable ${vName} is not a pointer/label type`);
           return '';
         }
@@ -1699,21 +1740,49 @@ export class TsToConCompiler {
           addDiagnostic(arg, context, 'error', `Action/Move/AI label/pointer cannot be outside of a class property declaration`);
         }
 
-        if(segments.length > 2) {
-          addDiagnostic(arg, context, 'error', `Action/Move/AI label/pointer declaration must be in the class's root`);
-          return '';
-        }
-
-        const sym = context.symbolTable.get((segments[1] as SegmentIdentifier).name);
+        let sym = context.symbolTable.get((segments[1] as SegmentIdentifier).name);
 
         if(!sym) {
           addDiagnostic(arg, context, 'error', `Variable ${(segments[1] as SegmentIdentifier).name} not declared`);
           return '';
         }
 
-        if(sym.type != ESymbolType.pointer) {
-          addDiagnostic(arg, context, 'error', `Variable ${(segments[1] as SegmentIdentifier).name} is not a pointer/label type`);
-          return '';
+        for(let i = 1; i < segments.length; i++) {
+          const seg = segments[i];
+          if(seg.kind != 'property') {
+              addDiagnostic(arg, context, 'error', `Segment ${seg.kind} is not allowed for pointer/label type`);
+              return '';
+          }
+
+          if(sym.type & ESymbolType.object) {
+            if(!sym.children) {
+              addDiagnostic(arg, context, 'error', `Object ${sym.name} has no defined properties`);
+              return '';
+            }
+
+            if(i == segments.length - 1) {
+              addDiagnostic(arg, context, 'error', `Variable ${(segments[1] as SegmentIdentifier).name} is not a pointer/label type`);
+              return '';
+            }
+
+            if(segments[i + 1].kind != 'property') {
+              addDiagnostic(arg, context, 'error', `Segment ${segments[i + 1].kind} is not allowed for pointer/label type`);
+              return '';
+          }
+
+            if(!sym.children[(segments[i + 1] as SegmentProperty).name]) {
+              addDiagnostic(arg, context, 'error', `Property ${(segments[i + 1] as SegmentProperty).name} does not exist in ${sym.name} in ${arg.getText()}`);
+              return '';
+            }
+
+            sym = sym.children[(segments[i + 1] as SegmentProperty).name] as SymbolDefinition;
+            continue;
+          }
+
+          if(sym.type != (ESymbolType.pointer | ESymbolType.constant)) {
+            addDiagnostic(arg, context, 'error', `Variable ${sym.name} is not a pointer/label type`);
+            return '';
+          }
         }
 
         return sym.name;
@@ -2565,10 +2634,19 @@ set rb ra
           }
         }
 
+        if(assignment && sym.readonly) {
+          addDiagnostic(expr, context, 'error', `Tried to assign to a read-only property ${sym.name} in ${expr.getText()}`);
+          return '';
+        }
+
         if (assignment)
           code += `setarray flat[ri] ra\n`;
         else
           code += `set ra flat[ri]\n`;
+
+        if(sym.type & ESymbolType.pointer && sym.type & ESymbolType.constant)
+          code = sym.name;
+
         return code;
       }
     }
@@ -2628,7 +2706,7 @@ set rb ra
 
           sym = sym as SymbolDefinition;
 
-          const seg = segments[obj.kind == 'this' || (sym && sym.native_pointer_index) ? 1 : 2];
+          let seg = segments[obj.kind == 'this' || (sym && sym.native_pointer_index) ? 1 : 2] as SegmentProperty;
           let op = '';
 
           if (sym && sym.native_pointer) {
@@ -2639,21 +2717,26 @@ set rb ra
           }
 
           if (seg.kind == 'property') {
-            if (obj.name == 'this' && context.curClass) {
-              if (context.curClass.num_elements == 0) {
+            if (obj.kind == 'this' && (context.curClass || context.symbolTable.has(seg.name))) {
+              if (context.curClass && context.curClass.num_elements == 0) {
                 addDiagnostic(expr, context, 'error', `Class ${context.curClass.name} has no properties`);
                 return '';
               }
 
-              if (!Object.keys(context.curClass.children).find(e => e == seg.name)) {
+              if (context.curClass && !Object.keys(context.curClass.children).find(e => e == seg.name)) {
                 addDiagnostic(expr, context, 'error', `Undefined property ${seg.name} in class ${context.curClass.name}`);
                 return '';
               }
 
-              let pSym = context.curClass.children[seg.name] as SymbolDefinition;
+              let pSym = (context.curClass
+                ? context.curClass.children[seg.name]
+                : context.symbolTable.get(seg.name)) as SymbolDefinition;
 
-              if (pSym.offset != 0)
+              if (pSym.offset != 0) {
+                if(pSym.global)
+                  code += `set ri 0\n`;
                 code += `add ri ${pSym.offset}\n`;
+              }
 
               for (let i = 2; i < segments.length; i++) {
                 const s = segments[i];
@@ -2698,7 +2781,7 @@ set rb ra
                   return code + (assignment ? `setarray flat[ri] ra\n` : `set ra flat[ri]\n`);
 
                 if (!Object.keys(pSym.children).find(e => e == s.name)) {
-                  addDiagnostic(expr, context, 'error', `Undefined property ${s.name} in class ${context.curClass.name}`);
+                  addDiagnostic(expr, context, 'error', `Undefined property ${s.name} in obj/class ${pSym.name} in ${expr.getText()}`);
                   return '';
                 }
 
@@ -2708,6 +2791,11 @@ set rb ra
 
                 if (pSym.offset != 0)
                   code += `add ri ${pSym.offset}\n`;
+              }
+
+              if(assignment && pSym.readonly) {
+                addDiagnostic(expr, context, 'error', `Tried to assign to a read-only property ${pSym.name} in ${expr.getText()}`);
+                return '';
               }
 
               return code + (assignment ? `setarray flat[ri] ra\n` : `set ra flat[ri]\n`);
@@ -3125,6 +3213,7 @@ set rb ra
       ...context,
       localVarOffset: {},
       localVarCount: 0,
+      initCode: '',
       paramMap: {},
       currentActorPicnum: undefined,
       currentActorExtra: undefined,
@@ -3133,6 +3222,7 @@ set rb ra
       currentActorActions: [],
       currentActorMoves: [],
       currentActorAis: [],
+      currentActorLabels: {},
       mainBFunc: false,
       curFunc: undefined,
     };
@@ -3169,7 +3259,7 @@ set rb ra
     const properties = cd.getProperties();
 
     for (const p of properties) {
-      if(['TAction', 'IAction', 'TMove', 'IMove', 'TAi', 'IAi'].includes(p.getTypeNode().getText())) {
+      if(p.getTypeNode().getText().match(/\b(TAction|IAction|TMove|IMove|TAi|IAi)\b/)) {
         const init = p.getInitializerOrThrow();
 
         this.parseVarForActionsMovesAi(p, localCtx, className);
@@ -3296,6 +3386,8 @@ set rb ra
       code += this.visitMethodDeclaration(m, className, type != '' ? localCtx : context, type);
 
     context.curClass = null;
+
+    code = (localCtx.initCode != '' ? `appendevent EVENT_SETDEFAULTS\n${indent(localCtx.initCode, 1)}\n  add ri 1\n  set rbp ri\n  set rsp rbp\n  sub rsp 1\nendevent\n` : '') + code;
 
     return code;
   }
@@ -3469,37 +3561,56 @@ set rb ra
   }
 
     // strip generic parameters so we end up with IAction / TAction …
-    const baseType = typeTxt.replace(/<.*$/, "");         // TAction<'a'> → TAction
+    const baseType = typeTxt.slice(0, typeTxt.indexOf('<'));         // TAction<'a'> → TAction
 
     /* ── 2. grab initializer ─────────────────────────────────────── */
     const init = decl.getInitializer();
     if (!init) return;
 
+    let sym: SymbolDefinition;
+
     /* helper that forwards to the correct low-level parser */
     const handleObj = (obj: ObjectLiteralExpression, propName?: string) => {
+      let s: SymbolDefinition;
       switch (baseType) {
         case "IAction":
         case "TAction":
-          this.parseIActionLiteral(obj, ctx, propName, className);   // 🔑 NEW
+          s = this.parseIActionLiteral(obj, ctx, propName, className);
           break;
 
         case "IMove":
         case "TMove":
-          this.parseIMoveLiteral(obj, ctx, propName, className);     // 🔑 NEW
+          s = this.parseIMoveLiteral(obj, ctx, propName, className);
           break;
 
         case "IAi":
         case "TAi":
-          this.parseIAiLiteral(obj, ctx, propName, className);       // 🔑 NEW
+          s = this.parseIAiLiteral(obj, ctx, propName, className);
           break;
       }
+
+      return s;
     };
 
     /* ── 3. OLD SHAPES ───────────────────────────────────────────── */
     // 3 a) single object → IAction / IMove / IAi
     if (!isArray && !/^[T][A-Z]/.test(baseType)) {        // not TAction / …
-      if (init.isKind(SyntaxKind.ObjectLiteralExpression))
-        handleObj(init as ObjectLiteralExpression, decl.getName());
+      if (init.isKind(SyntaxKind.ObjectLiteralExpression)) {
+        const sym = handleObj(init as ObjectLiteralExpression, decl.getName());
+        sym.global = true;
+        ctx.symbolTable.set(decl.getName(), sym);
+        ctx.currentActorLabels[decl.getName()] = sym;
+        sym.offset = ctx.globalVarCount;
+        let code = `set ri ${ctx.globalVarCount + 1}\nsetarray flat[${ctx.globalVarCount}] ri\nsetarray flat[ri] ${sym.name}\n`;
+        ctx.globalVarCount += 2;
+        Object.entries(sym.children).forEach(e => {
+          e[1] = e[1] as SymbolDefinition;
+          code += `add ri 1\nsetarray flat[ri] ${e[1].literal}\n`
+          ctx.globalVarCount++;
+        });
+
+        ctx.initCode += code;
+      }
       return;
     }
 
@@ -3507,14 +3618,47 @@ set rb ra
     // top-level object whose *properties* are the actions / moves / ais
     if (!init.isKind(SyntaxKind.ObjectLiteralExpression)) return;
 
-    (init as ObjectLiteralExpression).getProperties().forEach(prop => {
+    ctx.symbolTable.set(decl.getName(), {
+      name: decl.getName(),
+      offset: ctx.globalVarCount,
+      global: true,
+      readonly: true,
+      type: ESymbolType.object | ESymbolType.pointer | ESymbolType.constant,
+      children: {}
+    });
+
+    let code = `set ri ${ctx.globalVarCount + 1}\nsetarray flat[${ctx.globalVarCount}] ri\n`;
+    ctx.globalVarCount++;
+
+    const obj = ctx.symbolTable.get(decl.getName()) as SymbolDefinition;
+    obj.num_elements = obj.size = 0;
+    let code2 = '';
+
+    (init as ObjectLiteralExpression).getProperties().forEach((prop, i, a) => {
       if (!prop.isKind(SyntaxKind.PropertyAssignment)) return;
 
       const propName = prop.getName().replace(/[`'"]/g, ""); // walk / run / …
       const value = prop.getInitializer();
-      if (value && value.isKind(SyntaxKind.ObjectLiteralExpression))
-        handleObj(value as ObjectLiteralExpression, propName);
+      if (value && value.isKind(SyntaxKind.ObjectLiteralExpression)) {
+        const sym = handleObj(value as ObjectLiteralExpression, propName);
+        ctx.currentActorLabels[propName] = sym;
+        obj.children[propName] = sym;
+        obj.num_elements++;
+        obj.size += sym.size;
+        sym.offset = i;
+        code += `set ri ${ctx.globalVarCount + a.length + i}\nsetarray flat[${ctx.globalVarCount}] ri\n`;
+        code2 += `add ri 1\nsetarray flat[ri] ${sym.name}\n`;
+        ctx.globalVarCount++;
+        Object.entries(sym.children).forEach(e => {
+          e[1] = e[1] as SymbolDefinition;
+          code2 += `add ri 1\nsetarray flat[ri] ${e[1].literal}\n`
+        });
+      }
     });
+
+    code += code2;
+    ctx.globalVarCount += obj.size;
+    ctx.initCode += code;
   }
 
   /* ------------------------------------------------------------------
@@ -3525,7 +3669,7 @@ set rb ra
     ctx: CompilerContext,
     fallbackName = "",
     className: string,
-  ) {
+  ): SymbolDefinition {
     let start = 0, length = 0, viewType = 0, inc = 0, delay = 0;
 
     obj.getProperties().forEach(p => {
@@ -3545,10 +3689,14 @@ set rb ra
       `action A_${className}_${fallbackName} ${start} ${length} ${viewType} ${inc} ${delay}`,
     );
 
-    ctx.symbolTable.set(fallbackName, {
+    return {
       name: `A_${className}_${fallbackName}`,
       offset: 0,
-      type: ESymbolType.pointer,
+      type: ESymbolType.object,
+      num_elements: 6,
+      size: 6,
+      readonly: true,
+      literal: `A_${className}_${fallbackName}`,
       children: {
         start: { name: 'start', type: ESymbolType.number, offset: 0, literal: start },
         length: { name: 'length', type: ESymbolType.number, offset: 0, literal: length },
@@ -3556,7 +3704,7 @@ set rb ra
         incValue: { name: 'incValue', type: ESymbolType.number, offset: 0, literal: inc },
         delay: { name: 'delay', type: ESymbolType.number, offset: 0, literal: delay },
       }
-    });
+    };
   }
 
   private parseIMoveLiteral(
@@ -3564,7 +3712,7 @@ set rb ra
     ctx: CompilerContext,
     fallbackName = "",                                // 🔑 NEW
     className: string,
-  ) {
+  ): SymbolDefinition {
     let hv = 0, vv = 0;
 
     obj.getProperties().forEach(p => {
@@ -3579,15 +3727,19 @@ set rb ra
 
     ctx.currentActorMoves.push(`move M_${className}_${fallbackName} ${fallbackName} ${hv} ${vv}`);
 
-    ctx.symbolTable.set(fallbackName, {
+    return {
       name: `M_${className}_${fallbackName}`,
       offset: 0,
-      type: ESymbolType.pointer,
+      type: ESymbolType.object,
+      num_elements: 3,
+      size: 3,
+      readonly: true,
+      literal: `M_${className}_${fallbackName}`,
       children: {
         horizontal_vel: { name: 'horizontal_vel', type: ESymbolType.number, offset: 0, literal: hv },
         vertical_vel: { name: 'vertical_vel', type: ESymbolType.number, offset: 0, literal: vv },
       }
-    });
+    };
   }
 
   private parseIAiLiteral(
@@ -3595,32 +3747,37 @@ set rb ra
     ctx: CompilerContext,
     fallbackName = "",                                // 🔑 NEW
     className: string,
-  ) {
-    let action = "", move = ""; let flags = 0;
+  ): SymbolDefinition {
+    let action: SymbolDefinition, move: SymbolDefinition; let flags = 0;
 
     obj.getProperties().forEach(p => {
       if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
       const key = p.getName();
       const valNode = p.getInitializerOrThrow();
+      const segments = this.unrollMemberExpression(valNode);
+      const seg: SegmentProperty = segments[segments.length - 1] as SegmentProperty;
       switch (key) {
-        case "action": action = valNode.getText().replace(/[`'"]/g, ""); break;
-        case "move": move = valNode.getText().replace(/[`'"]/g, ""); break;
+        case "action": action = ctx.currentActorLabels[seg.name]; break;
+        case "move": move = ctx.currentActorLabels[seg.name]; break;
         case "flags": flags = evalMoveFlags(valNode, ctx); break;
       }
     });
 
-    ctx.currentActorAis.push(`ai AI_${className}_${fallbackName} ${action} ${move} ${flags}`);
+    ctx.currentActorAis.push(`ai AI_${className}_${fallbackName} ${action.literal} ${move.literal} ${flags}`);
 
-    ctx.symbolTable.set(fallbackName, {
+    return {
       name: `AI_${className}_${fallbackName}`,
       offset: 0,
-      type: ESymbolType.pointer,
+      type: ESymbolType.object,
+      num_elements: 4,
+      size: 4,
+      readonly: true,
       children: {
-        action: ctx.symbolTable.get(action),
-        move: ctx.symbolTable.get(move),
+        action: action,
+        move: move,
         flags: { name: 'flags', type: ESymbolType.number, offset: 0, literal: flags },
       }
-    });
+    };
   }
 
 

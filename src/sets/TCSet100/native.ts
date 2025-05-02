@@ -92,30 +92,36 @@ export interface CON_NATIVE_VAR {
 export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     {
         name: 'PlayAction',
-        code: `action`,
+        code: (args: boolean) => {
+            return `state _PlayAction`;
+        },
         returns: false,
         return_type: null,
         arguments: [
-            CON_NATIVE_FLAGS.LABEL
+            CON_NATIVE_FLAGS.OBJECT
         ]
     },
     {
         name: 'Move',
-        code: `move`,
+        code: (args: boolean) => {
+            return `state _Move`;
+        },
         returns: false,
         return_type: null,
         arguments: [
-            CON_NATIVE_FLAGS.LABEL,
-            CON_NATIVE_FLAGS.CONSTANT
+            CON_NATIVE_FLAGS.OBJECT,
+            CON_NATIVE_FLAGS.VARIABLE
         ]
     },
     {
         name: 'StartAI',
-        code: `ai`,
+        code: (args: boolean) => {
+            return `state _StartAI`
+        },
         returns: false,
         return_type: null,
         arguments: [
-            CON_NATIVE_FLAGS.LABEL
+            CON_NATIVE_FLAGS.OBJECT
         ]
     },
     {
@@ -215,8 +221,21 @@ state popd
         name: 'Count',
         code: ((arg?: boolean) => {
             if(arg)
-                return `seta[].htg_t 0 r0 `;
-            return `geta[].htg_t 0 rb `;
+                return `seta[].htg_t 0 r0`;
+            return `geta[].htg_t 0 rb`;
+        }),
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
+        ]
+    },
+    {
+        name: 'ActionCount',
+        code: ((arg?: boolean) => {
+            if(arg)
+                return `seta[].htg_t 2 r0`;
+            return `geta[].htg_t 2 rb`;
         }),
         returns: true,
         return_type: 'variable',
@@ -1174,6 +1193,14 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
         type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'htg_t 4',
+        init: 0,
+    },
+    {
+        name: 'curFrame',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'htg_t 3',
         init: 0,
     },
     {

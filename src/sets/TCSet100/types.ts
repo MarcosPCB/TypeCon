@@ -847,8 +847,8 @@ declare global {
      * Use this interface to define AI configurations within the system.
      *
      * Available properties:
-     * @property {TLabel} action - The action for this AI.
-     * @property {TLabel} move - The move for the AI.
+     * @property {IAction} action - The action for this AI.
+     * @property {IMove} move - The move for the AI.
      * @property {EMoveFlags} flags - The move flags.
      *
      * @interface IAi
@@ -857,16 +857,16 @@ declare global {
         /**
          * The action for this AI.
          *
-         * @type {TLabel}
+         * @type {IAction}
          */
-        action: TLabel;
+        action: IAction;
 
         /**
          * The move for the AI.
          *
-         * @type {TLabel}
+         * @type {IMove}
          */
-        move: TLabel;
+        move: IMove;
 
         /**
          * The move flags.
@@ -1057,6 +1057,12 @@ declare global {
          * @returns - the current counter value
          */
         public Count(value?: number): CON_NATIVE<number>
+         /**
+         * Set or gets the native action counter for this actor
+         * @param value - Set the ation counter to this value. Leave blank to just retrieve the current action counter value
+         * @returns - the current action counter value
+         */
+         public ActionCount(value?: number): CON_NATIVE<number>
         /**
          * Gets the current distance from the ceiling
          * @returns - the distance right shifted to 8

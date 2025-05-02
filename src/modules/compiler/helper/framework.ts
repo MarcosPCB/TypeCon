@@ -1,5 +1,5 @@
 import { Dirent, readdirSync, readFileSync } from "fs";
-import { CompilerContext } from "../services/Compiler";
+import { CompilerContext, indent } from "../services/Compiler";
 import path from 'path';
 
 export enum ECompileOptions {
@@ -31,7 +31,8 @@ export class CONInit {
     constructor(public readonly stackSize = 1024,
         public readonly heapPageSize = 8,
         public readonly heapNumPages = 64,
-        public readonly precompiled = true) {
+        public readonly precompiled = true,
+    ) {
             this.heapSize = heapNumPages * heapPageSize;
             pageSize = heapPageSize;
 
@@ -41,48 +42,49 @@ export class CONInit {
 
             this.initCode = `
 //Used mainly for function parameters
-var r0 0 0
-var r1 0 0
-var r2 0 0
-var r3 0 0
-var r4 0 0
-var r5 0 0
-var r6 0 0
-var r7 0 0
-var r8 0 0
-var r9 0 0
-var r10 0 0
-var r11 0 0
-var r12 0 0
-var r13 0 0
-var r14 0 0
-var r15 0 0
-var r16 0 0
-var r17 0 0
-var r18 0 0
-var r19 0 0
-var r20 0 0
-var r21 0 0
-var r22 0 0
-var r23 0 0
+define REG_FLAGS 132096
+var r0 0 REG_FLAGS
+var r1 0 REG_FLAGS
+var r2 0 REG_FLAGS
+var r3 0 REG_FLAGS
+var r4 0 REG_FLAGS
+var r5 0 REG_FLAGS
+var r6 0 REG_FLAGS
+var r7 0 REG_FLAGS
+var r8 0 REG_FLAGS
+var r9 0 REG_FLAGS
+var r10 0 REG_FLAGS
+var r11 0 REG_FLAGS
+var r12 0 REG_FLAGS
+var r13 0 REG_FLAGS
+var r14 0 REG_FLAGS
+var r15 0 REG_FLAGS
+var r16 0 REG_FLAGS
+var r17 0 REG_FLAGS
+var r18 0 REG_FLAGS
+var r19 0 REG_FLAGS
+var r20 0 REG_FLAGS
+var r21 0 REG_FLAGS
+var r22 0 REG_FLAGS
+var r23 0 REG_FLAGS
 
 //Accumulator
-var ra 0 0
+var ra 0 REG_FLAGS
 
 //Base/return
-var rb 0 0
+var rb 0 REG_FLAGS
 
 //Counter
-var rc 0 0
+var rc 0 REG_FLAGS
 
 //Data
-var rd 0 0
+var rd 0 REG_FLAGS
 
 //Index
-var ri 0 0
+var ri 0 REG_FLAGS
 
 //Source index
-var rsi 0 0
+var rsi 0 REG_FLAGS
 
 //Flags register
 /*
@@ -92,19 +94,19 @@ var rsi 0 0
     8 - NULL return
     16 - string address
 */
-var rf 0 0
+var rf 0 REG_FLAGS
 
 //Segmentation register
-var rds ${stackSize} 0 //determines the start of the heap memory
+var rds ${stackSize} REG_FLAGS //determines the start of the heap memory
 
 //Base pointer and Stack pointer
-var rbp 0 0
-var rsp -1 0
+var rbp 0 REG_FLAGS
+var rsp -1 REG_FLAGS
 
 //Base pointer ans Stack pointer fro string memory
 define STRINGSTACK 1024 //This is where the stack begins - 1023 and 1022 are used as temporary holders for string operations
-var rsbp 1024 0
-var rssp 1023 0
+var rsbp 1024 REG_FLAGS
+var rssp 1023 REG_FLAGS
 
 //ASCII conversion table
 string 900  
@@ -232,10 +234,10 @@ array allocTable ${heapNumPages} 0
 array lookupHeap ${heapNumPages} 0
 
 //The current number of pages available
-var heaptables ${heapNumPages} 0
+var heaptables ${heapNumPages} REG_FLAGS
 
 //The current heap memory size
-var heapsize ${this.heapSize} 0 //heaptables * PAGE_SIZE
+var heapsize ${this.heapSize} REG_FLAGS //heaptables * PAGE_SIZE
 
 //For pushing the r0-12 registers
 array rstack 24 0
@@ -244,12 +246,12 @@ array rstack 24 0
 array flat ${stackSize + this.heapSize}
 `;
             this.initStates = `
-var _HEAPi 0 0
-var _HEAPj 0 0
-var _HEAPk 0 0
-var _HEAPl 0 0
-var _HEAP_request 0 0
-var _HEAP_pointer -1 0
+var _HEAPi 0 REG_FLAGS
+var _HEAPj 0 REG_FLAGS
+var _HEAPk 0 REG_FLAGS
+var _HEAPl 0 REG_FLAGS
+var _HEAP_request 0 REG_FLAGS
+var _HEAP_pointer -1 REG_FLAGS
 
 defstate pushrall
     add rsp 1
@@ -890,6 +892,49 @@ defstate _krand
     add randomseed 221297
     set rb randomseed
     abs rb
+ends
+
+defstate _PlayAction
+    seta[].htg_t 2 0
+    seta[].htg_t 3 0
+    seta[].htg_t 4 r0
+ends
+
+defstate _Move
+    seta[].hitag r1
+    seta[].htg_t 1 r0
+ends
+
+defstate _StartAI
+    set ri flat[r0]
+    seta[].htg_t 5 flat[ri]
+    add ri 1
+    seta[].htg_t 4 flat[ri]
+    add ri 1
+    seta[].htg_t 1 flat[ri]
+    add ri 1
+    seta[].hitag flat[ri]
+    seta[].htg_t 2 0
+    seta[].htg_t 3 0
+    set ra 32
+    or ra 32768
+    geta[].htflags rb
+    and rb ra
+    set ra 0
+    ifn rb 0
+    set ra 1
+    set rb 0
+    ifg sprite[].extra 0
+        set rb 1
+    or ra rb
+    geta[].hitag rb
+    and rb 8
+    ifg ra 0
+    ifn rb 0 {
+        state krand
+        and rb 2047
+        seta[].ang rb
+    }  
 ends
 `
         }
