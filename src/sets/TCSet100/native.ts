@@ -286,6 +286,13 @@ state popd
         arguments: []
     },
     {
+        name: 'IsAwayFromWall',
+        code: 'set rb 0 \nifawayfromwall set rb 1',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
         name: 'IsRandom',
         code: `
 state _krand

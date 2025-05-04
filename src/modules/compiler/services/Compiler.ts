@@ -850,7 +850,7 @@ export class TsToConCompiler {
         if (context.isInLoop)
           code += `exit\n`;
         else
-          code += `break\n`;
+          code += `state popc\nstate popd\nstate popb\njump rb\n`; //switch statements
 
         return code;
       }
@@ -1127,85 +1127,32 @@ export class TsToConCompiler {
     return code;
   }
 
+  // Switches are turned into IF conditions
   private visitSwitchStatement(sw: SwitchStatement, context: CompilerContext) {
     let code = (this.options.lineDetail ? `/*${sw.getText()}*/\n` : '') + this.visitExpression(sw.getExpression(), context);
     const cases = sw.getCaseBlock().getClauses();
-    code += `switch ra\n`;
+    code += `set rd ra\nset rc -1\n`;
+    code += `getcurraddress ra\nifn rc -1 {\n`
+    code += indent(`state pushb\n`, 1);
     for (let i = 0; i < cases.length; i++) {
+      code += indent(`add rc 1\n`, 1);
       const c = cases[i];
       if (c.isKind(SyntaxKind.DefaultClause))
-        code += `default:\n`;
+        code += (this.options.lineDetail ? `/*${c.getText()}*/\n` : '') + indent(`ifge rc ${cases.length} {\n`, 1);
       else {
         const clause = c.getExpression();
-        if (clause.isKind(SyntaxKind.CallExpression) && clause.getExpression().getText() == 'Label') {
-          const innerArgs = (clause as CallExpression).getArguments();
-          if (innerArgs.length > 0) {
-            code += `case ${innerArgs[0].getText().replace(/[`'"]/g, "")}:\n`;
-          } else {
-            addDiagnostic(clause, context, "error", "Label() called without an argument");
-            return code;
-          }
-        } else if (clause.isKind(SyntaxKind.NumericLiteral))
-          code += `case ${(clause as NumericLiteral).getText()}:\n`
-        else if (clause.isKind(SyntaxKind.PropertyAccessExpression)) {
-          const segments = this.unrollMemberExpression(clause);
-
-          if(segments[0].kind != 'this') {
-            addDiagnostic(clause, context, 'error', `Unsupported clause for label ${clause.getText()}`);
-            return code;
-          }
-
-          let sym = context.symbolTable.get((segments[1] as SegmentProperty).name);
-
-          if(!sym) {
-            addDiagnostic(clause, context, 'error', `Variable/property not declared ${clause.getText()}`);
-            return code;
-          };
-
-          for(let i = 1; i < segments.length; i++) {
-            if(sym.type & ESymbolType.object) {
-              if(!sym.children) {
-                addDiagnostic(clause, context, 'error', `No defined objects for ${sym.name} in ${clause.getText()}`);
-                return code;
-              }
-
-              if(i == segments.length - 1) {
-                addDiagnostic(clause, context, 'error', `Unsupported clause type ${sym.type} for label ${clause.getText()}`);
-                return code;
-              }
-
-              const seg = segments[i + 1];
-
-              if(seg.kind != 'identifier') {
-                addDiagnostic(clause, context, 'error', `Unsupported clause type segment ${seg.kind} for label ${clause.getText()}`);
-                return code;
-              }
-
-              if(!sym.children[seg.name]) {
-                addDiagnostic(clause, context, 'error', `Property ${seg.name} does not exist in ${sym.name} for label ${clause.getText()}`);
-                return code;
-              }
-
-              sym = sym.children[seg.name] as SymbolDefinition;
-              continue;
-            }
-
-            if(sym.type != (ESymbolType.pointer | ESymbolType.constant)) {
-              addDiagnostic(clause, context, 'error', `Unsupported clause type ${sym.type} for label ${clause.getText()}`);
-              return code;
-            }
-          }
-
-          code += `case ${sym.name}:\n`;
-        } else {
-          addDiagnostic(clause, context, "error", `Unsupported case clause: ${clause.getText()}`);
-          return code;
-        }
+        
+        code += (this.options.lineDetail ? `/*${c.getText()}*/\n` : '') + indent(`state pushd\nstate pushc\n`, 1)
+        code += indent(this.visitExpression(clause, context), 1);
+        code += indent(`state popc\nstate popd\nife ra rd {\n`, 1);
+        code += indent(`state pushd\nstate pushc\n`, 2);
       }
 
-      c.getStatements().forEach(e => code += this.visitStatement(e, context));
+      c.getStatements().forEach(e => code += indent(this.visitStatement(e, context), 2));
+      code += indent(`}\nstate popc\nstate popd\n`, 1)
     }
-    code += `endswitch\n`;
+
+    code += `}\ngetcurraddress rb\nife rc -1 {\n  set rc 0\n  jump ra\n}\nelse\n  state popb\n`;
 
     return code;
   }
@@ -3698,11 +3645,12 @@ set rb ra
       readonly: true,
       literal: `A_${className}_${fallbackName}`,
       children: {
-        start: { name: 'start', type: ESymbolType.number, offset: 0, literal: start },
-        length: { name: 'length', type: ESymbolType.number, offset: 0, literal: length },
-        viewType: { name: 'viewType', type: ESymbolType.number, offset: 0, literal: viewType },
-        incValue: { name: 'incValue', type: ESymbolType.number, offset: 0, literal: inc },
-        delay: { name: 'delay', type: ESymbolType.number, offset: 0, literal: delay },
+        loc: { name: 'loca', type: ESymbolType.number, offset: 0, literal: `A_${className}_${fallbackName}` },
+        start: { name: 'start', type: ESymbolType.number, offset: 1, literal: start },
+        length: { name: 'length', type: ESymbolType.number, offset: 2, literal: length },
+        viewType: { name: 'viewType', type: ESymbolType.number, offset: 3, literal: viewType },
+        incValue: { name: 'incValue', type: ESymbolType.number, offset: 4, literal: inc },
+        delay: { name: 'delay', type: ESymbolType.number, offset: 5, literal: delay },
       }
     };
   }
@@ -3736,8 +3684,9 @@ set rb ra
       readonly: true,
       literal: `M_${className}_${fallbackName}`,
       children: {
-        horizontal_vel: { name: 'horizontal_vel', type: ESymbolType.number, offset: 0, literal: hv },
-        vertical_vel: { name: 'vertical_vel', type: ESymbolType.number, offset: 0, literal: vv },
+        loc: { name: 'loca', type: ESymbolType.number, offset: 0, literal: `M_${className}_${fallbackName}` },
+        horizontal_vel: { name: 'horizontal_vel', type: ESymbolType.number, offset: 1, literal: hv },
+        vertical_vel: { name: 'vertical_vel', type: ESymbolType.number, offset: 2, literal: vv },
       }
     };
   }
@@ -3773,9 +3722,10 @@ set rb ra
       size: 4,
       readonly: true,
       children: {
+        loc: { name: 'loc', type: ESymbolType.number, offset: 0, literal: `AI_${className}_${fallbackName}` },
         action: action,
         move: move,
-        flags: { name: 'flags', type: ESymbolType.number, offset: 0, literal: flags },
+        flags: { name: 'flags', type: ESymbolType.number, offset: 3, literal: flags },
       }
     };
   }
