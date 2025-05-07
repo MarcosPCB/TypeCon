@@ -131,7 +131,7 @@ class AssaultTrooper extends CActor {
 
     Hide() {
         switch (this.curAction) {
-            case this.actions.aReappear:
+            case this.actions.aReappear.loc:
                 if (this.curActionFrame >= 2) {
                     this.Sound(DN3D.ESound.TELEPORTER, false);
                     this.StartAI(this.ais.aiShooting);
@@ -142,7 +142,7 @@ class AssaultTrooper extends CActor {
                 }
                 break;
 
-            case this.actions.aWalking:
+            case this.actions.aWalking.loc:
                 if (this.playerDist < 2448 && this.playerDist > 1024) {
                     if (this.CeilingDist() < 48 || IsPlayerState(EPlayerStates.facing))
                         this.Stop();
@@ -155,7 +155,7 @@ class AssaultTrooper extends CActor {
                 }
                 break;
 
-            case this.actions.aHide:
+            case this.actions.aHide.loc:
                 if (this.curActionFrame >= 2) {
                     this.Spawn(DN3D.ENames.TRANSPORTERSTAR);
                     this.Sound(DN3D.ESound.TELEPORTER, false);
@@ -167,7 +167,7 @@ class AssaultTrooper extends CActor {
                 }
                 break;
 
-            case this.actions.aAboutHide:
+            case this.actions.aAboutHide.loc:
                 if (this.curActionFrame >= 2) {
                     this.PlayAction(this.actions.aHide);
                     this.CStat(0);
@@ -210,7 +210,7 @@ class AssaultTrooper extends CActor {
         }
 
         if(this.CanSee()) {
-            if(this.curMove == this.moves.runVels && this.playerDist < 1596)
+            if(this.curMove == this.moves.runVels.loc && this.playerDist < 1596)
                 this.StartAI(this.ais.aiDucking);
 
             if(IsPlayerState(EPlayerStates.higher)) {
@@ -255,18 +255,18 @@ class AssaultTrooper extends CActor {
     }
 
     Duck() {
-        if(this.curAction == this.actions.aDuck) {
+        if(this.curAction == this.actions.aDuck.loc) {
             if(this.curActionFrame >= 8) {
                 if(IsPlayerState(EPlayerStates.alive)) {
                     if(this.IsRandom(8))
                         this.PlayAction(this.actions.aDuckShoot)
-                } else if(this.curMove == this.moves.dontGetUp)
+                } else if(this.curMove == this.moves.dontGetUp.loc)
                     this.Stop();
                 else this.StartAI(this.ais.aiSeekPlayer)
             }
-        } else if(this.curAction == this.actions.aDuckShoot) {
+        } else if(this.curAction == this.actions.aDuckShoot.loc) {
             if(this.Count() >= 64) {
-                if(this.curMove == this.moves.dontGetUp)
+                if(this.curMove == this.moves.dontGetUp.loc)
                     this.Count(0);
                 else {
                     if(this.playerDist < 1100)
@@ -359,8 +359,15 @@ class AssaultTrooper extends CActor {
         }
     }
 
+    ExplodeBody() {
+        this.Sound(DN3D.ESound.SQUISHED, false);
+        DN3D.states.TroopBodyJibs();
+        DN3D.states.StandardJibs();
+        this.KillIt();
+    }
+
     CheckHit() {
-        if(this.curAction == this.actions.aSuffering) {
+        if(this.curAction == this.actions.aSuffering.loc) {
             this.StopSound(DN3D.ESound.LIZARD_BEG);
             this.Sound(DN3D.ESound.PRED_DYING, false);
             this.CStat(0);
@@ -390,12 +397,9 @@ class AssaultTrooper extends CActor {
 
             this.AddKills(1);
 
-            if(this.weaponHit == DN3D.ENames.RPG || this.weaponHit == DN3D.ENames.RADIUSEXPLOSION) {
-                this.Sound(DN3D.ESound.SQUISHED, false);
-                DN3D.states.TroopBodyJibs();
-                DN3D.states.StandardJibs();
-                this.KillIt();
-            } else {
+            if(this.weaponHit == DN3D.ENames.RPG || this.weaponHit == DN3D.ENames.RADIUSEXPLOSION)
+                this.ExplodeBody();
+            else {
                 this.Sound(DN3D.ESound.PRED_DYING, false);
                 if(this.IsRandom(32) && this.FloorDist() <= 32) {
                     this.Sound(DN3D.ESound.LIZARD_BEG, false);
@@ -422,11 +426,296 @@ class AssaultTrooper extends CActor {
         }
     }
 
-    Troop() {
-        this.Fall();
+    Jetpack() {
+        if(this.curAction == this.actions.aJetpackIll.loc) {
+            if(this.CanSee() && this.ActionCount() >= 2) {
+                this.ResetAction();
+                this.Sound(DN3D.ESound.PRED_ATTACK, false);
+                this.Shoot(DN3D.ENames.FIRELASER);
+            }
+
+            if(IsPlayerState(EPlayerStates.higher) || this.IsInWater())
+                this.StartAI(this.ais.aiJetpack);
+            else if(this.Count() >= 26 && this.FloorDist() < 26)
+                this.StartAI(this.ais.aiSeekPlayer);
+        } else if(this.Count() >= 48 && this.CanSee())
+            ActionAndMove(this.actions.aJetpackIll, this.moves.jetpackIllVels, EMoveFlags.seekplayer);
+    }
+
+    Suffering() {
+        if(this.ActionCount() < 2)
+            return;
+
+        if(this.IsRandom(16))
+            this.Spawn(DN3D.ENames.WATERDRIP);
+
+        if(this.ActionCount() < 14)
+            return;
+
+        this.StopSound(DN3D.ESound.LIZARD_BEG);
+        this.CStat(0);
+        this.extra = 0;
+        this.PlayAction(this.actions.aSufferDead);
+        this.Stop();
+    }
+
+    Shrunk() {
+        if(this.Count() >= DN3D.shrunkDoneCount)
+            this.StartAI(this.ais.aiSeekPlayer);
+        else if(this.Count() >= DN3D.shrunkCount)
+            this.SizeTo(48, 40, 1, 1);
+        else
+            DN3D.states.GenericShrunkCode();
+    }
+
+    CheckPal() {
+        if(this.curAI == null) {
+            if(this.pal == 21)
+                this.extra *= 2;
+        }
     }
 
     Main() {
+        this.CheckPal();
+        this.Fall();
 
+        if(this.IsInWater() && this.IsRandom(1))
+            this.Spawn(DN3D.ENames.WATERBUBBLE);
+
+        switch(this.curAction) {
+            case this.actions.aStand.loc:
+                if(this.IsRandom(192))
+                    this.StartAI(this.ais.aiShooting);
+                else
+                    this.StartAI(this.ais.aiSeekPlayer);
+                break;
+
+            case this.actions.aFrozen.loc:
+                if(this.Count() >= DN3D.thawTime) {
+                    this.StartAI(this.ais.aiSeekEnemy);
+                    this.GetLastPal();
+                } else if(this.Count() >= DN3D.frozenDripTime && this.ActionCount() >= 26) {
+                    this.Spawn(DN3D.ENames.WATERDRIP);
+                    this.ResetAction();
+                }
+
+                if(this.HitByWeapon()) {
+                    if(this.weaponHit == DN3D.ENames.FREEZEBLAST) {
+                        this.extra = 0;
+                        this.Stop();
+                    }
+
+                    this.AddKills(1);
+                    if(this.IsRandom(84))
+                        this.Spawn(DN3D.ENames.BLOODPOOL);
+
+                    this.Glass(30);
+                    this.Sound(DN3D.ESound.GLASS_BREAKING, false);
+                    this.KillIt();
+                }
+
+                if(this.playerDist <= DN3D.frozenQuickKickDist && IsPlayerState(EPlayerStates.facing))
+                    this.PlayerKick();
+
+                break;
+
+            case this.actions.aPlayDead.loc:
+                if(this.HitByWeapon()) {
+                    if(this.weaponHit == DN3D.ENames.RADIUSEXPLOSION)
+                        this.ExplodeBody();
+                    this.Stop();
+                } else
+                    DN3D.states.CheckSquished();
+
+                if(this.Count() >= DN3D.playDeadTime) {
+                    this.AddKills(-1);
+                    this.Sound(DN3D.ESound.PRED_ROAM, false, true);
+                    this.CStat(EStats.BLOCK | EStats.BLOCK_HITSCAN);
+                    this.extra = 1;
+                    this.StartAI(this.ais.aiShooting);
+                } else if(IsPlayerState(EPlayerStates.facing))
+                    this.Count(0);
+
+                this.Stop();
+                break;
+
+            case this.actions.aDead.loc:
+                this.extra = 0;
+
+                if(IsRespawnActive() && this.Count() >= DN3D.respawnActorTime) {
+                    this.Spawn(DN3D.ENames.TRANSPORTERSTAR);
+                    this.CStat(EStats.BLOCK | EStats.BLOCK_HITSCAN);
+                    this.extra = this.defaultStrength;
+                    this.StartAI(this.ais.aiSeekPlayer);
+                }
+
+                if(this.HitByWeapon()) {
+                    if(this.weaponHit == DN3D.ENames.RADIUSEXPLOSION)
+                        this.ExplodeBody();
+                    this.Stop();
+                } else
+                    DN3D.states.CheckSquished();
+
+                break;
+
+            case this.actions.aSufferDead.loc:
+                if(this.ActionCount() >= 2) {
+                    if(this.IsRandom(64)) {
+                        this.Count(0);
+                        this.PlayAction(this.actions.aPlayDead);
+                    } else {
+                        this.Sound(DN3D.ESound.PRED_DYING, false, true);
+                        this.PlayAction(this.actions.aDead);
+                    }
+                }
+
+                break;
+
+            case this.actions.aDying.loc:
+                this.Dying();
+                this.Stop();
+                break;
+
+            case this.actions.aSuffering.loc:
+                this.Suffering();
+                if(this.HitByWeapon())
+                    this.CheckHit();
+
+                break;
+
+            case this.actions.aFlintch.loc:
+                if(this.ActionCount() >= 4)
+                    this.StartAI(this.ais.aiSeekEnemy);
+
+                break;
+
+            default:
+                switch(this.curAI) {
+                    case this.ais.aiSeekPlayer.loc:
+                    case this.ais.aiSeekEnemy.loc:
+                    case this.ais.aiDodge.loc:
+                        this.Seek();
+                        break;
+
+                    case this.ais.aiJetpack.loc:
+                        this.Jetpack();
+                        if(!this.IsInWater())
+                            this.Sound(DN3D.ESound.DUKE_JETPACK_IDLE, false, true);
+                        break;
+
+                    case this.ais.aiShooting.loc:
+                        this.Shooting();
+                        break;
+
+                    case this.ais.aiFleeing.loc:
+                    case this.ais.aiFleeingBack.loc:
+                        this.Flee();
+                        break;
+
+                    case this.ais.aiDucking.loc:
+                        this.Duck();
+                        break;
+
+                    case this.ais.aiShrunk.loc:
+                        this.Shrunk();
+                        break;
+
+                    case this.ais.aiGrow.loc:
+                        DN3D.states.GenericGrowCode();
+                        break;
+                    
+                    case this.ais.aiHide.loc:
+                        this.Hide();
+                        this.Stop();
+                        break;
+                }
+                break;
+        }
+
+        if(this.HitByWeapon())
+            this.CheckHit();
+        else
+            DN3D.states.CheckSquished();
+    }
+
+    protected Variations: OnVariation<AssaultTrooper> = {
+        OnJetpack(this: AssaultTrooper) {
+            this.CheckPal();
+            this.StartAI(this.ais.aiJetpack);
+            this.picnum = this.defaultPicnum;
+            return {
+                picnum: DN3D.ENames.LIZTROOPJETPACK,
+                extra: this.defaultStrength
+            }
+        },
+        OnDuck(this: AssaultTrooper) {
+            this.CheckPal();
+            this.StartAI(this.ais.aiDucking);
+            this.picnum = this.defaultPicnum;
+            if(this.GapDist() < 48)
+                this.Move(this.moves.dontGetUp, 0);
+            return {
+                picnum: DN3D.ENames.LIZTROOPDUCKING,
+                extra: this.defaultStrength
+            }
+        },
+        OnShoot(this: AssaultTrooper) {
+            this.CheckPal();
+            this.StartAI(this.ais.aiShooting);
+            this.picnum = this.defaultPicnum;
+            return {
+                picnum: DN3D.ENames.LIZTROOPSHOOT,
+                extra: this.defaultStrength,
+                first_action: this.actions.aStand
+            }
+        },
+        onStayput(this: AssaultTrooper) {
+            this.flags |= ESpriteFlags.BADGUYSTAYPUT;
+            this.CheckPal();
+            this.StartAI(this.ais.aiSeekPlayer);
+            this.picnum = this.defaultPicnum;
+            return {
+                picnum: DN3D.ENames.LIZTROOPSTAYPUT,
+                extra: this.defaultStrength,
+                first_action: this.actions.aStayStand
+            }
+        },
+        OnRunning(this: AssaultTrooper) {
+            this.CheckPal();
+            this.StartAI(this.ais.aiSeekPlayer);
+            this.picnum = this.defaultPicnum;
+            return {
+                picnum: DN3D.ENames.LIZTROOPRUNNING,
+                extra: this.defaultStrength,
+                first_action: this.actions.aStand 
+            }
+        },
+        OnToilet(this: AssaultTrooper) {
+            if(this.Count() >= 24) {
+                this.Sound(DN3D.ESound.FLUSH_TOILET, false);
+                this.Operate(EOperateFlags.doors);
+                this.StartAI(this.ais.aiSeekPlayer);
+                this.picnum = this.defaultPicnum;
+            } else if(this.Count() < 2)
+                this.CheckPal();
+
+            return {
+                picnum: DN3D.ENames.LIZTROOPONTOILET,
+                extra: this.defaultStrength
+            }
+        },
+        JustSit(this: AssaultTrooper) {
+            if(this.Count() >= 30) {
+                this.Operate(EOperateFlags.doors);
+                this.StartAI(this.ais.aiSeekPlayer);
+                this.picnum = this.defaultPicnum;
+            } else if(this.Count() < 2)
+                this.CheckPal();
+
+            return {
+                picnum: DN3D.ENames.LIZTROOPJUSTSIT,
+                extra: this.defaultStrength
+            }
+        }
     }
 }

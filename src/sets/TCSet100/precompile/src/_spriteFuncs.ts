@@ -18,9 +18,9 @@ namespace _spriteFuncs {
     }
 
     function ActionAndMove(action: IAction, move: IMove, flags: number): void {
-        sprites[thisActor].curAction = action;
+        sprites[thisActor].curAction = action.loc;
         sprites[thisActor].curActionFrame = 0;
-        sprites[thisActor].curMove = move;
+        sprites[thisActor].curMove = move.loc;
         sprites[thisActor].tags.hitag = flags;
     }
 }

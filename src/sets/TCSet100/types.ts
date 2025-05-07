@@ -752,6 +752,10 @@ declare global {
      */
     export interface IAction {
         /**
+         * The byte-code pointer
+         */
+        loc?: number;
+        /**
          * The start point from the actor's tile number.
          *
          * @type {number}
@@ -819,6 +823,10 @@ declare global {
      */
     export interface IMove {
         /**
+         * The byte-code pointer
+         */
+        loc?: number;
+        /**
          * Horizontal velocity.
          *
          * @type {number}
@@ -854,6 +862,10 @@ declare global {
      * @interface IAi
      */
     export interface IAi {
+        /**
+         * The byte-code pointer
+         */
+        loc?: number;
         /**
          * The action for this AI.
          *
@@ -942,11 +954,35 @@ declare global {
     /** Contains the current ID of the current actor */
     export const thisActor: CON_NATIVE_GAMEVAR<'THISACTOR', number>;
 
+    /**
+     * Plays an action and starts a movement without chaning the AI
+     * @param action The action to be played
+     * @param move The movement to be started
+     * @param flags The movement flags
+     */
     export function ActionAndMove(action: IAction | null, move: IMove | null, flags: number): CON_NATIVE_STATE<'__spriteFuncs_ActionAndMove'>;
+    /**
+     * Conditioning check if it's in sprite can see the player, if can shoot the player and checks it's distance
+     * @param distance the distance to be checked
+     * @param greater if wanted to check if the distance is greater or less equal
+     */
     export function CanSeeShootInDist(distance: number, greater: boolean): CON_NATIVE_STATE<'__spriteFuncs_CanSeeShootInDist'>;
+
+    /**
+     * Checks if a certain respawn mode is enabled.
+     * Monsters (hard-coded actors and useractors check RESPAWN_MONSTERS,
+     * inventory items (hard-coded) check RESPAWN_INVENTORY and everything else checks RESPAWN_ITEMS.
+     * By default, inventory items always respawn in multiplayer - cooperative or dukematch (no spawn) - although
+     * they are assigned as such through hard-coded actors.
+     * If you desire to add your own Inventory icon, you will need to check RESPAWN_INVENTORY gamevar
+     * instead of using ifrespawn command.
+     */
+    export function IsRespawnActive(): CON_NATIVE<boolean>;
 
     /** @class for actor declaration. Use this as extension to declare your custom actors. */
     export class CActor {
+        public defaultStrength: CON_NATIVE<number>;
+        public defaultPicnum: CON_NATIVE<number>;
         /** The current tile number of this actor */
         public picnum: CON_NATIVE<number>;
         /** Not accessible outside the constructor */
@@ -966,11 +1002,11 @@ declare global {
         public playerDist: CON_NATIVE<number>;
 
         /** The current action pointer */
-        public curAction: CON_NATIVE<IAction>;
+        public curAction: CON_NATIVE<number>;
         /** The current action frame */
         public curActionFrame: CON_NATIVE<number>;
         /** The current move pointer */
-        public curMove: CON_NATIVE<IMove>;
+        public curMove: CON_NATIVE<number>;
         /** The current velocity */
         public vel: CON_NATIVE<number>;
         /** The current actor's angle */
@@ -978,7 +1014,7 @@ declare global {
         /** The current position */
         public pos: CON_NATIVE<vec3>;
         /** The current AI pointer */
-        public curAI: CON_NATIVE<IAi>;
+        public curAI: CON_NATIVE<number>;
         /** The current palette used by the actor */
         public pal: CON_NATIVE<number>;
         /** The current sector object */
@@ -1310,6 +1346,8 @@ declare global {
          * Per-actor events. See {@link OnEvent}
          */
         protected Events: OnEvent;
+
+        protected Variations: OnVariation<CActor | any>;
     }
 
     /** Other sprites in the game world */
@@ -1324,6 +1362,14 @@ declare global {
             this: CEvent & CActor
         ) => void | number;
     }>;
+
+    export type OnVariation<C extends CActor> = Record<string, {
+        (this: C): {
+            picnum: number,
+            extra: number,
+            first_action?: IAction
+        };
+    }>
 
     /** @class for declaring events. Use this as extension. */
     export class CEvent {

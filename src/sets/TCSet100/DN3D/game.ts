@@ -1,4 +1,4 @@
-import { CON_NATIVE } from '../native';
+import { CON_CONSTANT, CON_NATIVE } from '../native';
 
 //@typecon
 
@@ -7,6 +7,16 @@ namespace nocompile {}
 namespace statedecl {}
 
 export namespace DN3D {
+
+    export const shrunkDoneCount: CON_CONSTANT<304> = 304;
+    export const shrunkCount: CON_CONSTANT<270> = 270; 
+    export const thawTime: CON_CONSTANT<138> = 138;
+    export const frozenDripTime: CON_CONSTANT<90> = 90;
+    export const playDeadTime: CON_CONSTANT<120> = 120;
+    export const frozenQuickKickDist: CON_CONSTANT<980> = 980;
+    export const respawnActorTime: CON_CONSTANT<768> = 768;
+    export const respawnItemTime: CON_CONSTANT<768> = 768;
+
     /**
      * Enumeration that maps every classic Build‑engine “tile number” macro to its
      * numeric value. Values come from the original `#define`s used by the EDuke32
@@ -1240,6 +1250,7 @@ export namespace DN3D {
         function LizBodyJibs(): CON_NATIVE<'liz_body_jibs'>;
         function StandardJibs(): CON_NATIVE<'standard_pjibs'>;
         function RF(): CON_NATIVE<'rf'>;
+        function CheckSquished(): CON_NATIVE<'checksquished'>;
     }
 }
 

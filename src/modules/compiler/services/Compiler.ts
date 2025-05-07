@@ -2493,7 +2493,7 @@ set rb ra
 
           if (seg.kind == 'property') {
             if (!sym.children) {
-              addDiagnostic(expr, context, "error", `Object property ${seg.name} is not defined: ${expr.getText()}`);
+              addDiagnostic(expr, context, "error", `Object ${sym.name} properties are not defined: ${expr.getText()}`);
               return "set ra 0\n";
             }
 
@@ -2948,7 +2948,24 @@ set rb ra
         case 'IAction':
         case 'IMove':
         case 'IAi':
-          t = ESymbolType.pointer;
+          t = ESymbolType.object;
+          children = type.getText() == 'IAction' ? {
+            loc: { name: 'loc', offset: 0, type: ESymbolType.number },
+            start: { name: 'start', offset: 0, type: ESymbolType.number },
+            length: { name: 'length', offset: 0, type: ESymbolType.number },
+            viewType: { name: 'viewType', offset: 0, type: ESymbolType.number },
+            incValue: { name: 'incValue', offset: 0, type: ESymbolType.number },
+            delay: { name: 'delay', offset: 0, type: ESymbolType.number },
+          } : (type.getText() == 'IMove' ? {
+            loc: { name: 'loc', offset: 0, type: ESymbolType.number },
+            horizontal_vel: { name: 'horizontal_vel', offset: 0, type: ESymbolType.number },
+            vertical_vel: { name: 'vertical_vel', offset: 0, type: ESymbolType.number },
+          } : {
+            loc: { name: 'loc', offset: 0, type: ESymbolType.number },
+            action: { name: 'action', offset: 0, type: ESymbolType.number },
+            move: { name: 'move', offset: 0, type: ESymbolType.number },
+            flags: { name: 'flags', offset: 0, type: ESymbolType.number },
+          });
           break;
 
         case 'constant':
