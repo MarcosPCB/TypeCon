@@ -110,6 +110,9 @@ var rds ${stackSize} REG_FLAGS //determines the start of the heap memory
 var rbp 0 REG_FLAGS
 var rsp -1 REG_FLAGS
 
+//Block base pointer
+var rbbp 0 REG_FLAGS
+
 //Base pointer ans Stack pointer fro string memory
 define STRINGSTACK 1024 //This is where the stack begins - 1023 and 1022 are used as temporary holders for string operations
 var rsbp 1024 REG_FLAGS

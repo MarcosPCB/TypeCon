@@ -1563,7 +1563,7 @@ export class TsToConCompiler {
       context.usingRD = useRD;
       if(useRD)
         code += `state popd\n`;
-      
+
       return code;
     }
 
@@ -2080,10 +2080,7 @@ set rb ra
     }
 
     if(fnNameRaw == 'Stop' && fnObj == 'this') {
-      if(context.hasLocalVars)
-        code += `sub rbp 1\nset rsp rbp\n\nstate pop\nset rbp ra\n`
-      else if(context.mainBFunc)
-        code += `sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\n`
+      code += `  set rbp rbbp\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\n`
       code += `break\n`
       return code;
     }
@@ -3600,7 +3597,7 @@ set rb ra
                 }
               });
 
-              codeV += `${this.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\nuseractor ${localCtx.currentActorIsEnemy ? 1 : 0} ${picnum} ${extra} ${action}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+              codeV += `${this.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\nuseractor ${localCtx.currentActorIsEnemy ? 1 : 0} ${picnum} ${extra} ${action}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
 
               stmts.forEach(s => {
                 if(!s.isKind(SyntaxKind.ReturnStatement))
@@ -4084,7 +4081,7 @@ set rb ra
       const firstAction = localCtx.currentActorFirstAction || "0";
       const enemy = localCtx.currentActorIsEnemy ? 1 : 0;
       localCtx.mainBFunc = true;
-      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
       md.getParameters().forEach((p, i) => {
         const type = p.getType();
         let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
@@ -4143,7 +4140,7 @@ set rb ra
       code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nenda \n\n`;
       return code;
     } else if (type == 'CEvent' && (mName.toLowerCase() == 'append' || mName.toLowerCase() == 'prepend')) {
-      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\n${mName.toLowerCase() == 'append' ? 'append' : 'on'}event EVENT_${context.currentEventName}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\n${mName.toLowerCase() == 'append' ? 'append' : 'on'}event EVENT_${context.currentEventName}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
       const body = md.getBody() as any;
       if (body) {
         body.getStatements().forEach(st => {
