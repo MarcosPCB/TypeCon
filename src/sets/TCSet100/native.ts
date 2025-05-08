@@ -185,27 +185,7 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     {
         name: 'SizeTo',
         code: ((arg?: boolean) => {
-            return `geta[].xrepeat ra
-geta[].yrepeat rb
-ifl ra r0 {
-add ra r2
-seta[].xrepeat ra
-}
-ifl rb r1 {
-set ra rb
-gettiledata[sprite[].picnum].ysize rd
-mul ra rd
-add ra 8
-shiftr ra 2
-state pushd
-geta[].htfloorz rd
-sub rd sprite[].htceilingz
-ifl ra rd {
-add rb r3
-seta[].yrepeat rb
-}
-state popd
-} \n`;
+            return `state _SizeTo`;
         }),
         returns: false,
         return_type: null,
@@ -294,16 +274,9 @@ state popd
     },
     {
         name: 'IsRandom',
-        code: `
-state _krand
-shiftr rb 8
-set ra rb
-sub r0 255
-abs r0
-set rb 0
-ifge ra r0
-  set rb 1
-`,
+        code: (args: boolean) => {
+            return `state _IsRandom\n`
+        },
         returns: true,
         return_type: 'variable',
         arguments: [
@@ -312,35 +285,42 @@ ifge ra r0
     },
     {
         name: 'IsInWater',
-        code: 'set rb 1 \nifinwater set rb 0 ',
+        code: 'set rb 0\nifinwater set rb 1',
         returns: true,
         return_type: 'variable',
         arguments: []
     },
     {
         name: 'IsOnWater',
-        code: 'set rb 1 \nifonwater set rb 0 ',
+        code: 'set rb 0\nifonwater set rb 1',
         returns: true,
         return_type: 'variable',
         arguments: []
     },
     {
         name: 'IsOutside',
-        code: 'set rb 1 \nifoutside set rb 0 ',
+        code: 'set rb 0\nifoutside set rb 1',
         returns: true,
         return_type: 'variable',
         arguments: []
     },
     {
         name: 'IsInSpace',
-        code: 'set rb 1 \nifinspace set rb 0 ',
+        code: 'set rb 0 \nifinspace set rb 1',
         returns: true,
         return_type: 'variable',
         arguments: []
     },
     {
         name: 'IsInOuterSpace',
-        code: 'set rb 1 \nifinouterspace set rb 0 ',
+        code: 'set rb 0 \nifinouterspace set rb 1',
+        returns: true,
+        return_type: 'variable',
+        arguments: []
+    },
+    {
+        name: 'IsRespawnActive',
+        code: 'set rb 0 \nifrespawn set rb 1',
         returns: true,
         return_type: 'variable',
         arguments: []
@@ -422,7 +402,22 @@ ifge ra r0
     {
         name: 'Spawn',
         code: (args?: boolean, fn?: string) => {
-            return `set rd RETURN \nifge r2 1 eqspawn r0 \nelse espawn r0 \nset r0 RETURN\nset ra RETURN\nstate push\nstate pushd\n${fn}state pop\nset rb ra\nstate popd\nset RETURN rd`;
+            return `
+set rd RETURN
+ifge r2 1
+  eqspawn r0
+else
+    espawn r0
+set r0 RETURN
+set ra RETURN
+state push
+state pushd
+${fn}
+state popd
+state pop
+set rb ra
+set RETURN rd
+`;
         },
         returns: true,
         return_type: 'variable',
@@ -468,22 +463,7 @@ else
     {
         name: 'Operate',
         code: (args: boolean) => {
-            return `
-ife r0 0
-  operate
-ifand r0 1
-  operate
-ifand r0 2
-  operateactivators r1 r2
-ifand r0 4
-  operatemasterswitches r1
-ifand r0 8
-  operaterespawns r1
-ifand r0 16
-  operatesectors r3 r4
-ifand r0 32
-  activatebysector r3 r4
-`
+            return `state _Operate`
         },
         returns: false,
         return_type: null,
@@ -501,7 +481,29 @@ ifand r0 32
     {
         name: 'Shoot',
         code: (args?: boolean, fn?: string) => {
-            return `set rd RETURN \nife r2 0 eshoot r0 \nelse { \nife r4 1 { \neshoot r0 \ngeta[RETURN].zvel ra \nadd ra r3 \nseta[RETURN].zvel ra \n } else ezshoot r3 r0\n }\nset r0 RETURN\nset ra RETURN\nstate push\nstate pushd\n${fn}state pop\nset rb ra\nstate popd\nset RETURN rd `;
+            return `
+set rd RETURN
+ife r2 0
+  eshoot r0
+else {
+  ife r4 1 {
+    eshoot r0
+    geta[RETURN].zvel ra
+    add ra r3
+    seta[RETURN].zvel ra
+  } else
+   ezshoot r3 r0
+}
+set r0 RETURN
+set ra RETURN
+state push
+state pushd
+${fn}
+state popd
+state pop
+set rb ra
+set RETURN rd
+`;
         },
         returns: true,
         return_type: 'variable',

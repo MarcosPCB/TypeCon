@@ -1365,8 +1365,8 @@ declare global {
 
     export type OnVariation<C extends CActor> = Record<string, {
         (this: C): {
-            picnum: number,
-            extra: number,
+            picnum: constant,
+            extra: constant,
             first_action?: IAction
         };
     }>

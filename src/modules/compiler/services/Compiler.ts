@@ -64,7 +64,7 @@ import {
 
 import { EventList, TEvents } from "../types";
 
-import { evalMoveFlags, findNativeFunction, findNativeVar_Sprite } from "../helper/helpers";
+import { evalLiteral, findNativeFunction, findNativeVar_Sprite } from "../helper/helpers";
 import { compiledFiles, ECompileOptions, ICompiledFile, pageSize } from "../helper/framework";
 
 
@@ -233,6 +233,10 @@ export interface CompilerContext {
   mainBFunc: boolean;
 
   initCode: string;
+
+  inSwitch: boolean;
+  hasLocalVars: boolean;
+  usingRD: boolean;
 }
 
 export interface CompileResult {
@@ -348,6 +352,9 @@ export class TsToConCompiler {
       mainBFunc: false,
 
       initCode: '',
+      inSwitch: false,
+      hasLocalVars: false,
+      usingRD: false
     };
 
     const outputLines: string[] = [];
@@ -598,7 +605,7 @@ export class TsToConCompiler {
 
     if (!typeNode || !typeNode.isKind(SyntaxKind.TypeLiteral)) {
       if (typeNode) {
-        if (['OnEvent', 'constant', 'TLabel', 'CON_NATIVE', 'CON_NATIVE_POINTER', 'quote', 'TAction', 'TMove', 'TAi'].includes(aliasName))
+        if (['OnEvent', 'constant', 'TLabel', 'CON_NATIVE', 'CON_NATIVE_POINTER', 'quote', 'TAction', 'TMove', 'TAi', 'OnVariation'].includes(aliasName))
           return;
 
         if (typeNode.getKind() == SyntaxKind.NumberKeyword
@@ -850,7 +857,7 @@ export class TsToConCompiler {
         if (context.isInLoop)
           code += `exit\n`;
         else
-          code += `state popc\nstate popd\nstate popb\njump rb\n`; //switch statements
+          code += `state popb\njump rb\n`; //switch statements
 
         return code;
       }
@@ -936,6 +943,12 @@ export class TsToConCompiler {
 
     context.isInLoop = true;
 
+    const useRD = context.usingRD;
+    context.usingRD = true;
+
+    if(useRD)
+      code += `state pushd\n`;
+
     const pattern = this.parseIfCondition(ws.getExpression(), context);
     const right = typeof pattern.right === 'number' ? `set rd ${pattern.right}\n`
       : (this.visitExpression(pattern.right, context) + `set rd ra\n`);
@@ -956,6 +969,11 @@ export class TsToConCompiler {
     code += '}\n';
 
     context.isInLoop = false;
+
+    context.usingRD = useRD;
+
+    if(useRD)
+      code += `state popd\n`;
 
     return code;
   }
@@ -1069,8 +1087,7 @@ export class TsToConCompiler {
     let code = "";
     const expr = rs.getExpression();
     if (expr) {
-      code += this.visitExpression(expr, context);
-      code += `set rb ra\n`;
+      code += this.visitExpression(expr, context, 'rb');
     } else {
       code += `set rb 0\n`;
     }
@@ -1102,10 +1119,14 @@ export class TsToConCompiler {
       return code;
     }
 
+    const useRD = context.usingRD;
+    context.usingRD = true;
+
     // Evaluate left side normally
     code += this.options.lineDetail ? `// 'if' left side\n` : '';
-    code += this.visitExpression(pattern.left, context);
-    code += `set rd ra\nstate pushd\n`;
+    code += this.visitExpression(pattern.left, context, 'rd');
+    if(useRD)
+      code += `state pushd\n`;
 
     // For the right side, check if it's a number or an Expression.
     code += this.options.lineDetail ? `// 'if' right side\n` : '';
@@ -1115,7 +1136,10 @@ export class TsToConCompiler {
       code += this.visitExpression(pattern.right, context);
     }
 
-    code += `state popd\n${pattern.op} rd ra {\n`;
+    if(useRD)
+      code += `state popd\n`
+
+    code += `${pattern.op} rd ra {\n`;
     code += indent(thenPart, 1);
     if (elsePart != '') {
       code += `} else {\n`;
@@ -1124,6 +1148,8 @@ export class TsToConCompiler {
 
     code += `}\n`;
 
+    context.usingRD = useRD;
+
     return code;
   }
 
@@ -1131,28 +1157,44 @@ export class TsToConCompiler {
   private visitSwitchStatement(sw: SwitchStatement, context: CompilerContext) {
     let code = (this.options.lineDetail ? `/*${sw.getText()}*/\n` : '') + this.visitExpression(sw.getExpression(), context);
     const cases = sw.getCaseBlock().getClauses();
-    code += `set rd ra\nset rc -1\n`;
-    code += `getcurraddress ra\nifn rc -1 {\n`
+    const pastSwitch = context.inSwitch;
+    if(context.usingRD)
+      code += `state pushd\n`;
+
+    if(pastSwitch)
+      code += `set rd rsw\nstate pushd\nset rd rswc\nstate pushd\n`;
+    else
+      context.inSwitch = true;
+
+    code += `set rsw ra\nset rswc -1\n`;
+    code += `getcurraddress ra\nifn rswc -1 {\n`
     code += indent(`state pushb\n`, 1);
     for (let i = 0; i < cases.length; i++) {
-      code += indent(`add rc 1\n`, 1);
+      code += indent(`add rswc 1\n`, 1);
       const c = cases[i];
       if (c.isKind(SyntaxKind.DefaultClause))
-        code += (this.options.lineDetail ? `/*${c.getText()}*/\n` : '') + indent(`ifge rc ${cases.length} {\n`, 1);
+        code += (this.options.lineDetail ? `/*${c.getText()}*/\n` : '') + indent(`ifge rswc ${cases.length} {\n`, 1);
       else {
         const clause = c.getExpression();
         
-        code += (this.options.lineDetail ? `/*${c.getText()}*/\n` : '') + indent(`state pushd\nstate pushc\n`, 1)
+        code += this.options.lineDetail ? `/*${c.getText()}*/\n` : '';/* + indent(`state pushd\nstate pushc\n`, 1)*/
         code += indent(this.visitExpression(clause, context), 1);
-        code += indent(`state popc\nstate popd\nife ra rd {\n`, 1);
-        code += indent(`state pushd\nstate pushc\n`, 2);
+        code += indent(`ife ra rsw {\n`, 1);
       }
 
       c.getStatements().forEach(e => code += indent(this.visitStatement(e, context), 2));
-      code += indent(`}\nstate popc\nstate popd\n`, 1)
+      code += `}\n`;
     }
 
-    code += `}\ngetcurraddress rb\nife rc -1 {\n  set rc 0\n  jump ra\n}\nelse\n  state popb\n`;
+    code += `}\ngetcurraddress rb\nife rswc -1 {\n  set rswc 0\n  jump ra\n}\nelse\n  state popb\n`;
+
+    if(pastSwitch)
+      code += `state popd\nset rswc rd\nstate popd\nset rsw rd\n`;
+    else
+      context.inSwitch = false;
+
+    if(context.usingRD)
+      code += `state popd\n`;
 
     return code;
   }
@@ -1243,41 +1285,41 @@ export class TsToConCompiler {
   /******************************************************************************
    * Expression
    *****************************************************************************/
-  private visitExpression(expr: Expression, context: CompilerContext): string {
+  private visitExpression(expr: Expression, context: CompilerContext, reg = 'ra'): string {
     let code = ''//`/* ${expr.getText()} */\n`;
     context.curExpr = ESymbolType.number;
     context.curSymRet = null;
 
     switch (expr.getKind()) {
       case SyntaxKind.BinaryExpression:
-        return code + this.visitBinaryExpression(expr as BinaryExpression, context);
+        return code + this.visitBinaryExpression(expr as BinaryExpression, context, reg);
 
       case SyntaxKind.CallExpression:
-        return code + this.visitCallExpression(expr as CallExpression, context);
+        return code + this.visitCallExpression(expr as CallExpression, context, reg);
 
       case SyntaxKind.ObjectLiteralExpression:
         return code + this.visitObjectLiteral(expr as ObjectLiteralExpression, context);
 
       case SyntaxKind.PropertyAccessExpression:
       case SyntaxKind.ElementAccessExpression:
-        return code + this.visitMemberExpression(expr, context);
+        return code + this.visitMemberExpression(expr, context, undefined, false, reg);
 
       case SyntaxKind.PrefixUnaryExpression:
       case SyntaxKind.PostfixUnaryExpression:
-        return code + this.visitUnaryExpression(expr, context);
+        return code + this.visitUnaryExpression(expr, context, reg);
 
       case SyntaxKind.ParenthesizedExpression:
-        return code + this.visitParenthesizedExpression(expr as ParenthesizedExpression, context);
+        return code + this.visitParenthesizedExpression(expr as ParenthesizedExpression, context, reg);
 
       case SyntaxKind.ArrowFunction:
         return code + this.visitArrowFunctionExpression(expr as ArrowFunction, context);
 
       default:
-        return code + this.visitLeafOrLiteral(expr, context);
+        return code + this.visitLeafOrLiteral(expr, context, undefined, reg);
     }
   }
 
-  private visitLeafOrLiteral(expr: Expression, context: CompilerContext): string {
+  private visitLeafOrLiteral(expr: Expression, context: CompilerContext, direct?: boolean, reg = 'ra'): string {
     let code = "";
     context.curSymRet = null;
 
@@ -1289,7 +1331,7 @@ export class TsToConCompiler {
       if (name in context.paramMap) {
         const i = context.paramMap[name];
 
-        code += `set ra r${i.offset}\n`;
+        code += `set ${reg} r${i.offset}\n`;
 
         if (i.type & ESymbolType.string)
           context.curExpr = ESymbolType.string
@@ -1314,13 +1356,24 @@ export class TsToConCompiler {
 
       if (context.symbolTable.has(name)) {
         const off = context.symbolTable.get(name) as SymbolDefinition;
-        if(off.type == ESymbolType.pointer)
-          return code + `set ra ${off.name}\n`;
+        if(off.type & ESymbolType.constant) {
+          if(direct)
+            return String(off.literal);
+
+          return code + `set ${reg} ${off.literal}`;
+        }
+
+        if(off.type == ESymbolType.pointer) {
+          if(direct)
+            return String(off.literal);
+
+          return code + `set ${reg} ${off.name}\n`;
+        }
 
         if (off.type & ESymbolType.native)
-          return code + `set ra ${off.CON_code}\n`;
+          return code + `set ${reg} ${off.CON_code}\n`;
 
-        code += `set ri rbp\nadd ri ${off.offset}\nset ra flat[ri]\n`;
+        code += `set ri rbp\nadd ri ${off.offset}\nset ${reg} flat[ri]\n`;
         if (off.type & ESymbolType.string)
           context.curExpr = ESymbolType.string;
 
@@ -1329,6 +1382,10 @@ export class TsToConCompiler {
 
         if (off.heap)
           code += `set rf 1\n`;
+
+        if(direct)
+          return String(off.literal);
+
         return code;
       }
 
@@ -1336,17 +1393,20 @@ export class TsToConCompiler {
 
       if(native) {
         if(native.var_type == CON_NATIVE_TYPE.variable) {
-          return code + `set ra ${native.code}\n`;
+          return code + `set ${reg} ${native.code}\n`;
         }
       }
       // fallback => unknown
       addDiagnostic(expr, context, "error", `Unknown identifier: ${name}`);
-      code += `set ra 0\n`;
+      code += `set ${reg} 0\n`;
       return code;
     }
 
     if (expr.isKind(SyntaxKind.NumericLiteral)) {
-      code += `set ra ${expr.getText()}\n`;
+      code += `set ${reg} ${expr.getText()}\n`;
+      if(direct)
+        return expr.getText()
+      ;
       return code;
     }
     if (expr.isKind(SyntaxKind.StringLiteral) || expr.isKind(SyntaxKind.NoSubstitutionTemplateLiteral)) {
@@ -1356,16 +1416,17 @@ export class TsToConCompiler {
       for (let i = 0; i < text.length; i++)
         code += `add ri 1\nsetarray flat[ri] ${text.charCodeAt(i)}\n`;
 
-      code += `set ra rb\n`;
+      if(reg != 'rb')
+        code += `set ${reg} rb\n`;
       context.curExpr = ESymbolType.string;
       return code;
     }
     if (expr.isKind(SyntaxKind.TrueKeyword)) {
-      code += `set ra 1\n`;
+      code += `set ${reg} 1\n`;
       return code;
     }
     if (expr.isKind(SyntaxKind.FalseKeyword)) {
-      code += `set ra 0\n`;
+      code += `set ${reg} 0\n`;
       return code;
     }
 
@@ -1375,7 +1436,7 @@ export class TsToConCompiler {
       context.curExpr |= ESymbolType.array;
 
       if (args.length == 0) {
-        code += `state pushr2\nset r0 ${pageSize}\nset r1 ${EHeapType.array}\nstate alloc\nstate popr2\nset ra rb\n`;
+        code += `state pushr2\nset r0 ${pageSize}\nset r1 ${EHeapType.array}\nstate alloc\nstate popr2\n${reg != 'rb' ? `set ${reg} rb\n` : ''}`;
         return code;
       }
 
@@ -1383,7 +1444,7 @@ export class TsToConCompiler {
         code += this.visitExpression(a as Expression, context);
       });
 
-      return code + `state pushr2\nset r0 ra\nset r1 ${EHeapType.array}\nstate alloc\nstate popr2\nset ra rb\n`;
+      return code + `state pushr2\nset r0 ra\nset r1 ${EHeapType.array}\nstate alloc\nstate popr2\n${reg != 'rb' ? `set ${reg} rb\n` : ''}`;
     }
 
     if (expr.isKind(SyntaxKind.AsExpression)) {
@@ -1401,7 +1462,7 @@ export class TsToConCompiler {
 
     if (expr.isKind(SyntaxKind.NullKeyword)) {
       context.curExpr = ESymbolType.null;
-      return code + 'set ra 0\n';
+      return code + `set ${reg} 0\n`;
     }
 
     if (expr.isKind(SyntaxKind.NewExpression)) {
@@ -1414,7 +1475,7 @@ export class TsToConCompiler {
       }
 
       if (sym.type != ESymbolType.class) {
-        addDiagnostic(expr, context, 'error', `Onyl classes are supported by a New Expression: ${expr.getText()}`);
+        addDiagnostic(expr, context, 'error', `Only classes are supported by a New Expression: ${expr.getText()}`);
         return '';
       }
 
@@ -1433,11 +1494,11 @@ export class TsToConCompiler {
     }
 
     addDiagnostic(expr, context, "error", `Unhandled leaf/literal: ${expr.getKindName()} - ${expr.getText()}`);
-    code += `set ra 0\n`;
+    code += `set ${reg} 0\n`;
     return code;
   }
 
-  private visitBinaryExpression(bin: BinaryExpression, context: CompilerContext): string {
+  private visitBinaryExpression(bin: BinaryExpression, context: CompilerContext, reg = 'ra'): string {
     const left = bin.getLeft();
     const right = bin.getRight();
     const opText = bin.getOperatorToken().getText();
@@ -1451,53 +1512,63 @@ export class TsToConCompiler {
       return code;
     }*/
 
+    const useRD = context.usingRD;
+    context.usingRD = true;
+
+    if(useRD)
+      code += `state pushd\n`;
+
     if (opText.includes("=") && !['>=', '<='].includes(opText)) {
       // assignment
-      code += this.visitExpression(right, context);
+      code += this.visitExpression(right, context, 'rd');
 
       if (opText != '=') {
-        code += `set rd ra\n`
+        //code += `set rd ra\n`
         code += this.visitExpression(left, context);
         switch (opText) {
           case '+=':
-            code += `add rd ra\nset ra rd\n`;
+            code += `add rd ra\n`;
             break;
           case "-=":
-            code += `sub rd ra\nset ra rd\n`;
+            code += `sub rd ra\n`;
             break;
           case "*=":
-            code += `mul rd ra\nset ra rd\n`;
+            code += `mul rd ra\n`;
             break;
           case "/=":
-            code += `div rd ra\nset ra rd\n`;
+            code += `div rd ra\n`;
             break;
           case "%=":
-            code += `mod rd ra\nset ra rd\n`;
+            code += `mod rd ra\n`;
             break;
           case "&=":
-            code += `and rd ra\nset ra rd\n`;
+            code += `and rd ra\n`;
             break;
           case "|=":
-            code += `or rd ra\nset ra rd\n`;
+            code += `or rd ra\n`;
             break;
           case "^=":
-            code += `xor rd ra\nset ra rd\n`;
+            code += `xor rd ra\n`;
             break;
           case ">>=":
-            code += `shiftr rd ra\nset ra rd\n`;
+            code += `shiftr rd ra\n`;
             break;
           case "<<=":
-            code += `shiftl rd ra\nset ra rd\n`;
+            code += `shiftl rd ra\n`;
             break;
         }
       }
 
-      code += this.storeLeftSideOfAssignment(left, context);
+      code += this.storeLeftSideOfAssignment(left, context, 'rd');
+      context.usingRD = useRD;
+      if(useRD)
+        code += `state popd\n`;
+      
       return code;
     }
 
     code += `// left side\n`
-    code += this.visitExpression(left, context);
+    code += this.visitExpression(left, context, 'rd');
     const isQuote = Boolean(context.curExpr & ESymbolType.quote);
     const isString = Boolean(context.curExpr & ESymbolType.string);
 
@@ -1506,11 +1577,9 @@ export class TsToConCompiler {
       code += `set ra 0\n`;
     }
 
-    code += `set rd ra\n`;
+    //code += `set rd ra\n`;
     code += this.options.lineDetail ? `// right side\n` : '';
-    code += `state pushd\n`;
     code += this.visitExpression(right, context);
-    code += `state popd\n`;
 
     if (isQuote && !(context.curExpr & ESymbolType.quote))
       code += `qputs 1022 %d\nqsprintf 1023 1022 ra\nset ra 1022\n`;
@@ -1528,79 +1597,103 @@ export class TsToConCompiler {
         else if (isString)
           code += `state pushr2\nset r0 rd\nset r1 ra\nstate _stringConcat\nstate popr2\nset ra rb\n`;
         else
-          code += `add rd ra\nset ra rd\n`;
+          code += `add rd ra\n`;
         break;
       case "-":
-        code += `sub rd ra\nset ra rd\n`;
+        code += `sub rd ra\n`;
         break;
       case "*":
-        code += `mul rd ra\nset ra rd\n`;
+        code += `mul rd ra\n`;
         break;
       case "/":
-        code += `div rd ra\nset ra rd\n`;
+        code += `div rd ra\n`;
         break;
       case "%":
-        code += `mod rd ra\nset ra rd\n`;
+        code += `mod rd ra\n`;
         break;
       case "&":
-        code += `and rd ra\nset ra rd\n`;
+        code += `and rd ra\n`;
         break;
       case "|":
-        code += `or rd ra\nset ra rd\n`;
+        code += `or rd ra\n`;
         break;
       case "^":
-        code += `xor rd ra\nset ra rd\n`;
+        code += `xor rd ra\n`;
         break;
       case ">>":
-        code += `shiftr rd ra\nset ra rd\n`;
+        code += `shiftr rd ra\n`;
         break;
       case "<<":
-        code += `shiftl rd ra\nset ra rd\n`;
+        code += `shiftl rd ra\n`;
         break;
       case "<":
-        code += `set rb 0\nifl rd ra\n  set rb 1\nset ra rb\n`;
+        code += `set rb 0\nifl rd ra\n  set rb 1\n`;
         break;
       case "<=":
-        code += `set rb 0\nifle rd ra\n  set rb 1\nset ra rb\n`;
+        code += `set rb 0\nifle rd ra\n  set rb 1\n`;
         break;
       case ">":
-        code += `set rb 0\nifg rd ra\n  set rb 1\nset ra rb\n`;
+        code += `set rb 0\nifg rd ra\n  set rb 1\n`;
         break;
       case ">=":
-        code += `set rb 0\nifge rd ra\n  set rb 1\nset ra rb\n`;
+        code += `set rb 0\nifge rd ra\n  set rb 1\n`;
         break;
       case "==":
-        code += `set rb 0\nife rd ra\n  set rb 1\nset ra rb\n`;
+        code += `set rb 0\nife rd ra\n  set rb 1\n`;
         break;
       case "!=":
-        code += `set rb 0\nifn rd ra\n  set rb 1\nset ra rb\n`;
+        code += `set rb 0\nifn rd ra\n  set rb 1\n`;
         break;
       case "&&":
-        code += `set rb 0\nifand rd ra\n  set rb 1\nset ra rb\n`;
+        code += `set rb 0\nifand rd ra\n  set rb 1\n`;
         break;
       case "||":
-        code += `set rb 0\nifeither rd ra\n  set rb 1\nset ra rb\n`;
+        code += `set rb 0\nifeither rd ra\n  set rb 1\n`;
         break;
       default:
         addDiagnostic(bin, context, "error", `Unhandled operator "${opText}"`);
         code += `set ra 0\n`;
     }
 
+    switch(opText) {
+      case "+":
+      case "-":
+      case "*":
+      case "/":
+      case "%":
+      case "&":
+      case "|":
+      case "^":
+        if(reg != 'rd')
+          code += `set ${reg} rd\n`;
+        break;
+      
+      default:
+        if(reg != 'rb')
+          code += `set ${reg} rb\n`;
+        break;
+    }
+
+    context.usingRD = useRD;
+
+    if(useRD)
+      code += `state popd\n`;
+
     return code;
   }
 
-  private storeLeftSideOfAssignment(left: Expression, context: CompilerContext): string {
+  private storeLeftSideOfAssignment(left: Expression, context: CompilerContext, reg = 'ra'): string {
     let code = "";
     if (left.isKind(SyntaxKind.Identifier)) {
       const name = left.getText();
       if (name in context.paramMap) {
         addDiagnostic(left, context, "warning", `Assigning to param: ${name} => set rX ra`);
-        code += `set r${context.paramMap[name].offset} ra\n`;
+        code += `set r${context.paramMap[name].offset} ${reg}\n`;
         return code;
       }
       if (name in context.localVarOffset) {
         const off = context.localVarOffset[name];
-        code += `set ri rbp\nsub ri ${off}\nsetarray flat[ri] ra\n`;
+        code += `set ri rbp\nsub ri ${off}\nsetarray flat[ri] ${reg}\n`;
         return code;
       }
 
@@ -1608,12 +1701,12 @@ export class TsToConCompiler {
 
       if (v) {
         if (v.type & ESymbolType.native)
-          return code + `set ${v.CON_code} ra\n`;
+          return code + `set ${v.CON_code} ${reg}\n`;
 
         if (v.type & ESymbolType.quote)
-          return code + `set ri rsbp\nadd ri ${v.offset}\nqstrcpy ri ra\n`;
+          return code + `set ri rsbp\nadd ri ${v.offset}\nqstrcpy ri ${reg}\n`;
 
-        code += `set ri rbp\nadd ri ${v.offset}\nsetarray flat[ri] ra\n`;
+        code += `set ri rbp\nadd ri ${v.offset}\nsetarray flat[ri] ${reg}\n`;
         return code;
       }
 
@@ -1621,21 +1714,21 @@ export class TsToConCompiler {
 
       if(native) {
         if(native.var_type == CON_NATIVE_TYPE.variable)
-          return code + `set ${native.code} ra\n`;
+          return code + `set ${native.code} ${reg}\n`;
       }
 
       addDiagnostic(left, context, "error", `Assignment to unknown identifier: ${name}`);
-      code += `set ra 0\n`;
+      code += `set ${reg} 0\n`;
       return code;
     }
 
     if (left.isKind(SyntaxKind.PropertyAccessExpression) || left.isKind(SyntaxKind.ElementAccessExpression)) {
-      code += this.visitMemberExpression(left, context, true);
+      code += `set ra ${reg}\n` + this.visitMemberExpression(left, context, true, false);
       return code;
     }
 
     addDiagnostic(left, context, "error", `Unsupported left side: ${left.getText()}`);
-    code += `set ra 0\n`;
+    code += `set ${reg} 0\n`;
     return code;
   }
 
@@ -1757,7 +1850,21 @@ export class TsToConCompiler {
         }
       }
 
-      addDiagnostic(arg, context, "error", "Expected a numeric constant for a native CONSTANT argument");
+      if(arg.isKind(SyntaxKind.PrefixUnaryExpression)) {
+        const exp = arg.getOperand();
+        const op = arg.getOperatorToken();
+
+        if(!exp.isKind(SyntaxKind.NumericLiteral)) {
+          addDiagnostic(arg, context, "error", `Expected a numeric constant for a native CONSTANT argument. Received: ${arg.getKindName()}`);
+          return '';
+        }
+
+        if(op == SyntaxKind.MinusToken) {
+          return `-${exp.getLiteralValue()}`;
+        }
+      }
+
+      addDiagnostic(arg, context, "error", `Expected a numeric constant for a native CONSTANT argument. Received: ${arg.getKindName()}`);
       return "";
     }
     // For VARIABLE arguments, we assume that the value is loaded into a register already.
@@ -1765,7 +1872,7 @@ export class TsToConCompiler {
   }
 
 
-  private visitCallExpression(call: CallExpression, context: CompilerContext): string {
+  private visitCallExpression(call: CallExpression, context: CompilerContext, reg = 'ra'): string {
     let code = this.options.lineDetail ? `/* ${call.getText()} */\n` : '';
     const args = call.getArguments();
     let resolvedLiterals: (string | null)[] = [];
@@ -1844,8 +1951,8 @@ export class TsToConCompiler {
               context.localVarCount += totalArgs;
             }
             for (let i = 0; i < args.length; i++) {
-              code += this.visitExpression(args[i] as Expression, context);
-              code += `set r${i} ra\n`;
+              code += this.visitExpression(args[i] as Expression, context, `r${i}`);
+              //code += `set r${i} ra\n`;
               resolvedLiterals.push(null);
             }
 
@@ -1926,15 +2033,15 @@ export class TsToConCompiler {
               context.localVarCount += totalArgs;
             }
             for (let i = 0; i < args.length; i++) {
-              code += this.visitExpression(args[i] as Expression, context);
-              code += `set r${i} ra\n`;
+              code += this.visitExpression(args[i] as Expression, context, `r${i}`);
+              //code += `set r${i} ra\n`;
               resolvedLiterals.push(null);
             }
 
             if (isClass)
               code += `set ri rbp\nadd ri ${objSym.offset}\nset r${totalArgs - 1} flat[ri]\n`;
 
-            code += `state ${o.name}\nset ra rb\n`;
+            code += `state ${o.name}\n${reg != 'rb' ? `set ${reg} rb\n` :  ''}`;
             if (totalArgs > 0) {
               code += `state popr${args.length > 12 ? 'all' : totalArgs}\n`;
               context.localVarCount -= args.length;
@@ -1972,6 +2079,15 @@ set rb ra
       return code;
     }
 
+    if(fnNameRaw == 'Stop' && fnObj == 'this') {
+      if(context.hasLocalVars)
+        code += `sub rbp 1\nset rsp rbp\n\nstate pop\nset rbp ra\n`
+      else if(context.mainBFunc)
+        code += `sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\n`
+      code += `break\n`
+      return code;
+    }
+
     if (fnNameRaw == 'Quote' && !fnObj) {
       if (args[0].isKind(SyntaxKind.StringLiteral)) {
         let text = args[0].getText().replace(/[`'"]/g, "");
@@ -1983,7 +2099,7 @@ set rb ra
         return code;
       } else {
         code += this.visitExpression(args[0] as Expression, context);
-        code += `state pushr1\nset r0 ra\nstate _convertString2Quote\nstate popr1\nset ra rb\n`
+        code += `state pushr1\nset r0 ra\nstate _convertString2Quote\nstate popr1\n${reg != 'rb' ? `set ${reg} rb\n` :  ''}`
         return code;
       }
     }
@@ -2022,10 +2138,13 @@ set rb ra
         code += `state pushr${argsLen > 12 ? 'all' : argsLen}\n`;
         context.localVarCount += argsLen;
       }
+
+      let fnType = 0; //0 - string, 1 - arrow, 2 - string from array, 3 - arrow from array
+
       for (let i = 0, j = 0; i < args.length; i++, j++) {
         const expected = nativeFn.arguments[i] ?? 0;
         // For LABEL and CONSTANT types, resolve to a literal.
-        if (expected & (CON_NATIVE_FLAGS.LABEL | CON_NATIVE_FLAGS.CONSTANT)) {
+        if (expected & (CON_NATIVE_FLAGS.LABEL | CON_NATIVE_FLAGS.CONSTANT) && !(expected & CON_NATIVE_FLAGS.OBJECT)) {
           const literal = this.resolveNativeArgument(args[i] as Expression, expected, context);
           resolvedLiterals.push(literal);
           // We do not emit register loads for these.
@@ -2034,13 +2153,13 @@ set rb ra
           if (!(context.curExpr & ESymbolType.string))
             code += `state pushr1\nset r0 ra\nstate _convertInt2String\nstate popr1\nset ra rb\n`
 
-          code += `state pushr1\nset r0 ra\nstate _convertString2Quote\nstate popr1\nset ra rb\n`
-          code += `set r${j} ra\n`;
+          code += `state pushr1\nset r0 ra\nstate _convertString2Quote\nstate popr1\nset r${j} rb\n`
+          //code += `set r${j} ra\n`;
           resolvedLiterals.push(null);
         } else if (expected & CON_NATIVE_FLAGS.VARIABLE) {
           // For VARIABLE, generate code normally.
-          code += this.visitExpression(args[i] as Expression, context);
-          code += `set r${j} ra\n`;
+          code += this.visitExpression(args[i] as Expression, context, `r${i}`);
+          //code += `set r${j} ra\n`;
           resolvedLiterals.push(null);
         } else if (expected & CON_NATIVE_FLAGS.FUNCTION) {
           // For FUNCTION, generate code normally and keep it at argCode
@@ -2048,14 +2167,15 @@ set rb ra
           resolvedLiterals.push(null);
         } else if (expected & (CON_NATIVE_FLAGS.OBJECT | CON_NATIVE_FLAGS.ARRAY)) {
           // For OBJECT and ARRAY, the next register sets what type of address we are dealing with
-          code += this.visitExpression(args[i] as Expression, context);
-          code += `set r${j} ra\n`;
+          code += `set rf 0\n`;
+          code += this.visitExpression(args[i] as Expression, context, `r${i}`);
+          //code += `set r${j} ra\n`;
           j++;
           code += `set r${j} 0\nife rf 1\n set r${j} 1\n`
           resolvedLiterals.push(null);
         } else {
-          code += this.visitExpression(args[i] as Expression, context);
-          code += `set r${j} ra\n`;
+          code += this.visitExpression(args[i] as Expression, context, `r${i}`);
+          //code += `set r${j} ra\n`;
           resolvedLiterals.push(null);
         }
       }
@@ -2089,7 +2209,7 @@ set rb ra
         }
       } else {
         // For complex functions, call the arrow function.
-        const fnCode = nativeFn.code(args.length > 0, argCode);
+        const fnCode = (nativeFn.code as (args?: boolean, fn?: string) => string)(args.length > 0, argCode);
         code += fnCode + "\n";
         if (args.length > 0) {
           code += `state popr${argsLen > 12 ? 'all' : argsLen}\n`;
@@ -2125,26 +2245,27 @@ set rb ra
       }
 
       for (let i = 0; i < args.length; i++) {
-        code += this.visitExpression(args[i] as Expression, context);
-        code += `set r${i} ra\n`;
+        code += this.visitExpression(args[i] as Expression, context, `r${i}`);
+        //code += `set r${i} ra\n`;
         resolvedLiterals.push(null);
       }
 
       if (isClass)
         code += `set ri rbp\nadd ri ${func.offset}\nset r${totalArgs - 1} flat[ri]\n`;
 
-      code += `state ${isClass ? func.children[fnName].name : (func.CON_code ? func.CON_code : func.name)}\nset ra rb\n`;
+      code += `state ${isClass ? func.children[fnName].name : (func.CON_code ? func.CON_code : func.name)}\n${reg != 'rb' ? `set ${reg} rb\n` :  ''}`;
       if (totalArgs > 0) {
         code += `state popr${totalArgs > 12 ? 'all' : totalArgs}\n`;
         context.localVarCount -= totalArgs;
       }
 
-
       context.curExpr = isClass ? (func.children[fnName] as SymbolDefinition).returns : func.returns;
     }
+
     if (nativeFn && nativeFn.returns) {
-      code += `set ra rb\n`;
+      code += `${reg != 'rb' ? `set ${reg} rb\n` :  ''}`;
     }
+
     return code;
   }
 
@@ -2442,13 +2563,13 @@ set rb ra
     return segments;
   }
 
-  private visitMemberExpression(expr: Expression, context: CompilerContext, assignment?: boolean, direct?: boolean): string {
+  private visitMemberExpression(expr: Expression, context: CompilerContext, assignment?: boolean, direct?: boolean, reg = 'ra'): string {
     let code = this.options.lineDetail ? `/* ${expr.getText()} */\n` : '';
     const segments = this.unrollMemberExpression(expr);
 
     if (segments.length === 0) {
       addDiagnostic(expr, context, "warning", `No segments found for expression: ${expr.getText()}`);
-      return "set ra 0\n";
+      return `set ${reg} 0\n`;
     }
 
     // Handle the object
@@ -2462,7 +2583,7 @@ set rb ra
         if (direct)
           return String(eSym.children[seg.name]);
 
-        code += `set ra ${eSym.children[seg.name]}\n`;
+        code = `set ${reg} ${eSym.children[seg.name]}\n`;
         return code;
       }
 
@@ -2472,13 +2593,13 @@ set rb ra
 
         if (!sym) {
           addDiagnostic(expr, context, "error", `Undefined object: ${expr.getText()}`);
-          return "set ra 0\n";
+          return "set ${reg} 0\n";
         }
       }
 
       if (sym.type & ESymbolType.string || sym.type & ESymbolType.array) {
         if ((segments[1].kind == 'property' && segments[1].name == 'length'))
-          return code + `set ri rbp\nadd ri ${sym.offset}\nset ri flat[ri]\n${assignment ? 'setarray flat[ri] ra\n' : 'set ra flat[ri]'}\n`;
+          return code + `set ri rbp\nadd ri ${sym.offset}\nset ri flat[ri]\n${assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]`}\n`;
       }
 
       if (sym.type & ESymbolType.native) {
@@ -2507,7 +2628,7 @@ set rb ra
           }
         }
 
-        code += assignment ? `set ${sym.CON_code} ra\n` : `set ra ${sym.CON_code}\n`;
+        code += assignment ? `set ${sym.CON_code} ${reg}\n` : `set ${reg} ${sym.CON_code}\n`;
         return code;
       }
 
@@ -2531,8 +2652,7 @@ set rb ra
             code += `state pushi\n`;
             code += this.visitExpression(seg.expr, context);
             if (localVars != context.localVarCount) {
-              code += `sub rsp ${localVars - context.localVarCount}\n`;
-              code += `add rsp 1\n` //Account for the push rd we did back there
+              code += `sub rsp ${localVars - context.localVarCount - 1}\n`;
               context.localVarCount = localVars;
             }
             code += `state popi\n`;
@@ -2570,13 +2690,19 @@ set rb ra
             sym = sym.children[seg.name] as SymbolDefinition | EnumDefinition;
 
             if (sym.type == ESymbolType.enum)
-              return code + `set ra ${sym.children[(segments[i + 1] as SegmentProperty).name]}\n`;
+              return direct ? String(sym.children[(segments[i + 1] as SegmentProperty).name]) : (`set ${reg} ${sym.children[(segments[i + 1] as SegmentProperty).name]}\n`);
 
-            if (sym.offset != 0)
+            if(sym.global) {
+              if (sym.offset != 0)
+                code += `set ri ${sym.offset}\n`;
+              else
+                code += `set ri 0\n`;
+            } else if (sym.offset != 0)
               code += `add ri ${sym.offset}\n`;
 
             if (sym.type & ESymbolType.object || sym.type & ESymbolType.array)
               code += `set ri flat[ri]\n`;
+
             continue;
           }
         }
@@ -2587,12 +2713,15 @@ set rb ra
         }
 
         if (assignment)
-          code += `setarray flat[ri] ra\n`;
+          code += `setarray flat[ri] ${reg}\n`;
         else
-          code += `set ra flat[ri]\n`;
+          code += `set ${reg} flat[ri]\n`;
 
-        if(sym.type & ESymbolType.pointer && sym.type & ESymbolType.constant)
-          code = sym.name;
+        if (direct)
+          return String(sym.literal);
+
+        if(sym.type & ESymbolType.constant)
+          code = `set ${reg} ${sym.literal}\n`;
 
         return code;
       }
@@ -2604,13 +2733,12 @@ set rb ra
           if (direct)
             return EMoveFlags[(segments[1] as SegmentProperty).name];
 
-          code += `set ra ${EMoveFlags[(segments[1] as SegmentProperty).name]}\n`;
+          code = `set ${reg} ${EMoveFlags[(segments[1] as SegmentProperty).name]}\n`;
           return code;
 
         default: //sprites, sectors, walls or other enums
           if (obj.kind != 'this') {
             //Check if it's a enum
-
             const e = context.symbolTable.get(obj.name);
 
             if (e && e.type == ESymbolType.enum) {
@@ -2618,7 +2746,7 @@ set rb ra
               if (direct)
                 return String(e.children[seg.name]);
 
-              code += `set ra ${e.children[seg.name]}\n`;
+              code += `set ${reg} ${e.children[seg.name]}\n`;
               return code;
             }
 
@@ -2637,7 +2765,6 @@ set rb ra
           } else {
             if (context.curClass)
               code += `set ri flat[rbp]\n`;
-            else code += `set ri THISACTOR\n`;
 
             if (context.currentActorPicnum)
               obj.name = 'sprites';
@@ -2647,7 +2774,7 @@ set rb ra
           if (segments.length == 2 && segments[1].kind == 'index') {
             context.localVarNativePointer = obj.name as any;
             context.localVarNativePointerIndexed = true,
-              code += `set ra ri\n`;
+              code += `set ${reg} ri\n`;
             return code;
           }
 
@@ -2675,15 +2802,43 @@ set rb ra
                 return '';
               }
 
+              //Check if it's an action, move or ai
+              let lastSeg = segments.at(-1), loc = false;;
+              if(lastSeg.kind == 'property') {
+                let proceed = true;
+
+                if(lastSeg.name == 'loc') {
+                  lastSeg = segments.at(-2);
+                  if(lastSeg.kind != 'property')
+                    proceed = false;
+                  else loc = true;
+                }
+
+                if(proceed) {
+                  //@ts-ignore
+                  const pointer = context.currentActorLabels[lastSeg.name];
+
+                  if(pointer && !(pointer.type & ESymbolType.enum) && (pointer.type & ESymbolType.pointer || loc)) {
+                    context.curExpr = ESymbolType.pointer;
+                    if(direct)
+                      return String(pointer.literal);
+
+                    return `set ${reg} ${pointer.literal}\n`;
+                  }
+                }
+              }
+
               let pSym = (context.curClass
                 ? context.curClass.children[seg.name]
                 : context.symbolTable.get(seg.name)) as SymbolDefinition;
 
-              if (pSym.offset != 0) {
-                if(pSym.global)
+              if(pSym.global) {
+                if (pSym.offset != 0)
+                  code += `set ri ${pSym.offset}\n`;
+                else 
                   code += `set ri 0\n`;
+              } else if (pSym.offset != 0)
                 code += `add ri ${pSym.offset}\n`;
-              }
 
               for (let i = 2; i < segments.length; i++) {
                 const s = segments[i];
@@ -2703,8 +2858,8 @@ set rb ra
                   code += `state pushi\n`;
                   code += this.visitExpression(s.expr, context);
                   if (localVars != context.localVarCount) {
-                    code += `sub rsp ${localVars - context.localVarCount}\n`;
-                    code += `add rsp 1\n` //Account for the push rd we did back there
+                    code += `sub rsp ${localVars - context.localVarCount - 1}\n`;
+                    //code += `add rsp 1\n` //Account for the push rd we did back there
                     context.localVarCount = localVars;
                   }
 
@@ -2725,7 +2880,7 @@ set rb ra
                 }
 
                 if (s.name == 'length' && (pSym.type & ESymbolType.string || pSym.type & ESymbolType.array))
-                  return code + (assignment ? `setarray flat[ri] ra\n` : `set ra flat[ri]\n`);
+                  return code + (assignment ? `setarray flat[ri] ra\n` : `set ${reg} flat[ri]\n`);
 
                 if (!Object.keys(pSym.children).find(e => e == s.name)) {
                   addDiagnostic(expr, context, 'error', `Undefined property ${s.name} in obj/class ${pSym.name} in ${expr.getText()}`);
@@ -2745,8 +2900,16 @@ set rb ra
                 return '';
               }
 
-              return code + (assignment ? `setarray flat[ri] ra\n` : `set ra flat[ri]\n`);
+              if(direct)
+                return String(pSym.literal);
+
+              if(pSym.type & ESymbolType.constant)
+                return `set ${reg} ${pSym.literal}\n`;
+
+              return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
             }
+
+            code += `set ri THISACTOR\n`;
 
             let nativeVar: CON_NATIVE_VAR[];
 
@@ -2838,7 +3001,7 @@ set rb ra
                     if (!overriden)
                       code += `${assignment ? 'set' : 'get'}${op}[ri].`;
 
-                    code += `${v.code} ra\n`;
+                    code += `${v.code} ${reg}\n`;
                   }
 
                   if (v.var_type == CON_NATIVE_TYPE.object)
@@ -2850,9 +3013,9 @@ set rb ra
                 if (!overriden)
                   code += `${assignment ? 'set' : 'get'}${op}[ri].`;
 
-                code += `${nVar.code} ra\n`;
-              } else code += `set ${assignment ? (nVar.code + ' ra\n')
-                : ('ra ' + nVar.code + '\n')}`
+                code += `${nVar.code} ${reg}\n`;
+              } else code += `set ${assignment ? (nVar.code + ` ${reg}\n`)
+                : (`${reg} ` + nVar.code + '\n')}`
             }
           }
 
@@ -2866,53 +3029,53 @@ set rb ra
   }
 
 
-  private visitUnaryExpression(expr: Expression, context: CompilerContext): string {
+  private visitUnaryExpression(expr: Expression, context: CompilerContext, reg = 'ra'): string {
     let code = this.options.lineDetail ? `// unary: ${expr.getText()}\n` : '';
     if (expr.isKind(SyntaxKind.PrefixUnaryExpression)) {
       const pre = expr as PrefixUnaryExpression;
       code += this.visitExpression(pre.getOperand(), context);
       switch (pre.getOperatorToken()) {
         case SyntaxKind.PlusPlusToken:
-          code += `add ra 1\n`;
+          code += `add ${reg} 1\n`;
           break;
         case SyntaxKind.MinusMinusToken:
-          code += `sub ra 1\n`;
+          code += `sub ${reg} 1\n`;
           break;
         case SyntaxKind.MinusToken:
-          code += `mul ra -1\n`;
+          code += `inv ${reg}\n`;
           break;
         case SyntaxKind.ExclamationToken:
           //addDiagnostic(expr, context, "error", `"!" not allowed in normal expressions (only if patterns)`);
-          code += `set ra 0\nifge ra 1\nset ra 1\n`;
+          code += `set rb 0\nifge ${reg} 1\nset rb 1\n`;
           break;
         default:
           addDiagnostic(expr, context, "error", `Unhandled prefix op`);
           code += `set ra 0\n`;
       }
-      code += `setarray flat[ri] ra\n`;
+      code += `setarray flat[ri] ${reg}\n`;
       return code;
     } else if (expr.isKind(SyntaxKind.PostfixUnaryExpression)) {
       const post = expr as PostfixUnaryExpression;
       code += this.visitExpression(post.getOperand(), context);
       switch (post.getOperatorToken()) {
         case SyntaxKind.PlusPlusToken:
-          code += `add ra 1\n`;
+          code += `add ${reg} 1\n`;
           break;
         case SyntaxKind.MinusMinusToken:
-          code += `sub ra 1\n`;
+          code += `sub ${reg} 1\n`;
           break;
         default:
           addDiagnostic(expr, context, "error", `Unhandled postfix op`);
           code += `set ra 0\n`;
       }
-      code += `setarray flat[ri] ra\n`;
+      code += `setarray flat[ri] ${reg}\n`;
       return code;
     }
     return code;
   }
 
-  private visitParenthesizedExpression(expr: ParenthesizedExpression, context: CompilerContext): string {
-    return this.visitExpression(expr.getExpression(), context);
+  private visitParenthesizedExpression(expr: ParenthesizedExpression, context: CompilerContext, reg = 'ra'): string {
+    return this.visitExpression(expr.getExpression(), context, reg);
   }
 
   /******************************************************************************
@@ -3219,8 +3382,25 @@ set rb ra
       code += this.visitConstructorDeclaration(ctors[0], localCtx, type);
     }
 
+    if(type == 'CActor') {
+      localCtx.symbolTable.set('defaultPicnum', {
+        name: 'defaultPicnum',
+        offset: 0,
+        type: ESymbolType.constant,
+        literal: localCtx.currentActorPicnum
+      });
+
+      localCtx.symbolTable.set('defaultStrength', {
+        name: 'defaultStrength',
+        offset: 0,
+        type: ESymbolType.constant,
+        literal: localCtx.currentActorExtra
+      });
+    }
+
     // visit properties
     const properties = cd.getProperties();
+    let codeV = '';
 
     for (const p of properties) {
       if(p.getTypeNode().getText().match(/\b(TAction|IAction|TMove|IMove|TAi|IAi)\b/)) {
@@ -3349,9 +3529,96 @@ set rb ra
     for (const m of methods)
       code += this.visitMethodDeclaration(m, className, type != '' ? localCtx : context, type);
 
+    for(const p of properties) {
+      if (p.getTypeNode().getText().includes('OnVariation')) {
+        const init = p.getInitializerOrThrow();
+
+        if (init.isKind(SyntaxKind.ObjectLiteralExpression)) {
+          const events = init.getProperties();
+
+          for (const e of events) {
+            if (!e.isKind(SyntaxKind.MethodDeclaration)) {
+              addDiagnostic(e, context, 'error', `OnVariation property must only contain functions: ${p.getText()}`);
+              return '';
+            }
+
+            const eFnName = e.getName();
+
+            const variationLocalCtx: CompilerContext = {
+              ...localCtx,
+              localVarOffset: {},
+              localVarCount: 0,
+              paramMap: {}
+            };
+
+
+            const body = e.getBody() as Block;
+            if (body) {
+              const stmts = body.getStatements() as Statement[];
+
+              const cactor = body.getDescendantsOfKind(SyntaxKind.ReturnStatement)
+
+              if(cactor.length == 0) {
+                addDiagnostic(init, localCtx, 'error', `Missing return statement on actor variation: ${eFnName}`);
+                return '';
+              }
+
+              const exp = cactor[0].getExpression();
+              if(!exp.isKind(SyntaxKind.ObjectLiteralExpression)) {
+                addDiagnostic(init, localCtx, 'error', `Return statement is not a object literal: ${exp.getText()}`);
+                return '';
+              }
+
+              const obj: ObjectLiteralExpression = exp as ObjectLiteralExpression;
+
+              let picnum = -1, extra = 0, action = '';
+
+              obj.getProperties().forEach(e => {
+                if(e.isKind(SyntaxKind.PropertyAssignment)) {
+                  let val: string | number;
+                  const init = e.getInitializer();
+
+                  if(init.isKind(SyntaxKind.ElementAccessExpression) || init.isKind(SyntaxKind.PropertyAccessExpression))
+                    val = this.visitMemberExpression(init, localCtx, false, true);
+
+                  if(init.isKind(SyntaxKind.Identifier))
+                    val = this.visitLeafOrLiteral(init, localCtx, true);
+
+                  switch(e.getName()) {
+                    case 'picnum':
+                      picnum = Number(val);
+                      break;
+
+                    case 'extra':
+                      extra = Number(val);
+                      break;
+
+                    case 'first_action':
+                      action = String(val);
+                      break;
+                  }
+                }
+              });
+
+              codeV += `${this.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\nuseractor ${localCtx.currentActorIsEnemy ? 1 : 0} ${picnum} ${extra} ${action}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+
+              stmts.forEach(s => {
+                if(!s.isKind(SyntaxKind.ReturnStatement))
+                  codeV += this.visitStatement(s, variationLocalCtx);
+              });
+            }
+
+            codeV += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nenda \n\n`;
+          }
+        }
+      }
+    }
+
+    code += codeV;
+
     context.curClass = null;
 
-    code = (localCtx.initCode != '' ? `appendevent EVENT_SETDEFAULTS\n${indent(localCtx.initCode, 1)}\n  add ri 1\n  set rbp ri\n  set rsp rbp\n  sub rsp 1\nendevent\n` : '') + code;
+    code = (localCtx.initCode != '' ? `appendevent EVENT_SETDEFAULTS\n${indent(localCtx.initCode, 1)}\n  add ri 1\n  set rbp ri\n  set rsp rbp\n  sub rsp 1\nendevent\n\n` : '') + code;
 
     return code;
   }
@@ -3587,7 +3854,7 @@ set rb ra
       offset: ctx.globalVarCount,
       global: true,
       readonly: true,
-      type: ESymbolType.object | ESymbolType.pointer | ESymbolType.constant,
+      type: ESymbolType.object | ESymbolType.pointer,
       children: {}
     });
 
@@ -3656,7 +3923,7 @@ set rb ra
     return {
       name: `A_${className}_${fallbackName}`,
       offset: 0,
-      type: ESymbolType.object,
+      type: ESymbolType.object | ESymbolType.pointer,
       num_elements: 6,
       size: 6,
       readonly: true,
@@ -3695,7 +3962,7 @@ set rb ra
     return {
       name: `M_${className}_${fallbackName}`,
       offset: 0,
-      type: ESymbolType.object,
+      type: ESymbolType.object | ESymbolType.pointer,
       num_elements: 3,
       size: 3,
       readonly: true,
@@ -3725,7 +3992,7 @@ set rb ra
       switch (key) {
         case "action": action = ctx.currentActorLabels[seg.name]; break;
         case "move": move = ctx.currentActorLabels[seg.name]; break;
-        case "flags": flags = evalMoveFlags(valNode, ctx); break;
+        case "flags": flags = evalLiteral(valNode, ctx); break;
       }
     });
 
@@ -3738,8 +4005,9 @@ set rb ra
       num_elements: 4,
       size: 4,
       readonly: true,
+      literal: `AI_${className}_${fallbackName}`,
       children: {
-        loc: { name: 'loc', type: ESymbolType.number, offset: 0, literal: `AI_${className}_${fallbackName}` },
+        loc: { name: 'loc', type: ESymbolType.number | ESymbolType.pointer, offset: 0, literal: `AI_${className}_${fallbackName}` },
         action: action,
         move: move,
         flags: { name: 'flags', type: ESymbolType.number, offset: 3, literal: flags },
@@ -3807,6 +4075,7 @@ set rb ra
       isInLoop: false,
       mainBFunc: false,
       curFunc: undefined,
+      hasLocalVars: false
     };
 
     if (type == 'CActor' && mName.toLowerCase() === "main") {
@@ -3886,7 +4155,12 @@ set rb ra
     }
 
     // otherwise => normal state
-    let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\ndefstate ${className}_${mName} \n  set ra rbp \n  state push \n  set rbp rsp\n  add rbp 1\n`;
+    let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\ndefstate ${className}_${mName}\n`;
+
+    if(md.getDescendantsOfKind(SyntaxKind.VariableDeclaration).length > 0) {
+      localCtx.hasLocalVars = true;
+      code += `  set ra rbp \n  state push \n  set rbp rsp\n  add rbp 1\n`;
+    }
 
     md.getParameters().forEach((p, i) => {
       const type = p.getType();
@@ -3980,7 +4254,10 @@ set rb ra
     }
 
     context.curFunc = curFunc;
-    code += `  sub rbp 1\n  set rsp rbp\n  state pop\n  set rbp ra\nends \n\n`;
+    if(md.getDescendantsOfKind(SyntaxKind.VariableDeclaration).length > 0)
+      code += `  sub rbp 1\n  set rsp rbp\n  state pop\n  set rbp ra\n`;
+
+    code += `ends\n\n`;
     return code;
   }
 }

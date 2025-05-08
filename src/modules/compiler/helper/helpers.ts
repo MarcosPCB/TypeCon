@@ -21,7 +21,7 @@ import {
    * e.g. EMoveFlags.faceplayer | EMoveFlags.randomangle,
    * disallowing call expressions and other unsupported constructs.
    */
-  export function evalMoveFlags(expr: Expression, context: CompilerContext): number {
+  export function evalLiteral(expr: Expression, context: CompilerContext): number {
     switch (expr.getKind()) {
       // A direct numeric literal => parse
       case SyntaxKind.NumericLiteral:
@@ -29,7 +29,7 @@ import {
   
       // A call expression => error
       case SyntaxKind.CallExpression:
-        addDiagnostic(expr, context, "error", "Call expressions not allowed in IAi.flags");
+        addDiagnostic(expr, context, "error", "Call expressions not allowed in this statement");
         return 0;
   
       // Possibly a property like EMoveFlags.faceplayer
@@ -38,19 +38,14 @@ import {
         const leftText = pae.getExpression().getText();
         const rightText = pae.getName();
         // e.g. leftText === "EMoveFlags", rightText === "faceplayer"
-        if (leftText === "EMoveFlags") {
-          // Resolve it from the EMoveFlags enum
-          const enumValue = (EMoveFlags as any)[rightText];
-          if (typeof enumValue === "number") {
-            return enumValue;
-          } else {
-            addDiagnostic(expr, context, "error", `Unknown EMoveFlags member: ${rightText}`);
+        switch(leftText) {
+          case "EMoveFlags": 
+            return EMoveFlags[rightText];
+          
+          default:
+            // e.g. someObject.someProp => not supported if we only want EMoveFlags
+            addDiagnostic(expr, context, "error", `Unsupported property access in IAi.flags: ${expr.getText()}`);
             return 0;
-          }
-        } else {
-          // e.g. someObject.someProp => not supported if we only want EMoveFlags
-          addDiagnostic(expr, context, "error", `Unsupported property access in IAi.flags: ${expr.getText()}`);
-          return 0;
         }
       }
   
@@ -58,7 +53,7 @@ import {
       case SyntaxKind.PrefixUnaryExpression: {
         const pre = expr as PrefixUnaryExpression;
         const op = pre.getOperatorToken();
-        const operandValue = evalMoveFlags(pre.getOperand(), context);
+        const operandValue = evalLiteral(pre.getOperand(), context);
         switch (op) {
           case SyntaxKind.MinusToken:
             return -operandValue;
@@ -73,8 +68,8 @@ import {
       // A binary expression => handle |, &, ^, +, etc. if you want
       case SyntaxKind.BinaryExpression: {
         const bin = expr as BinaryExpression;
-        const leftVal = evalMoveFlags(bin.getLeft(), context);
-        const rightVal = evalMoveFlags(bin.getRight(), context);
+        const leftVal = evalLiteral(bin.getLeft(), context);
+        const rightVal = evalLiteral(bin.getRight(), context);
         const op = bin.getOperatorToken().getText();
         switch (op) {
           case "|":

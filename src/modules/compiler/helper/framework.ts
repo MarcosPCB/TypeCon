@@ -86,6 +86,12 @@ var ri 0 REG_FLAGS
 //Source index
 var rsi 0 REG_FLAGS
 
+//Switch condition
+var rsw 0 REG_FLAGS
+
+//Switch counter
+var rswc 0 REG_FLAGS
+
 //Flags register
 /*
     1 - heap address return
@@ -93,6 +99,7 @@ var rsi 0 REG_FLAGS
     4 - stack object return
     8 - NULL return
     16 - string address
+    32 - label pointer address
 */
 var rf 0 REG_FLAGS
 
@@ -892,6 +899,58 @@ defstate _krand
     add randomseed 221297
     set rb randomseed
     abs rb
+ends
+
+defstate _IsRandom
+    state _krand
+    shiftr rb 8
+    set ra rb
+    sub r0 255
+    abs r0
+    set rb 0
+    ifge ra r0
+        set rb 1
+ends
+
+defstate _SizeTo
+    geta[].xrepeat ra
+    geta[].yrepeat rb
+    ifl ra r0 {
+        add ra r2
+        seta[].xrepeat ra
+    }
+    ifl rb r1 {
+        set ra rb
+        gettiledata[sprite[].picnum].ysize rd
+        mul ra rd
+        add ra 8
+        shiftr ra 2
+        state pushd
+        geta[].htfloorz rd
+        sub rd sprite[].htceilingz
+        ifl ra rd {
+            add rb r3
+            seta[].yrepeat rb
+        }
+        state popd
+    }
+ends
+
+defstate _Operate
+    ife r0 0
+        operate
+    ifand r0 1
+        operate
+    ifand r0 2
+        operateactivators r1 r2
+    ifand r0 4
+        operatemasterswitches r1
+    ifand r0 8
+        operaterespawns r1
+    ifand r0 16
+        operatesectors r3 r4
+    ifand r0 32
+        activatebysector r3 r4
 ends
 
 defstate _PlayAction
