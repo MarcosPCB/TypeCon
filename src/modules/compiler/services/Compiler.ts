@@ -64,7 +64,7 @@ import {
 
 import { EventList, TEvents } from "../types";
 
-import { evalLiteral, findNativeFunction, findNativeVar_Sprite } from "../helper/helpers";
+import { evalLiteral, evaluateLiteralExpression, findNativeFunction, findNativeVar_Sprite } from "../helper/helpers";
 import { compiledFiles, ECompileOptions, ICompiledFile, pageSize } from "../helper/framework";
 
 
@@ -1285,10 +1285,15 @@ export class TsToConCompiler {
   /******************************************************************************
    * Expression
    *****************************************************************************/
-  private visitExpression(expr: Expression, context: CompilerContext, reg = 'ra'): string {
+  private visitExpression(expr: Expression, context: CompilerContext, reg = 'ra', direct = false): string {
     let code = ''//`/* ${expr.getText()} */\n`;
     context.curExpr = ESymbolType.number;
     context.curSymRet = null;
+
+    const val = evaluateLiteralExpression(expr);
+
+    if(typeof val === 'number')
+      return (this.options.lineDetail ? `/* Evaluated: ${expr.getText()}*/\n` : '') + `set ${reg} ${val}\n`;
 
     switch (expr.getKind()) {
       case SyntaxKind.BinaryExpression:
@@ -1384,7 +1389,7 @@ export class TsToConCompiler {
           code += `set rf 1\n`;
 
         if(direct)
-          return String(off.literal);
+            return String(off.literal);
 
         return code;
       }
@@ -1393,6 +1398,9 @@ export class TsToConCompiler {
 
       if(native) {
         if(native.var_type == CON_NATIVE_TYPE.variable) {
+          if(direct)
+            return native.code as string;
+
           return code + `set ${reg} ${native.code}\n`;
         }
       }
@@ -1405,8 +1413,8 @@ export class TsToConCompiler {
     if (expr.isKind(SyntaxKind.NumericLiteral)) {
       code += `set ${reg} ${expr.getText()}\n`;
       if(direct)
-        return expr.getText()
-      ;
+        return expr.getText();
+
       return code;
     }
     if (expr.isKind(SyntaxKind.StringLiteral) || expr.isKind(SyntaxKind.NoSubstitutionTemplateLiteral)) {
@@ -1416,9 +1424,11 @@ export class TsToConCompiler {
       for (let i = 0; i < text.length; i++)
         code += `add ri 1\nsetarray flat[ri] ${text.charCodeAt(i)}\n`;
 
+      context.curExpr = ESymbolType.string;
+
       if(reg != 'rb')
         code += `set ${reg} rb\n`;
-      context.curExpr = ESymbolType.string;
+
       return code;
     }
     if (expr.isKind(SyntaxKind.TrueKeyword)) {
@@ -1567,7 +1577,7 @@ export class TsToConCompiler {
       return code;
     }
 
-    code += `// left side\n`
+    code +=  this.options.lineDetail ? `// left side\n` : '';
     code += this.visitExpression(left, context, 'rd');
     const isQuote = Boolean(context.curExpr & ESymbolType.quote);
     const isString = Boolean(context.curExpr & ESymbolType.string);
@@ -1959,7 +1969,9 @@ export class TsToConCompiler {
             if (isClass)
               code += `set r${totalArgs - 1} flat[rbp]\n`;
 
-            code += `state ${o.name}\nset ra rb\n`;
+            code += `state ${o.name}\n`;
+            if(o.returns)
+              code += `${reg != 'rb' ? `set ${reg} rb\n` :  ''}`;
             if (totalArgs > 0) {
               code += `state popr${args.length > 12 ? 'all' : totalArgs}\n`;
               context.localVarCount -= args.length;
@@ -2041,7 +2053,9 @@ export class TsToConCompiler {
             if (isClass)
               code += `set ri rbp\nadd ri ${objSym.offset}\nset r${totalArgs - 1} flat[ri]\n`;
 
-            code += `state ${o.name}\n${reg != 'rb' ? `set ${reg} rb\n` :  ''}`;
+            code += `state ${o.name}\n`
+            if(o.returns)
+              code += `${reg != 'rb' ? `set ${reg} rb\n` :  ''}`;
             if (totalArgs > 0) {
               code += `state popr${args.length > 12 ? 'all' : totalArgs}\n`;
               context.localVarCount -= args.length;
@@ -2092,7 +2106,7 @@ set rb ra
           addDiagnostic(args[0], context, 'warning', `Quote length greater than 128, truncating...`);
           text = text.slice(0, 128);
         }
-        code += `add rssp 1\nqputs 1023 ${text}\nqstrcpy rssp 1023\nset ra rssp\n`;
+        code += `add rssp 1\nqputs 1023 ${text}\nqstrcpy rssp 1023\nset r${reg} rssp\n`;
         return code;
       } else {
         code += this.visitExpression(args[0] as Expression, context);
@@ -2129,14 +2143,15 @@ set rb ra
       if (args.length > 0) {
         nativeFn.arguments.forEach(e => {
           argsLen++;
-          if (e == CON_NATIVE_FLAGS.OBJECT || e == CON_NATIVE_FLAGS.ARRAY)
-            argsLen++;
+          //if (e == CON_NATIVE_FLAGS.OBJECT || e == CON_NATIVE_FLAGS.ARRAY)
+            //argsLen++;
         });
         code += `state pushr${argsLen > 12 ? 'all' : argsLen}\n`;
         context.localVarCount += argsLen;
       }
 
       let fnType = 0; //0 - string, 1 - arrow, 2 - string from array, 3 - arrow from array
+      let optionalArgs = 0;
 
       for (let i = 0, j = 0; i < args.length; i++, j++) {
         const expected = nativeFn.arguments[i] ?? 0;
@@ -2163,18 +2178,16 @@ set rb ra
           argCode += this.visitExpression(args[i] as Expression, context);
           resolvedLiterals.push(null);
         } else if (expected & (CON_NATIVE_FLAGS.OBJECT | CON_NATIVE_FLAGS.ARRAY)) {
-          // For OBJECT and ARRAY, the next register sets what type of address we are dealing with
-          code += `set rf 0\n`;
           code += this.visitExpression(args[i] as Expression, context, `r${i}`);
-          //code += `set r${j} ra\n`;
-          j++;
-          code += `set r${j} 0\nife rf 1\n set r${j} 1\n`
           resolvedLiterals.push(null);
         } else {
           code += this.visitExpression(args[i] as Expression, context, `r${i}`);
           //code += `set r${j} ra\n`;
           resolvedLiterals.push(null);
         }
+
+        if(expected & CON_NATIVE_FLAGS.OPTIONAL)
+          optionalArgs++;
       }
 
       if (nativeFn.type_belong) {
@@ -2206,7 +2219,11 @@ set rb ra
         }
       } else {
         // For complex functions, call the arrow function.
-        const fnCode = (nativeFn.code as (args?: boolean, fn?: string) => string)(args.length > 0, argCode);
+        let fnCode = '';
+        if(resolvedLiterals.findIndex(e => typeof e !== 'string'))
+          fnCode = (nativeFn.code as (constants: string[]) => string)(resolvedLiterals);
+        else
+          fnCode = (nativeFn.code as (args?: boolean, fn?: string) => string)(optionalArgs > 0, argCode);
         code += fnCode + "\n";
         if (args.length > 0) {
           code += `state popr${argsLen > 12 ? 'all' : argsLen}\n`;
@@ -2250,7 +2267,7 @@ set rb ra
       if (isClass)
         code += `set ri rbp\nadd ri ${func.offset}\nset r${totalArgs - 1} flat[ri]\n`;
 
-      code += `state ${isClass ? func.children[fnName].name : (func.CON_code ? func.CON_code : func.name)}\n${reg != 'rb' ? `set ${reg} rb\n` :  ''}`;
+      code += `state ${isClass ? func.children[fnName].name : (func.CON_code ? func.CON_code : func.name)}\n${(reg != 'rb' && func.returns) ? `set ${reg} rb\n` :  ''}`;
       if (totalArgs > 0) {
         code += `state popr${totalArgs > 12 ? 'all' : totalArgs}\n`;
         context.localVarCount -= totalArgs;
@@ -2906,7 +2923,7 @@ set rb ra
               return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
             }
 
-            code += `set ri THISACTOR\n`;
+            //code += `set ri THISACTOR\n`;
 
             let nativeVar: CON_NATIVE_VAR[];
 
@@ -2940,6 +2957,7 @@ set rb ra
               //code += `state push\n`;
 
             let pushes = 0;
+            let setRI = false;
 
             if (nVar.type == CON_NATIVE_FLAGS.OBJECT) {
               let v = nVar.object;
@@ -2960,6 +2978,9 @@ set rb ra
 
                   code += this.visitExpression(s.expr, context);
                   if (nVar.override_code) {
+                    if(!setRI)
+                      code = 'set ri THISACTOR\n' + code;
+                    setRI = true;
                     code += nVar.code[assignment ? 1 : 0];
                     overriden = true;
                   }
@@ -2996,7 +3017,7 @@ set rb ra
                     for(let i = 0; i < pushes; i++)
                       code += `state pop\n`;
                     if (!overriden)
-                      code += `${assignment ? 'set' : 'get'}${op}[ri].`;
+                      code += `${assignment ? 'set' : 'get'}${op}[${obj.kind == 'this' ? 'THISACTOR' : 'ri'}].`;
 
                     code += `${v.code} ${reg}\n`;
                   }
@@ -3008,7 +3029,7 @@ set rb ra
             } else if (nVar.type == CON_NATIVE_FLAGS.VARIABLE) {
               if (nVar.var_type == CON_NATIVE_TYPE.native) {
                 if (!overriden)
-                  code += `${assignment ? 'set' : 'get'}${op}[ri].`;
+                  code += `${assignment ? 'set' : 'get'}${op}[${obj.kind == 'this' ? 'THISACTOR' : 'ri'}].`;
 
                 code += `${nVar.code} ${reg}\n`;
               } else code += `set ${assignment ? (nVar.code + ` ${reg}\n`)
@@ -3601,7 +3622,7 @@ set rb ra
 
               stmts.forEach(s => {
                 if(!s.isKind(SyntaxKind.ReturnStatement))
-                  codeV += this.visitStatement(s, variationLocalCtx);
+                  codeV += indent(this.visitStatement(s, variationLocalCtx), 1);
               });
             }
 

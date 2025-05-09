@@ -67,7 +67,7 @@ export enum EOperateFlags {
 
 export interface CON_NATIVE_FUNCTION {
     name: string,
-    code: string | ((args?: boolean, fn?: string) => string),
+    code: string | ((args?: boolean, fn?: string) => string) | ((constants: string[]) => string),
     returns: boolean,
     return_type: 'variable' | 'string' | 'pointer' | 'array' | 'object' | 'heap' | null,
     returnable?: any,
@@ -380,14 +380,14 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     },
     {
         name: 'ResetAction',
-        code: 'resetactioncount ',
+        code: 'resetactioncount',
         returns: false,
         return_type: null,
         arguments: []
     },
     {
         name: 'Flash',
-        code: 'flash ',
+        code: 'flash',
         returns: false,
         return_type: null,
         arguments: []
@@ -407,17 +407,18 @@ set rd RETURN
 ifge r2 1
   eqspawn r0
 else
-    espawn r0
+  espawn r0
 set r0 RETURN
 set ra RETURN
+${fn != '' ? `
 state push
 state pushd
 ${fn}
 state popd
 state pop
+` : ''}
 set rb ra
-set RETURN rd
-`;
+set RETURN rd`;
         },
         returns: true,
         return_type: 'variable',
@@ -433,18 +434,17 @@ set RETURN rd
         returns: false,
         return_type: null,
         code: (args: boolean) => {
-            return `
+            return args ? `
 ife r2 1
   soundonce r0
 else ife r1 1
   globalsound r0
 else
-  sound r0
-`
+  sound r0` : 'sound r0'
         },
         arguments: [
             CON_NATIVE_FLAGS.VARIABLE,
-            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL,
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
         ],
         arguments_default: [
@@ -496,14 +496,15 @@ else {
 }
 set r0 RETURN
 set ra RETURN
+${fn != '' ? `
 state push
 state pushd
 ${fn}
 state popd
 state pop
+` : ''}
 set rb ra
-set RETURN rd
-`;
+set RETURN rd`;
         },
         returns: true,
         return_type: 'variable',
@@ -738,7 +739,9 @@ al r0
     },
     {
         name: 'IsPlayerState',
-        code: `ifp`,
+        code: (constants: string[]) => {
+            return `set rb 0\nifp ${constants[0]} set rb 1`;
+        },
         returns: true,
         return_type: 'variable',
         arguments: [
@@ -1077,21 +1080,21 @@ state popr1
     },
     {
         name: 'CeilingDist',
-        code: 'geta[].z rb\ngeta[].sectnum ri\nsub rb sector[ri].ceilingz\nshiftr rb 8',
+        code: 'state _CeilingDist',
         returns: true,
         return_type: 'variable',
         arguments: []
     },
     {
         name: 'FloorDist',
-        code: 'geta[].sectnum ri\ngetsector[ri].floorz rb\nsub rb sprite[].z\nshiftr rb 8',
+        code: 'state _FloorDist',
         returns: true,
         return_type: 'variable',
         arguments: []
     },
     {
         name: 'GapDist',
-        code: 'geta[].sectnum ri\ngetsector[ri].floorz rb\nsub rb sector[ri].ceilingz\nshiftr rb 8',
+        code: 'state _GapDist',
         returns: true,
         return_type: 'variable',
         arguments: []

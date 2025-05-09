@@ -998,6 +998,27 @@ defstate _StartAI
         seta[].ang rb
     }  
 ends
+
+defstate _CeilingDist
+    geta[].z rb
+    geta[].sectnum ri
+    sub rb sector[ri].ceilingz
+    shiftr rb 8
+ends
+
+defstate _FloorDist
+    geta[].sectnum ri
+    getsector[ri].floorz rb
+    sub rb sprite[].z
+    shiftr rb 8
+ends
+
+defstate _GapDist
+    geta[].sectnum ri
+    getsector[ri].floorz rb
+    sub rb sector[ri].ceilingz
+    shiftr rb 8
+ends
 `
         }
 

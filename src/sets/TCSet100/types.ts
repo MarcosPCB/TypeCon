@@ -1179,7 +1179,7 @@ declare global {
          * @param global - play globally or not
          * @param once (optional) - only play it again if the other instance has finished already
          */
-        public Sound(sound_id: number, global: boolean, once?: boolean): CON_NATIVE<void>
+        public Sound(sound_id: number, global?: boolean, once?: boolean): CON_NATIVE<void>
         /**
          * Stops playing a sound
          * @param sound_id - the sound ID
