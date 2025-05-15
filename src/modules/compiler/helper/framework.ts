@@ -92,6 +92,9 @@ var rsw 0 REG_FLAGS
 //Switch counter
 var rswc 0 REG_FLAGS
 
+//Switch clause enabler
+var rswe 0 REG_FLAGS
+
 //Flags register
 /*
     1 - heap address return
@@ -902,6 +905,7 @@ defstate _krand
     add randomseed 221297
     set rb randomseed
     abs rb
+    shiftr rb 16
 ends
 
 defstate _IsRandom
@@ -959,12 +963,13 @@ ends
 defstate _PlayAction
     seta[].htg_t 2 0
     seta[].htg_t 3 0
-    seta[].htg_t 4 r0
+    seta[].htg_t 4 flat[flat[r0]]
 ends
 
 defstate _Move
-    seta[].hitag r1
-    seta[].htg_t 1 r0
+    seta[].hitag flat[r1]
+    seta[].htg_t 1 flat[flat[r0]]
+    seta[].htg_t 0 0
 ends
 
 defstate _StartAI
@@ -993,7 +998,7 @@ defstate _StartAI
     and rb 8
     ifg ra 0
     ifn rb 0 {
-        state krand
+        state _krand
         and rb 2047
         seta[].ang rb
     }  

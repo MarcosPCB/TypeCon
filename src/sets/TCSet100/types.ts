@@ -1033,13 +1033,15 @@ declare global {
          * @param picnum - the current actor's tile number
          * @param isEnemy - if it's an enemy or not
          * @param extra - the health
-         * @param first_action - the first action that the actor must use
+         * @param no_labelobj - true by default. Use false if you don't want the complete label declaration in memory as objects
+         * @param actor_hardcode - set to true if it's a hard coded actor
          */
         constructor(
             picnum: constant,
             isEnemy: boolean,
             extra: constant,
-            first_action?: IAction,
+            no_labelobj?: boolean,
+            actor_hardcode?: boolean
         )
 
         protected actions: TAction<string>;
@@ -1340,7 +1342,7 @@ declare global {
         /**
          * You must define this function for the actor to work
          */
-        protected Main(): void;
+        protected Main(first_action?: IAction): void;
 
         /**
          * Per-actor events. See {@link OnEvent}

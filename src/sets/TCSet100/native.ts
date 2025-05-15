@@ -148,9 +148,8 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     {
         name: 'CStat',
         code: ((args?: boolean) => {
-            if(typeof args !== 'undefined')
+            if(args == true)
                 return `seta[].cstat r0 \n`;
-
             return `geta[].cstat rb \n`
         }),
         returns: true,
@@ -199,8 +198,8 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     },
     {
         name: 'Count',
-        code: ((arg?: boolean) => {
-            if(arg)
+        code: ((args?: boolean) => {
+            if(args == true)
                 return `seta[].htg_t 0 r0`;
             return `geta[].htg_t 0 rb`;
         }),
@@ -212,8 +211,8 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     },
     {
         name: 'ActionCount',
-        code: ((arg?: boolean) => {
-            if(arg)
+        code: ((args?: boolean) => {
+            if(args == true)
                 return `seta[].htg_t 2 r0`;
             return `geta[].htg_t 2 rb`;
         }),
@@ -373,7 +372,7 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     },
     {
         name: 'Stop',
-        code: `sub rbp 1\nset rsp rbp\n\nstate pop\nset rbp ra\nbreak`,
+        code: `set rbp rbbp\nsub rbp 1\nset rsp rbp\nset rssp rsbp\nstate pop\nset rsbp ra\nstate pop\nset rbp ra\nstate _GC\nbreak`,
         returns: false,
         return_type: null,
         arguments: []
@@ -402,6 +401,7 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     {
         name: 'Spawn',
         code: (args?: boolean, fn?: string) => {
+            if(args == true)
             return `
 set rd RETURN
 ifge r2 1
@@ -418,6 +418,11 @@ state popd
 state pop
 ` : ''}
 set rb ra
+set RETURN rd`
+else return `
+set rd RETURN
+espawn r0
+set rb RETURN
 set RETURN rd`;
         },
         returns: true,
@@ -434,7 +439,7 @@ set RETURN rd`;
         returns: false,
         return_type: null,
         code: (args: boolean) => {
-            return args ? `
+            return args == true ? `
 ife r2 1
   soundonce r0
 else ife r1 1
@@ -481,7 +486,7 @@ else
     {
         name: 'Shoot',
         code: (args?: boolean, fn?: string) => {
-            return `
+            return args == true ? `
 set rd RETURN
 ife r2 0
   eshoot r0
@@ -504,6 +509,11 @@ state popd
 state pop
 ` : ''}
 set rb ra
+set RETURN rd`
+: `
+set rd RETURN
+eshoot r0
+set rb RETURN
 set RETURN rd`;
         },
         returns: true,

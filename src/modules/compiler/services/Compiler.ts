@@ -160,6 +160,7 @@ interface SymbolDefinition {
   CON_code?: string,
   returns?: Exclude<ESymbolType, ESymbolType.enum> | null;
   literal?: string | number | null;
+  parent?: SymbolDefinition;
 }
 
 interface TypeAliasDefinition {
@@ -202,6 +203,8 @@ export interface CompilerContext {
   currentActorMoves: string[];
   currentActorAis: string[];
   currentActorLabels: Record<string, SymbolDefinition>;
+  currentActorLabelAsObj: boolean;
+  currentActorHardcoded: boolean;
 
   // For event classes if needed
   currentEventName?: string;
@@ -343,6 +346,8 @@ export class TsToConCompiler {
       currentActorAis: [],
       currentEventName: undefined,
       currentActorLabels: {},
+      currentActorHardcoded: false,
+      currentActorLabelAsObj: true,
       typeAliases: new Map(),
       symbolTable: new Map(),
       currentFile: undefined,
@@ -1093,7 +1098,7 @@ export class TsToConCompiler {
     }
 
     if (context.mainBFunc) {
-      code += `sub rbp 1\nset rsp rbp\nset rssp rsbp\nstate pop\nset rsbp ra\nstate pop\nset rbp ra\n`;
+      code += `set rbp rbbp\nsub rbp 1\nset rsp rbp\nset rssp rsbp\nstate pop\nset rsbp ra\nstate pop\nset rbp ra\n`;
       code += `break\n`
     } else {
       code += `sub rbp 1\nset rsp rbp\n\nstate pop\nset rbp ra\n`;
@@ -1109,7 +1114,7 @@ export class TsToConCompiler {
    * if => must be (A && B), (A || B), or !(A || B)
    *****************************************************************************/
   private visitIfStatement(is: IfStatement, context: CompilerContext): string {
-    let code = this.options.lineDetail ? `/*${is.getText()}*/\n` : '';
+    let code = this.options.lineDetail ? `/*${is.getText().trim()}*/\n` : '';
     const pattern = this.parseIfCondition(is.getExpression(), context);
     const thenPart = this.visitBlockOrStmt(is.getThenStatement(), context);
     const elsePart = is.getElseStatement() ? this.visitBlockOrStmt(is.getElseStatement()!, context) : "";
@@ -1119,14 +1124,14 @@ export class TsToConCompiler {
       return code;
     }
 
-    const useRD = context.usingRD;
-    context.usingRD = true;
-
+    //if(useRD)
+      //code += `state pushd\n`;
     // Evaluate left side normally
     code += this.options.lineDetail ? `// 'if' left side\n` : '';
     code += this.visitExpression(pattern.left, context, 'rd');
-    if(useRD)
-      code += `state pushd\n`;
+
+    const useRD = context.usingRD;
+    context.usingRD = true;
 
     // For the right side, check if it's a number or an Expression.
     code += this.options.lineDetail ? `// 'if' right side\n` : '';
@@ -1136,9 +1141,6 @@ export class TsToConCompiler {
       code += this.visitExpression(pattern.right, context);
     }
 
-    if(useRD)
-      code += `state popd\n`
-
     code += `${pattern.op} rd ra {\n`;
     code += indent(thenPart, 1);
     if (elsePart != '') {
@@ -1147,6 +1149,9 @@ export class TsToConCompiler {
     }
 
     code += `}\n`;
+
+    //if(useRD)
+      //code += `state popd\n`
 
     context.usingRD = useRD;
 
@@ -1168,25 +1173,28 @@ export class TsToConCompiler {
 
     code += `set rsw ra\nset rswc -1\n`;
     code += `getcurraddress ra\nifn rswc -1 {\n`
-    code += indent(`state pushb\n`, 1);
+    code += indent(`state pushb\nset rswe 0\n`, 1);
     for (let i = 0; i < cases.length; i++) {
       code += indent(`add rswc 1\n`, 1);
       const c = cases[i];
       if (c.isKind(SyntaxKind.DefaultClause))
-        code += (this.options.lineDetail ? `/*${c.getText()}*/\n` : '') + indent(`ifge rswc ${cases.length} {\n`, 1);
+        code += (this.options.lineDetail ? `/*${c.getText()}*/\n` : '') + indent(`ifge rswc ${cases.length}\n  set rswe 1\n`, 1);
       else {
         const clause = c.getExpression();
         
         code += this.options.lineDetail ? `/*${c.getText()}*/\n` : '';/* + indent(`state pushd\nstate pushc\n`, 1)*/
         code += indent(this.visitExpression(clause, context), 1);
-        code += indent(`ife ra rsw {\n`, 1);
+        code += indent(`ife ra rsw\n  set rswe 1\n`, 1);
       }
 
-      c.getStatements().forEach(e => code += indent(this.visitStatement(e, context), 2));
-      code += `}\n`;
+      if(c.getStatements().length > 0) {
+        code += `  ife rswe 1 {\n`;
+        c.getStatements().forEach(e => code += indent(this.visitStatement(e, context), 2));
+        code += `  }\n`;
+      }
     }
 
-    code += `}\ngetcurraddress rb\nife rswc -1 {\n  set rswc 0\n  jump ra\n}\nelse\n  state popb\n`;
+    code += `  state popb\n}\ngetcurraddress rb\nife rswc -1 {\n  set rswc 0\n  jump ra\n}\n`;
 
     if(pastSwitch)
       code += `state popd\nset rswc rd\nstate popd\nset rsw rd\n`;
@@ -1513,7 +1521,7 @@ export class TsToConCompiler {
     const right = bin.getRight();
     const opText = bin.getOperatorToken().getText();
 
-    let code = this.options.lineDetail ? `// binary: ${left.getText()} ${opText} ${right.getText()}\n` : '';
+    let code = this.options.lineDetail ? `/* binary: ${left.getText().trim()} ${opText} ${right.getText().trim()}*/\n` : '';
 
     /*const forbidden = ["<", ">", "<=", ">=", "==", "!=", "&&", "||"];
     if (forbidden.includes(opText)) {
@@ -1525,16 +1533,14 @@ export class TsToConCompiler {
     const useRD = context.usingRD;
     context.usingRD = true;
 
-    if(useRD)
-      code += `state pushd\n`;
-
-    if (opText.includes("=") && !['>=', '<='].includes(opText)) {
+    if (opText.includes("=") && !['>=', '<=', '=='].includes(opText)) {
       // assignment
       code += this.visitExpression(right, context, 'rd');
 
       if (opText != '=') {
         //code += `set rd ra\n`
         code += this.visitExpression(left, context);
+
         switch (opText) {
           case '+=':
             code += `add rd ra\n`;
@@ -1571,14 +1577,15 @@ export class TsToConCompiler {
 
       code += this.storeLeftSideOfAssignment(left, context, 'rd');
       context.usingRD = useRD;
-      if(useRD)
-        code += `state popd\n`;
 
       return code;
     }
 
+    if(useRD)
+      code += `state pushd\n`;
     code +=  this.options.lineDetail ? `// left side\n` : '';
     code += this.visitExpression(left, context, 'rd');
+
     const isQuote = Boolean(context.curExpr & ESymbolType.quote);
     const isString = Boolean(context.curExpr & ESymbolType.string);
 
@@ -1684,10 +1691,10 @@ export class TsToConCompiler {
         break;
     }
 
-    context.usingRD = useRD;
-
-    if(useRD)
+    if(useRD && reg != 'rd')
       code += `state popd\n`;
+
+    context.usingRD = useRD;
 
     return code;
   }
@@ -2090,12 +2097,6 @@ ${(args[0] as StringLiteral).getText().replace(/[`'"]/g, "")}
 set rb ra
 //END OF HAND-WRITTEN UNSAFE CODE
 `
-      return code;
-    }
-
-    if(fnNameRaw == 'Stop' && fnObj == 'this') {
-      code += `  set rbp rbbp\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\n`
-      code += `break\n`
       return code;
     }
 
@@ -2601,6 +2602,7 @@ set rb ra
         return code;
       }
 
+      let isParam = false;
       sym = context.symbolTable.get(obj.name) as SymbolDefinition;
       if (!sym) {
         sym = context.paramMap[obj.name];
@@ -2609,6 +2611,8 @@ set rb ra
           addDiagnostic(expr, context, "error", `Undefined object: ${expr.getText()}`);
           return "set ${reg} 0\n";
         }
+
+        isParam = true;
       }
 
       if (sym.type & ESymbolType.string || sym.type & ESymbolType.array) {
@@ -2647,11 +2651,18 @@ set rb ra
       }
 
       if (!sym.native_pointer) {
-        code += `set ri rbp\nadd ri ${sym.offset}\n`;
-        code += `set ri flat[ri]\n`;
+        if(!isParam)
+          code += `set ri rbp\nadd ri ${sym.offset}\n`;
+        else
+          code += `set ri r${sym.offset}\n`;
+        //code += `set ri flat[ri]\n`;
 
         for (let i = 1; i < segments.length; i++) {
           const seg = segments[i];
+
+          if (sym.type & ESymbolType.object || sym.type & ESymbolType.array)
+            code += `set ri flat[ri]\n`;
+
           if (seg.kind == 'index') {
             if (!(sym.type & ESymbolType.array) && !(sym.type & ESymbolType.object) && !(sym.type & ESymbolType.string)) {
               addDiagnostic(expr, context, "error", `Indexing a non array variable: ${expr.getText()} - ${sym.type}`);
@@ -2714,9 +2725,6 @@ set rb ra
             } else if (sym.offset != 0)
               code += `add ri ${sym.offset}\n`;
 
-            if (sym.type & ESymbolType.object || sym.type & ESymbolType.array)
-              code += `set ri flat[ri]\n`;
-
             continue;
           }
         }
@@ -2736,6 +2744,9 @@ set rb ra
 
         if(sym.type & ESymbolType.constant)
           code = `set ${reg} ${sym.literal}\n`;
+
+        if(sym.type & ESymbolType.object || (sym.type & ESymbolType.array && segments.at(-1).kind != 'index'))
+          return code + `set ${reg} ri\n`;
 
         return code;
       }
@@ -2817,28 +2828,14 @@ set rb ra
               }
 
               //Check if it's an action, move or ai
-              let lastSeg = segments.at(-1), loc = false;;
+              let lastSeg = segments.at(-1);
               if(lastSeg.kind == 'property') {
-                let proceed = true;
+                //@ts-ignore
+                const pointer = context.currentActorLabels[lastSeg.name];
 
-                if(lastSeg.name == 'loc') {
-                  lastSeg = segments.at(-2);
-                  if(lastSeg.kind != 'property')
-                    proceed = false;
-                  else loc = true;
-                }
-
-                if(proceed) {
-                  //@ts-ignore
-                  const pointer = context.currentActorLabels[lastSeg.name];
-
-                  if(pointer && !(pointer.type & ESymbolType.enum) && (pointer.type & ESymbolType.pointer || loc)) {
-                    context.curExpr = ESymbolType.pointer;
-                    if(direct)
-                      return String(pointer.literal);
-
-                    return `set ${reg} ${pointer.literal}\n`;
-                  }
+                if(pointer && !(pointer.type & ESymbolType.enum) && (pointer.type & ESymbolType.object)) {
+                  if(direct)
+                    return String(pointer.name);
                 }
               }
 
@@ -2857,13 +2854,14 @@ set rb ra
               for (let i = 2; i < segments.length; i++) {
                 const s = segments[i];
 
+                if (pSym.type & ESymbolType.object || pSym.type & ESymbolType.array)
+                  code += `set ri flat[ri]\n`;
+
                 if (s.kind == 'index') {
                   if (!(pSym.type & ESymbolType.array)) {
                     addDiagnostic(expr, context, 'error', `Indexing a non-array property ${pSym.name}`);
                     return '';
                   }
-
-                  code += `set ri flat[ri]\n`;
 
                   const localVars = context.localVarCount;
                   //code += `state pushd\n`
@@ -2901,8 +2899,6 @@ set rb ra
                   return '';
                 }
 
-                code += `set ri flat[ri]\n`;
-
                 pSym = pSym.children[s.name] as SymbolDefinition;
 
                 if (pSym.offset != 0)
@@ -2919,6 +2915,9 @@ set rb ra
 
               if(pSym.type & ESymbolType.constant)
                 return `set ${reg} ${pSym.literal}\n`;
+
+              if(pSym.type & ESymbolType.object || (pSym.type & ESymbolType.array && segments.at(-1).kind != 'index'))
+                return code + `set ${reg} ri\n`;
 
               return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
             }
@@ -3364,6 +3363,8 @@ set rb ra
       currentActorExtra: undefined,
       currentActorIsEnemy: undefined,
       currentActorFirstAction: undefined,
+      currentActorHardcoded: false,
+      currentActorLabelAsObj: true,
       currentActorActions: [],
       currentActorMoves: [],
       currentActorAis: [],
@@ -3419,10 +3420,22 @@ set rb ra
     // visit properties
     const properties = cd.getProperties();
     let codeV = '';
+    let hasLabels = false;
 
     for (const p of properties) {
       if(p.getTypeNode().getText().match(/\b(TAction|IAction|TMove|IMove|TAi|IAi)\b/)) {
-        const init = p.getInitializerOrThrow();
+        if(!hasLabels) {
+          localCtx.initCode = `setarray flat[${localCtx.globalVarCount}] 0\n`
+          localCtx.globalVarCount++;
+          localCtx.symbolTable.set(`lb${localCtx.currentActorPicnum}_enabler`, {
+            name: `lb${localCtx.currentActorPicnum}_enabler`,
+            offset: localCtx.globalVarCount - 1,
+            global: true,
+            type: ESymbolType.boolean
+          });
+
+          hasLabels = true;
+        }
 
         this.parseVarForActionsMovesAi(p, localCtx, className);
       }
@@ -3521,16 +3534,18 @@ set rb ra
       }
     }
 
+    let labels = '';
+
     // if CActor => append the actions/moves/ais lines
     if (type == 'CActor') {
       for (const a of localCtx.currentActorActions) {
-        code += a + "\n";
+        labels += a + "\n";
       }
       for (const mv of localCtx.currentActorMoves) {
-        code += mv + "\n";
+        labels += mv + "\n";
       }
       for (const ai of localCtx.currentActorAis) {
-        code += ai + "\n";
+        labels += ai + "\n";
       }
     }
 
@@ -3636,7 +3651,62 @@ set rb ra
 
     context.curClass = null;
 
-    code = (localCtx.initCode != '' ? `appendevent EVENT_SETDEFAULTS\n${indent(localCtx.initCode, 1)}\n  add ri 1\n  set rbp ri\n  set rsp rbp\n  sub rsp 1\nendevent\n\n` : '') + code;
+    code = labels + '\n' + (localCtx.initCode != ''
+      ? `
+appendevent EVENT_NEWGAME
+${indent(localCtx.initCode, 1)}
+  add ri 1
+  set rbp ri
+  set rsp rbp
+  sub rsp 1
+endevent
+
+appendevent EVENT_SPAWN
+  ifactor ${localCtx.currentActorPicnum} {
+    ife flat[${(localCtx.symbolTable.get(`lb${localCtx.currentActorPicnum}_enabler`) as SymbolDefinition).offset}] 0 {
+      setarray flat[${(localCtx.symbolTable.get(`lb${localCtx.currentActorPicnum}_enabler`) as SymbolDefinition).offset}] 1
+      geta[].htg_t 4 ra
+      geta[].htg_t 1 rb
+      geta[].htg_t 5 rc
+      geta[].hitag rd
+
+${Object.values(localCtx.currentActorLabels).map(e => {
+        if(e.name.startsWith('A_'))
+          return `
+      set ri flat[${e.parent ? e.parent.offset : e.offset}]
+      ${e.parent && e.offset != 0 ? `add ri ${e.offset}`: ''}
+      action ${e.name}
+      setarray flat[flat[ri]] sprite[].htg_t 4`;
+
+        if(e.name.startsWith('M_'))
+          return `
+      set ri flat[${e.parent ? e.parent.offset : e.offset}]
+      ${e.parent && e.offset != 0 ? `add ri ${e.offset}`: ''}
+      move ${e.name} 0
+      setarray flat[flat[ri]] sprite[].htg_t 1`;
+
+          return `
+      set ri flat[${e.parent ? e.parent.offset : e.offset}]
+      ${e.parent && e.offset != 0 ? `add ri ${e.offset}`: ''}
+      ai ${e.name}
+      set ri flat[ri]
+      setarray flat[ri] sprite[].htg_t 5
+      add ri 1
+      setarray flat[ri] sprite[].htg_t 4
+      add ri 1
+      setarray flat[ri] sprite[].htg_t 1
+      add ri 1
+      setarray flat[ri] sprite[].hitag`;
+    }).join('\n')}
+
+      seta[].htg_t 4 ra
+      seta[].htg_t 1 rb
+      seta[].htg_t 5 rc
+      seta[].hitag rd
+    }
+  }
+endevent
+` : '') + code;
 
     return code;
   }
@@ -3850,11 +3920,14 @@ set rb ra
         ctx.symbolTable.set(decl.getName(), sym);
         ctx.currentActorLabels[decl.getName()] = sym;
         sym.offset = ctx.globalVarCount;
-        let code = `set ri ${ctx.globalVarCount + 1}\nsetarray flat[${ctx.globalVarCount}] ri\nsetarray flat[ri] ${sym.name}\n`;
+        let code = `set ri ${ctx.globalVarCount + 1}\nsetarray flat[${ctx.globalVarCount}] ri\nsetarray flat[ri] 0\n`;
         ctx.globalVarCount += 2;
-        Object.entries(sym.children).forEach(e => {
+        Object.entries(sym.children).forEach((e, i) => {
+          if(!i)
+            return;
           e[1] = e[1] as SymbolDefinition;
-          code += `add ri 1\nsetarray flat[ri] ${e[1].literal}\n`
+          if(ctx.currentActorLabelAsObj)
+            code += `add ri 1\nsetarray flat[ri] ${e[1].literal}\n`
           ctx.globalVarCount++;
         });
 
@@ -3872,7 +3945,7 @@ set rb ra
       offset: ctx.globalVarCount,
       global: true,
       readonly: true,
-      type: ESymbolType.object | ESymbolType.pointer,
+      type: ESymbolType.object,
       children: {}
     });
 
@@ -3883,6 +3956,8 @@ set rb ra
     obj.num_elements = obj.size = 0;
     let code2 = '';
 
+    let gv = ctx.globalVarCount;
+    
     (init as ObjectLiteralExpression).getProperties().forEach((prop, i, a) => {
       if (!prop.isKind(SyntaxKind.PropertyAssignment)) return;
 
@@ -3895,18 +3970,24 @@ set rb ra
         obj.num_elements++;
         obj.size += sym.size;
         sym.offset = i;
-        code += `set ri ${ctx.globalVarCount + a.length + i}\nsetarray flat[${ctx.globalVarCount}] ri\n`;
-        code2 += `add ri 1\nsetarray flat[ri] ${sym.name}\n`;
+        sym.parent = obj;
+        code += `set ri ${ctx.globalVarCount + a.length + i}\nsetarray flat[${gv}] ri\n`;
+        code2 += `set ri ${ctx.globalVarCount + a.length + i}\nsetarray flat[ri] 0\n`;
         ctx.globalVarCount++;
-        Object.entries(sym.children).forEach(e => {
+        gv++;
+        Object.entries(sym.children).forEach((e, i) => {
+          if(!i)
+            return;
           e[1] = e[1] as SymbolDefinition;
-          code2 += `add ri 1\nsetarray flat[ri] ${e[1].literal}\n`
+          if(ctx.currentActorLabelAsObj)
+            code2 += `add ri 1\nsetarray flat[ri] ${sym.name.startsWith('AI_') ? '0' : e[1].literal}\n`
+          ctx.globalVarCount++;
         });
       }
     });
 
     code += code2;
-    ctx.globalVarCount += obj.size;
+    ctx.globalVarCount += (init as ObjectLiteralExpression).getProperties().length * 2;
     ctx.initCode += code;
   }
 
@@ -3935,19 +4016,17 @@ set rb ra
     });
 
     ctx.currentActorActions.push(
-      `action A_${className}_${fallbackName} ${start} ${length} ${viewType} ${inc} ${delay}`,
-    );
+      `action A_${className}_${fallbackName} ${start} ${length} ${viewType} ${inc} ${delay}`);
 
     return {
       name: `A_${className}_${fallbackName}`,
       offset: 0,
-      type: ESymbolType.object | ESymbolType.pointer,
+      type: ESymbolType.object,
       num_elements: 6,
       size: 6,
       readonly: true,
-      literal: `A_${className}_${fallbackName}`,
       children: {
-        loc: { name: 'loca', type: ESymbolType.number, offset: 0, literal: `A_${className}_${fallbackName}` },
+        loc: { name: 'loc', type: ESymbolType.number, offset: 0, literal: `A_${className}_${fallbackName}` },
         start: { name: 'start', type: ESymbolType.number, offset: 1, literal: start },
         length: { name: 'length', type: ESymbolType.number, offset: 2, literal: length },
         viewType: { name: 'viewType', type: ESymbolType.number, offset: 3, literal: viewType },
@@ -3975,18 +4054,17 @@ set rb ra
       }
     });
 
-    ctx.currentActorMoves.push(`move M_${className}_${fallbackName} ${fallbackName} ${hv} ${vv}`);
+    ctx.currentActorMoves.push(`move M_${className}_${fallbackName} ${hv} ${vv}`);
 
     return {
       name: `M_${className}_${fallbackName}`,
       offset: 0,
-      type: ESymbolType.object | ESymbolType.pointer,
+      type: ESymbolType.object,
       num_elements: 3,
       size: 3,
       readonly: true,
-      literal: `M_${className}_${fallbackName}`,
       children: {
-        loc: { name: 'loca', type: ESymbolType.number, offset: 0, literal: `M_${className}_${fallbackName}` },
+        loc: { name: 'loc', type: ESymbolType.number, offset: 0, literal: `M_${className}_${fallbackName}` },
         horizontal_vel: { name: 'horizontal_vel', type: ESymbolType.number, offset: 1, literal: hv },
         vertical_vel: { name: 'vertical_vel', type: ESymbolType.number, offset: 2, literal: vv },
       }
@@ -4014,7 +4092,7 @@ set rb ra
       }
     });
 
-    ctx.currentActorAis.push(`ai AI_${className}_${fallbackName} ${action.literal} ${move.literal} ${flags}`);
+    ctx.currentActorAis.push(`ai AI_${className}_${fallbackName} ${action.name} ${move.name} ${flags}`);
 
     return {
       name: `AI_${className}_${fallbackName}`,
@@ -4023,7 +4101,6 @@ set rb ra
       num_elements: 4,
       size: 4,
       readonly: true,
-      literal: `AI_${className}_${fallbackName}`,
       children: {
         loc: { name: 'loc', type: ESymbolType.number | ESymbolType.pointer, offset: 0, literal: `AI_${className}_${fallbackName}` },
         action: action,
@@ -4057,20 +4134,20 @@ set rb ra
         context.currentActorExtra = parseInt(a2.getText(), 10);
       }
     }
+    if (args.length >= 4) {
+      // label as objects in memory
+      const fa = args[3];
+
+      if (fa && (fa.getText() != 'undefined' && fa.getText() != 'null'))
+        context.currentActorLabelAsObj = fa.getText() == 'true' ? true : false;
+    }
+
     if (args.length >= 5) {
-      // first_action
+      // label as objects in memory
       const fa = args[4];
 
-      if (fa && (fa.getText() != 'undefined' && fa.getText() != 'null')) {
-        const sym = context.symbolTable.get(fa.getText());
-
-        if (!sym) {
-          addDiagnostic(call, context, 'error', `Action ${fa.getText()} is not declared`);
-          return;
-        }
-
-        context.currentActorFirstAction = sym.name.replace(/[`'"]/g, "");
-      }
+      if (fa && (fa.getText() != 'undefined' && fa.getText() != 'null'))
+        context.currentActorHardcoded = fa.getText() == 'true' ? true : false;
     }
   }
 
@@ -4099,59 +4176,38 @@ set rb ra
     if (type == 'CActor' && mName.toLowerCase() === "main") {
       const pic = localCtx.currentActorPicnum || 0;
       const extra = localCtx.currentActorExtra || 0;
-      const firstAction = localCtx.currentActorFirstAction || "0";
+      let firstAction = '0';
       const enemy = localCtx.currentActorIsEnemy ? 1 : 0;
       localCtx.mainBFunc = true;
-      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\nuseractor ${enemy} ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
       md.getParameters().forEach((p, i) => {
         const type = p.getType();
-        let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
-        let children: Record<string, SymbolDefinition>;
-        let con = '';
-        switch (type.getText()) {
-          case 'string':
-          case 'boolean':
-          case 'pointer':
-            t = ESymbolType[type.getText()];
-            break;
 
-          case 'constant':
-          case 'number':
-            break;
+        if(p.getName() == 'first_action') {
+          const init = p.getInitializer();
 
-          case 'string[]':
-            t = ESymbolType.string | ESymbolType.array;
-            break;
+          if(!init) {
+            addDiagnostic(p, localCtx, 'warning', `Missing first action initilizer in Main from ${className}`);
+            return;
+          }
 
-          case 'quote':
-            t = ESymbolType.quote;
-            break;
+          if(init.isKind(SyntaxKind.ElementAccessExpression) || init.isKind(SyntaxKind.PropertyAccessExpression)) {
+            const segments = this.unrollMemberExpression(init);
 
-          case 'number[]':
-          case '[]':
-          case 'any[]':
-            t |= ESymbolType.array;
-            break;
+            const seg = segments.at(-1) as SegmentProperty;
 
-          default:
-            let tText = type.getText();
+            const label = localCtx.currentActorLabels[seg.name];
 
-            if (type.getText().endsWith('[]')) {
-              t = ESymbolType.object | ESymbolType.array;
-              tText = tText.slice(0, tText.length - 2);
-            } else t = ESymbolType.object;
-
-            const alias = context.typeAliases.get(tText);
-
-            if (!alias) {
-              addDiagnostic(md, context, 'error', `Undeclared type alias ${tText}`);
-              return '';
+            if(!label) {
+              addDiagnostic(p, localCtx, 'warning', `Undefined first action ${init.getText()} in Main from ${className}`);
+              return;
             }
 
-            children = this.getObjectTypeLayout(tText, context);
+            firstAction = label.name;
+          }
         }
-        localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children };
       });
+
+      let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\n${localCtx.currentActorHardcoded ? 'actor' : `useractor ${enemy}` } ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
       const body = md.getBody() as any;
       if (body) {
         body.getStatements().forEach(st => {
@@ -4175,10 +4231,10 @@ set rb ra
     // otherwise => normal state
     let code = `${this.options.lineDetail ? `/*${md.getText()}*/` : ''}\ndefstate ${className}_${mName}\n`;
 
-    if(md.getDescendantsOfKind(SyntaxKind.VariableDeclaration).length > 0) {
-      localCtx.hasLocalVars = true;
+    //if(md.getDescendantsOfKind(SyntaxKind.VariableDeclaration).length > 0) {
+      //localCtx.hasLocalVars = true;
       code += `  set ra rbp \n  state push \n  set rbp rsp\n  add rbp 1\n`;
-    }
+    //}
 
     md.getParameters().forEach((p, i) => {
       const type = p.getType();
@@ -4272,7 +4328,7 @@ set rb ra
     }
 
     context.curFunc = curFunc;
-    if(md.getDescendantsOfKind(SyntaxKind.VariableDeclaration).length > 0)
+    //if(md.getDescendantsOfKind(SyntaxKind.VariableDeclaration).length > 0)
       code += `  sub rbp 1\n  set rsp rbp\n  state pop\n  set rbp ra\n`;
 
     code += `ends\n\n`;
