@@ -162,7 +162,7 @@ class AssaultTrooper extends CActor {
                     ActionAndMove(this.actions.aWalking, this.moves.walkVels, EMoveFlags.faceplayer)
                     this.CStat(EStats.INVISIBLE);
                 } else {
-                    this.SizeTo(41, 40, 4, 4);
+                    this.SizeTo(4, 40, 4, 4);
                     this.Spawn(DN3D.ENames.FRAMEEFFECT1);
                 }
                 break;
@@ -260,8 +260,7 @@ class AssaultTrooper extends CActor {
                 if(IsPlayerState(EPlayerStates.alive)) {
                     if(this.IsRandom(128))
                         this.PlayAction(this.actions.aDuckShoot)
-                } else if(this.curMove == this.moves.dontGetUp.loc)
-                    return;
+                } else if(this.curMove == this.moves.dontGetUp.loc) return;
                 else this.StartAI(this.ais.aiSeekPlayer)
             }
         } else if(this.curAction == this.actions.aDuckShoot.loc) {
@@ -417,7 +416,7 @@ class AssaultTrooper extends CActor {
             this.Sound(DN3D.ESound.PRED_PAIN, false);
 
             if(this.weaponHit == DN3D.ENames.SHRINKSPARK) {
-                this.Sound(DN3D.ESound.ACTOR_SHRINKING, false);
+                this.Sound(DN3D.ESound.ACTOR_SHRINKING);
                 this.StartAI(this.ais.aiShrunk);
             } else if(this.weaponHit == DN3D.ENames.GROWSPARK)
                 this.Sound(DN3D.ESound.EXPANDERHIT, false);
@@ -539,7 +538,6 @@ class AssaultTrooper extends CActor {
                     this.Count(0);
 
                 return;
-                break;
 
             case this.actions.aDead.loc:
                 this.extra = 0;
@@ -587,7 +585,7 @@ class AssaultTrooper extends CActor {
                 if(this.ActionCount() >= 4)
                     this.StartAI(this.ais.aiSeekEnemy);
 
-                break;
+                return;
 
             default:
                 switch(this.curAI) {
@@ -627,7 +625,6 @@ class AssaultTrooper extends CActor {
                     case this.ais.aiHide.loc:
                         this.Hide();
                         return;
-                        break;
                 }
                 break;
         }

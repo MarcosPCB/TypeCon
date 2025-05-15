@@ -64,14 +64,17 @@ import {
 
 import { EventList, TEvents } from "../types";
 
-import { evalLiteral, evaluateLiteralExpression, findNativeFunction, findNativeVar_Sprite } from "../helper/helpers";
+import { evaluateLiteralExpression, findNativeFunction, findNativeVar_Sprite } from "../helper/helpers";
 import { compiledFiles, ECompileOptions, ICompiledFile, pageSize } from "../helper/framework";
 
 
 type DiagnosticSeverity = "error" | "warning";
 
-type IfCondition =
-  | { op: "ifand" | "ifeither" | "ifneither" | "ife" | "ifn" | "ifl" | "ifg" | "ifle" | "ifge"; left: Expression; right: Expression | number };
+type IfCondition = { 
+    op: "ifand" | "ifeither" | "ifneither" | "ife" | "ifn" | "ifl" | "ifg" | "ifle" | "ifge";
+    left: Expression | number;
+    right: Expression | number
+};
 
 
 interface SegmentIdentifier {
@@ -1128,27 +1131,41 @@ export class TsToConCompiler {
       //code += `state pushd\n`;
     // Evaluate left side normally
     code += this.options.lineDetail ? `// 'if' left side\n` : '';
-    code += this.visitExpression(pattern.left, context, 'rd');
+    let leftCode = '';
+    if (typeof pattern.left === "number")
+      leftCode = String(pattern.left);
+    else 
+      code += this.visitExpression(pattern.left, context, 'rd');
 
     const useRD = context.usingRD;
     context.usingRD = true;
 
     // For the right side, check if it's a number or an Expression.
     code += this.options.lineDetail ? `// 'if' right side\n` : '';
-    if (typeof pattern.right === "number") {
-      code += `set ra ${pattern.right}\n`;
-    } else {
+    let rightCode = '';
+    if (typeof pattern.right === "number")
+      rightCode = `${pattern.right}`;
+    else
       code += this.visitExpression(pattern.right, context);
-    }
 
-    code += `${pattern.op} rd ra {\n`;
+    code += `${pattern.op} ${leftCode != '' ? leftCode : 'rd'} ${rightCode != '' ? rightCode : 'ra'} `;
+
+    if(thenPart.split('\n').length > 1)
+      code += `{`;
+    code += `\n`;
     code += indent(thenPart, 1);
     if (elsePart != '') {
-      code += `} else {\n`;
+      if(thenPart.split('\n').length > 1)
+        code += `} `;
+      code += `else `;
+      if(elsePart.split('\n').length > 1)
+        code += `{`;
+      code += `\n`;
       code += indent(elsePart, 1);
-    }
-
-    code += `}\n`;
+      if(elsePart.split('\n').length > 1)
+        code += `}\n`;
+    } else if(thenPart.split('\n').length > 1)
+        code += `}\n`;
 
     //if(useRD)
       //code += `state popd\n`
@@ -1234,7 +1251,9 @@ export class TsToConCompiler {
         ">=": "ifge"
       };
       if (mapping[op]) {
-        return { op: mapping[op], left: bin.getLeft(), right: bin.getRight() };
+        const l = evaluateLiteralExpression(bin.getLeft());
+        const r = evaluateLiteralExpression(bin.getRight());
+        return { op: mapping[op], left: typeof l !== 'undefined' ? Number(l) : bin.getLeft(), right: typeof r !== 'undefined' ? Number(r) : bin.getRight() };
       }
       addDiagnostic(expr, context, "error", `if condition must be (A&&B), (A||B), a comparison, or a function call. Found operator "${op}"`);
       return undefined;
@@ -1530,52 +1549,58 @@ export class TsToConCompiler {
       return code;
     }*/
 
+      if(left.getText() == 'this.extra')
+        debugger;
+
     const useRD = context.usingRD;
     context.usingRD = true;
-
+    
     if (opText.includes("=") && !['>=', '<=', '=='].includes(opText)) {
       // assignment
-      code += this.visitExpression(right, context, 'rd');
+      const valD = evaluateLiteralExpression(right);
+      if(typeof valD === 'undefined')
+        code += this.visitExpression(right, context,);
 
       if (opText != '=') {
         //code += `set rd ra\n`
-        code += this.visitExpression(left, context);
+        code += this.visitExpression(left, context, 'rd');
 
         switch (opText) {
           case '+=':
-            code += `add rd ra\n`;
+            code += `add rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
             break;
           case "-=":
-            code += `sub rd ra\n`;
+            code += `sub rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
             break;
           case "*=":
-            code += `mul rd ra\n`;
+            code += `mul rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
             break;
           case "/=":
-            code += `div rd ra\n`;
+            code += `div rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
             break;
           case "%=":
-            code += `mod rd ra\n`;
+            code += `mod rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
             break;
           case "&=":
-            code += `and rd ra\n`;
+            code += `and rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
             break;
           case "|=":
-            code += `or rd ra\n`;
+            code += `or rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
             break;
           case "^=":
-            code += `xor rd ra\n`;
+            code += `xor rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
             break;
           case ">>=":
-            code += `shiftr rd ra\n`;
+            code += `shiftr rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
             break;
           case "<<=":
-            code += `shiftl rd ra\n`;
+            code += `shiftl rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
             break;
         }
-      }
+      } //else
+        //code += `set rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
 
-      code += this.storeLeftSideOfAssignment(left, context, 'rd');
+      code += this.storeLeftSideOfAssignment(left, context, `${opText != '=' ? 'rd' : typeof valD !== 'undefined' ? Number(valD) : 'ra'}`);
       context.usingRD = useRD;
 
       return code;
@@ -1596,7 +1621,10 @@ export class TsToConCompiler {
 
     //code += `set rd ra\n`;
     code += this.options.lineDetail ? `// right side\n` : '';
-    code += this.visitExpression(right, context);
+    const valD = evaluateLiteralExpression(right);
+
+    if(typeof valD === 'undefined')
+      code += this.visitExpression(right, context);
 
     if (isQuote && !(context.curExpr & ESymbolType.quote))
       code += `qputs 1022 %d\nqsprintf 1023 1022 ra\nset ra 1022\n`;
@@ -1614,58 +1642,58 @@ export class TsToConCompiler {
         else if (isString)
           code += `state pushr2\nset r0 rd\nset r1 ra\nstate _stringConcat\nstate popr2\nset ra rb\n`;
         else
-          code += `add rd ra\n`;
+          code += `add rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
         break;
       case "-":
-        code += `sub rd ra\n`;
+        code += `sub rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
         break;
       case "*":
-        code += `mul rd ra\n`;
+        code += `mul rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
         break;
       case "/":
-        code += `div rd ra\n`;
+        code += `div rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
         break;
       case "%":
-        code += `mod rd ra\n`;
+        code += `mod rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
         break;
       case "&":
-        code += `and rd ra\n`;
+        code += `and rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
         break;
       case "|":
-        code += `or rd ra\n`;
+        code += `or rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
         break;
       case "^":
-        code += `xor rd ra\n`;
+        code += `xor rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
         break;
       case ">>":
-        code += `shiftr rd ra\n`;
+        code += `shiftr rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
         break;
       case "<<":
-        code += `shiftl rd ra\n`;
+        code += `shiftl rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
         break;
       case "<":
-        code += `set rb 0\nifl rd ra\n  set rb 1\n`;
+        code += `set rb 0\nifl rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
         break;
       case "<=":
-        code += `set rb 0\nifle rd ra\n  set rb 1\n`;
+        code += `set rb 0\nifle rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
         break;
       case ">":
-        code += `set rb 0\nifg rd ra\n  set rb 1\n`;
+        code += `set rb 0\nifg rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
         break;
       case ">=":
-        code += `set rb 0\nifge rd ra\n  set rb 1\n`;
+        code += `set rb 0\nifge rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
         break;
       case "==":
-        code += `set rb 0\nife rd ra\n  set rb 1\n`;
+        code += `set rb 0\nife rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
         break;
       case "!=":
-        code += `set rb 0\nifn rd ra\n  set rb 1\n`;
+        code += `set rb 0\nifn rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
         break;
       case "&&":
-        code += `set rb 0\nifand rd ra\n  set rb 1\n`;
+        code += `set rb 0\nifand rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
         break;
       case "||":
-        code += `set rb 0\nifeither rd ra\n  set rb 1\n`;
+        code += `set rb 0\nifeither rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
         break;
       default:
         addDiagnostic(bin, context, "error", `Unhandled operator "${opText}"`);
@@ -1740,7 +1768,7 @@ export class TsToConCompiler {
     }
 
     if (left.isKind(SyntaxKind.PropertyAccessExpression) || left.isKind(SyntaxKind.ElementAccessExpression)) {
-      code += `set ra ${reg}\n` + this.visitMemberExpression(left, context, true, false);
+      code += `${reg != 'ra' ? `set ra ${reg}\n` : ''}` + this.visitMemberExpression(left, context, true, false);
       return code;
     }
 
@@ -3050,7 +3078,7 @@ set rb ra
     let code = this.options.lineDetail ? `// unary: ${expr.getText()}\n` : '';
     if (expr.isKind(SyntaxKind.PrefixUnaryExpression)) {
       const pre = expr as PrefixUnaryExpression;
-      code += this.visitExpression(pre.getOperand(), context);
+      code += this.visitExpression(pre.getOperand(), context, reg);
       switch (pre.getOperatorToken()) {
         case SyntaxKind.PlusPlusToken:
           code += `add ${reg} 1\n`;
@@ -3063,7 +3091,10 @@ set rb ra
           break;
         case SyntaxKind.ExclamationToken:
           //addDiagnostic(expr, context, "error", `"!" not allowed in normal expressions (only if patterns)`);
-          code += `set rb 0\nifge ${reg} 1\nset rb 1\n`;
+          if(reg != 'rb')
+            code += `set rb ${reg}\n`;
+
+          code += `clamp rb 0 1\n`
           break;
         default:
           addDiagnostic(expr, context, "error", `Unhandled prefix op`);
@@ -3073,7 +3104,7 @@ set rb ra
       return code;
     } else if (expr.isKind(SyntaxKind.PostfixUnaryExpression)) {
       const post = expr as PostfixUnaryExpression;
-      code += this.visitExpression(post.getOperand(), context);
+      code += this.visitExpression(post.getOperand(), context, reg);
       switch (post.getOperatorToken()) {
         case SyntaxKind.PlusPlusToken:
           code += `add ${reg} 1\n`;
@@ -3633,7 +3664,7 @@ set rb ra
                 }
               });
 
-              codeV += `${this.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\nuseractor ${localCtx.currentActorIsEnemy ? 1 : 0} ${picnum} ${extra} ${action}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+              codeV += `${this.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\n${localCtx.currentActorHardcoded ? 'actor' : `useractor ${localCtx.currentActorIsEnemy ? 1 : 0}` } ${picnum} ${extra} ${action}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
 
               stmts.forEach(s => {
                 if(!s.isKind(SyntaxKind.ReturnStatement))
@@ -3979,7 +4010,7 @@ endevent
           if(!i)
             return;
           e[1] = e[1] as SymbolDefinition;
-          if(ctx.currentActorLabelAsObj)
+          if(ctx.currentActorLabelAsObj || sym.name.startsWith('AI_'))
             code2 += `add ri 1\nsetarray flat[ri] ${sym.name.startsWith('AI_') ? '0' : e[1].literal}\n`
           ctx.globalVarCount++;
         });
@@ -4088,7 +4119,7 @@ endevent
       switch (key) {
         case "action": action = ctx.currentActorLabels[seg.name]; break;
         case "move": move = ctx.currentActorLabels[seg.name]; break;
-        case "flags": flags = evalLiteral(valNode, ctx); break;
+        case "flags": flags = Number(evaluateLiteralExpression(valNode)); break;
       }
     });
 

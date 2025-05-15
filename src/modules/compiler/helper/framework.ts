@@ -904,7 +904,10 @@ defstate _krand
     mul randomseed 1664525
     add randomseed 221297
     set rb randomseed
-    abs rb
+    ifl randomseed 0 {
+      abs rb
+      shiftl rb 1
+    }
     shiftr rb 16
 ends
 
@@ -920,26 +923,36 @@ defstate _IsRandom
 ends
 
 defstate _SizeTo
-    geta[].xrepeat ra
-    geta[].yrepeat rb
-    ifl ra r0 {
-        add ra r2
-        seta[].xrepeat ra
-    }
-    ifl rb r1 {
-        set ra rb
-        gettiledata[sprite[].picnum].ysize rd
-        mul ra rd
-        add ra 8
-        shiftr ra 2
-        state pushd
-        geta[].htfloorz rd
-        sub rd sprite[].htceilingz
-        ifl ra rd {
-            add rb r3
-            seta[].yrepeat rb
-        }
-        state popd
+    set ra r0
+    sub ra sprite[].xrepeat
+    ifl ra 0 
+        inv r2
+
+    add r2 sprite[].xrepeat
+    ifl ra 0
+        clamp r2 r0 255
+    else
+        clamp r2 1 r0
+    seta[].xrepeat r2
+
+    set ra r1
+    sub ra sprite[].yrepeat
+    ifl ra 0 
+        inv r3
+
+    gettiledata[sprite[].picnum].ysize rb
+    add rb 8
+    mul rb sprite[].yrepeat
+    shiftr rb 2
+    geta[].htfloorz r0
+    sub r0 sprite[].htceilingz
+    ifl rb r0 {
+        add r3 sprite[].yrepeat
+        ifl ra 0
+            clamp r3 r1 255
+        else
+            clamp r3 1 r1
+        seta[].yrepeat r3
     }
 ends
 
@@ -981,6 +994,7 @@ defstate _StartAI
     seta[].htg_t 1 flat[ri]
     add ri 1
     seta[].hitag flat[ri]
+    seta[].htg_t 0 0
     seta[].htg_t 2 0
     seta[].htg_t 3 0
     set ra 32
@@ -989,7 +1003,7 @@ defstate _StartAI
     and rb ra
     set ra 0
     ifn rb 0
-    set ra 1
+        set ra 1
     set rb 0
     ifg sprite[].extra 0
         set rb 1
