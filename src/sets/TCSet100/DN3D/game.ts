@@ -1248,7 +1248,7 @@ export namespace DN3D {
         function RandomWallJibs(): CON_NATIVE<'random_wall_jibs'>;
         function TroopBodyJibs(): CON_NATIVE<'troop_body_jibs'>;
         function LizBodyJibs(): CON_NATIVE<'liz_body_jibs'>;
-        function StandardPJibs(): CON_NATIVE<'standard_pjibs'>;
+        function StandardPlayerJibs(): CON_NATIVE<'standard_pjibs'>;
         function RF(): CON_NATIVE<'rf'>;
         function CheckSquished(): CON_NATIVE<'checksquished'>;
     }

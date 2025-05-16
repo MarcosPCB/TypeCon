@@ -225,6 +225,11 @@ ${quoteInit}
 //Internal per-actor vars
 var playerDist 0 2
 
+//Internal native weapon system customization
+array nwsMaxAmmo 24
+array nwsCurAmmo 24
+array nwsAmmoDisc 24
+
 /*
     Every time an user request an X amount of memory (arrays or objects), its value must fit inside a PAGE,
     if it's bigger than a PAGE, than allocate as many PAGES as necessary.
@@ -1037,6 +1042,18 @@ defstate _GapDist
     getsector[ri].floorz rb
     sub rb sector[ri].ceilingz
     shiftr rb 8
+ends
+
+defstate _CurrWeapon
+    state push
+    getp[].curr_weapon rb
+    getp[].bsubweapon rb ra
+    ife ra 1
+    ife rb != GROW_WEAPON
+    ife rb != HANDREMOTE_WEAPON
+    ife rb != 12
+        add rb 13
+    state pop
 ends
 `
         }

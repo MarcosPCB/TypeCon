@@ -24,7 +24,8 @@ export enum CON_NATIVE_TYPE {
     native = 1,
     object = 2,
     array = 4,
-    variable = 8
+    variable = 8,
+    variable_range = 16,
 }
 
 export enum CON_NATIVE_FLAGS {
@@ -83,7 +84,7 @@ export interface CON_NATIVE_VAR {
     var_type: CON_NATIVE_TYPE,
     type: CON_NATIVE_FLAGS,
     readonly: boolean,
-    init: string | number,
+    init: string | number, //When variable_range is set in var_type, init takes the first variable part of the game var's name.
     code: string | string[], //When override_code is true, code is an array containing the get and then the set code 
     object?: CON_NATIVE_VAR[],
     override_code?: boolean
@@ -1108,6 +1109,42 @@ state popr1
         returns: true,
         return_type: 'variable',
         arguments: []
+    },
+    {
+        name: 'AmmoDiscount',
+        code: (args?: boolean) => {
+            if(args !== undefined)
+                return `
+state _CurrWeapon
+setarray nwsAmmoDisc[rb] r0
+set rb r0`
+            else return `
+state _CurrWeapon
+set rb nwsAmmoDisc[rb]`
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+
+        ]
+    },
+    {
+        name: 'MaxAmmo',
+        code: (args?: boolean) => {
+            if(args !== undefined)
+                return `
+state _CurrWeapon
+setarray nwsAmmoDisc[rb] r0
+set rb r0`
+            else return `
+state _CurrWeapon
+set rb nwsAmmoDisc[rb]`
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+
+        ]
     }
 ]
 
@@ -1374,6 +1411,177 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
         code: 'pal'
     }
 ];
+
+const nativeVars_Weapons: CON_NATIVE_VAR[] = [
+    {
+        name: 'flags',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_FLAGS'
+    },
+    {
+        name: 'clip',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_CLIP'
+    },
+    {
+        name: 'reload',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_RELOAD'
+    },
+    {
+        name: 'fireDelay',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_FIREDELAY'
+    },
+    {
+        name: 'holdDelay',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_HOLDDELAY'
+    },
+    {
+        name: 'totalTime',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_TOTALTIME'
+    },
+    {
+        name: 'flashColor',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_FLASHCOLOR'
+    },
+    {
+        name: 'shoots',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_SHOOTS'
+    },
+    {
+        name: 'shotsPerBurst',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_SHOTSPERBURST'
+    },
+    {
+        name: 'spawn',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_SPAWN'
+    },
+    {
+        name: 'spawnTime',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_SPAWNTIME'
+    },
+    {
+        name: 'reloadSound1',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_RELOADSOUND1'
+    },
+    {
+        name: 'reloadSound2',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_RELOADSOUND2'
+    },
+    {
+        name: 'selectSound',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_SELECTSOUND'
+    },
+    {
+        name: 'fireSound',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_FIRESOUND'
+    },
+    {
+        name: 'initialSound',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_INITIALSOUND'
+    },
+    {
+        name: 'sound2Sound',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_SOUND2SOUND'
+    },
+    {
+        name: 'sound2Time',
+        var_type: CON_NATIVE_TYPE.variable_range,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 'WEAPOM',
+        code: '_SOUND2TIME'
+    },
+    {
+        name: 'zRange',
+        var_type: CON_NATIVE_TYPE.variable,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        code: 'ZRANGE'
+    },
+    {
+        name: 'angleRange',
+        var_type: CON_NATIVE_TYPE.variable,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        code: 'ANGRANGE'
+    },
+    {
+        name: 'autoAimAngle',
+        var_type: CON_NATIVE_TYPE.variable,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        code: 'AUTOAIMANGLE'
+    },
+]
 
 export const nativeVarsList = ['sprites', 'sectors', 'walls', 'projectiles',
     'players', 'tiledata', 'tsprites', 'paldata', 'userdef'];

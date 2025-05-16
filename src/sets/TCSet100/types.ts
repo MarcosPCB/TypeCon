@@ -1487,4 +1487,360 @@ declare global {
     }
 
     export const sectors: CSector[];
+
+    /**
+     * Weapon flags.
+     *
+     * @enum {number}
+     *
+     * @property {number} HOLSTER_CLEARS_CLIP Holster key “refills” magazine by removing excess ammo from the player
+     * @property {number} GLOWS Controls glowing effect on SHRINKER weapon’s crystal, no effect on other weapons, probably breaks shotgun if used with that weapon
+     * @property {number} AUTOMATIC Resets kickback_pic to 1 instead of 0 when animation ends
+     * @property {number} FIREEVERYOTHER Fires projectiles every frame instead of when kickback_pic is equal to WEAPONx_FIREDELAY; also alters burst‐fire behavior so that shots are dispatched once per tic instead of all at once
+     * @property {number} FIREEVERYTHIRD Fires when kickback_pic % 3 === 0 (every third frame)
+     * @property {number} RANDOMRESTART When used with AUTOMATIC, resets kickback_pic to a random value between 1 and 4 instead of 1 when animation ends
+     * @property {number} AMMOPERSHOT Use ammo per shot per burst (like the Devastator)
+     * @property {number} BOMB_TRIGGER Is a bomb trigger (Pipebomb Detonator)
+     * @property {number} NOVISIBLE Using does NOT cause player to flash the level (clear visibility)
+     * @property {number} THROWIT Currently unused
+     * @property {number} CHECKATRELOAD Check weapon availability at “reload” time; only affects weapons with WORKSLIKE of TRIPBOMB_WEAPON
+     * @property {number} STANDSTILL Stops all player z-axis movement when firing
+     * @property {number} SPAWNTYPE2 Spawn Type 2 (Shotgun shells)
+     * @property {number} SPAWNTYPE3 Spawn Type 3 (Chaingun shells)
+     * @property {number} SEMIAUTO Semi‐automatic (cancel button press after each shot)
+     * @property {number} RELOAD_TIMING Alternate formula for reload sound timing, generally used for pistol
+     * @property {number} RESET Resets kickback_pic to 1 instead of 0 at end of firing animation if fire is held
+     */
+    export enum EWeaponFlags {
+        HOLSTER_CLEARS_CLIP = 1,
+        GLOWS               = 2,
+        AUTOMATIC           = 4,
+        FIREEVERYOTHER      = 8,
+        FIREEVERYTHIRD      = 16,
+        RANDOMRESTART       = 32,
+        AMMOPERSHOT         = 64,
+        BOMB_TRIGGER        = 128,
+        NOVISIBLE           = 256,
+        THROWIT             = 512,
+        CHECKATRELOAD       = 1024,
+        STANDSTILL          = 2048,
+        SPAWNTYPE2          = 4096,
+        SPAWNTYPE3          = 8192,
+        SEMIAUTO            = 16384,
+        RELOAD_TIMING       = 32768,
+        RESET               = 65536,
+    }
+
+    export class CWeaponNative {
+        /** True if it's secondary to any ID from 0 - 10 */
+        public subWeapon: CON_NATIVE<boolean>;
+        /** 
+         * The flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        public flags: CON_NATIVE<number>;
+
+        /** 
+         * It's the amount of ammo that can be fired before there is a reloading animation and pause.
+         * If you want to disable the reloading, set {@link clip} to 0. 
+         * */
+        public clip: CON_NATIVE<number>;
+        /** 
+         * Defines the number of frames displayed in the weapon's reload sequence,
+         * in a similar vein to {@link totalTime}. If {@link clip} is zero, this sequence takes place after every shot.
+         * If non-zero, it takes place when the remainder of the weapon's current ammo divided by {@link clip} is zero.
+         * The {@link hudCounter} values increase to a weapon's {@link totalTime} plus its {@link reload}. */
+        public reload: CON_NATIVE<number>;
+
+        /** Defines what frame the weapon will fire it's projectile on. */
+        public fireDelay: CON_NATIVE<number>;
+        /**
+         * The number of animation frames between shooting and reloading. 
+         * @see **Note**: If {@link flags} has {@link EWeaponFlags.RESET} set on the weapon
+         * and {@link hudCounter} is greater than {@link totalTime} - holdDelay,
+         * then {@link hudCounter} is set to either 1 or 0 depending on whether the fire key is still held.
+         */
+        public holdDelay: CON_NATIVE<number>;
+        /** Defines the total number of frames a weapon uses in its firing sequence. */
+        public totalTime: CON_NATIVE<number>;
+
+        public flashColor: CON_NATIVE<number>;
+
+        /** This is the tilenum of the projectile */
+        public shoots: CON_NATIVE<number>;
+        /** 
+         * Defines the amount of projectiles (which itself is defined by {@link shoots})
+         * that will fire when the weapon reaches it's firing frame.
+         */
+        public shotsPerBurst: CON_NATIVE<number>;
+
+        /**
+         * This defines what the weapon spawns when the {@link spawnTime} is reached.
+         * Used in the default weapons to spawn empty shells.
+         * To spawn nothing, set to 0.
+         */
+        public spawn: CON_NATIVE<number>;
+        /**
+         * Defines what frame the item specified by {@link spawn} will spawn on.
+         */
+        public spawnTime: CON_NATIVE<number>;
+
+        /**
+         * If {@link EWeaponFlags.RELOAD_TIMING} is enabled in the {@link flags} bitfield,
+         * reloadSound1 is the first sound to be played in the weapon's reload sequence. {@link reloadSound2} is the second.
+         * All weapons have this value set to **EJECT_CLIP** by default but only
+         * WEAPON 1 (the pistol) utilizes it.
+         */
+        public reloadSound1: CON_NATIVE<number>;
+        /**
+         * If {@link EWeaponFlags.RELOAD_TIMING} is enabled in the {@link flags} bitfield,
+         * reloadSound2 is the second sound to be played in the weapon's reload sequence. {@link reloadSound1} is the first.
+         * All weapons have this value set to **INSERT_CLIP** by default but only
+         * WEAPON 1 (the pistol) utilizes it.
+         */
+        public reloadSound2: CON_NATIVE<number>;
+        /** The sound played when a weapon is selected. */
+        public selectSound: CON_NATIVE<number>;
+        /** 
+         * Plays the corresponding sound when the {@link hudCounter} reaches
+         * the number specified by {@link fireDelay}
+         */
+        public fireSound: CON_NATIVE<number>;
+        /**
+         * Defines the sound that will play when the player starts to fire the weapon
+         * **(NOT the sound that will play when the weapon actually fires its projectile**
+         * that is controlled by {@link fireSound})
+         * @see {@link fireSound}
+         */
+        public initialSound: CON_NATIVE<number>;
+        /**
+         * This is the weapon's second sound.
+         * It starts on the frame number defined with {@link sound2Time}.
+         */
+        public sound2Sound: CON_NATIVE<number>;
+        /**
+         * If the weapon has a second shooting sound defined in {@link sound2Sound} like the shotgun,
+         * this is the frame number for the second sound to start.
+         */
+        public sound2Time: CON_NATIVE<number>;
+
+        /**
+         * Determines random Z vellocity adjustment on hitscan weapons fired from player.
+         * By default, hitscan projectiles (i.e. instant hit bullet projectiles such as **SHOTSPARK1**)
+         * do not have perfect aim; there is a random component to their trajectories.
+         * zRange is the Z part of this random component.
+         * zRange can be adjusted in GetShotRange event or in the method {@link GetShotRange}.
+         * When zRange is set to 1, the hitscan projectile will fire with perfect Z axis accuracy.
+         * Increase {@link angleRange} by powers of 2 (2, 4, etc.) to increase the random angle and decrease accuracy.
+         * @see {@link angleRange}
+         */
+        public zRange: CON_NATIVE<number>;
+        /** Determines random angle adjustment on hitscan weapons fired from player.
+         * @see {@link zRange}
+         */
+        public angleRange: CON_NATIVE<number>;
+        /**
+         * This determines the horizontal range (a cone from 0-512 * 2, with the center being the player's current angle)
+         * at which shots will automatically lock onto enemies when autoaim is active.
+         * This variable must be set inside GetAutoAimAng or in the method {@link autoAimAngle} to take effect.
+         * The default is 48. Set it to 0 to disable autoaim, or to 512 for a full 180 degree autoaim in front of the player.
+         * 
+         * @see {@link autoAimAngle}
+         */
+        public autoAimAngle: CON_NATIVE<number>;
+
+        /** Gets/Sets the maximum ammo for this weapon */
+        public MaxAmmo(amount: number): CON_NATIVE<number>;
+         /** Gets/Sets the current ammo for this weapon */
+        public CurrentAmmo(amount: number): CON_NATIVE<number>;
+        /** Gets/Sets how much ammo is used per-shot fired */
+        public AmmoDiscount(amount: number): CON_NATIVE<number>;
+
+        /** The frame counter for the weapon. Use this to draw the weapon psrite in {@link DrawHUD}
+         * or change its value whenever you need to make awesome effects.
+         * **Note**: When set to 1, it starts the firing animation until it reaches {@link totalTime}
+         * @default true
+         * @see {@link totalTime}
+         * */
+        public hudCounter: CON_NATIVE<number>;
+
+        /**
+         * Set this to **false** to disable sway effects applied automatically to the sprite drawing
+         * @default true
+         * @see {@link weapon_xoffset}
+         * @see {@link gunPos}
+         */
+        public SwayEffect: CON_NATIVE<boolean>;
+
+        /**
+         * Set this to properly initialize the weapon the way you want it to work.
+         *
+         * @param config - The initial configuration for the weapon (applied when called in the WeapXKey event — X is the weapon’s corresponding key number)
+         */
+        constructor(config: {
+            /** The weapon ID (0 – 11) */
+            id: constant;
+        
+            /** True if it’s secondary to any ID from 0 – 10 */
+            subWeapon: boolean;
+        
+            /**
+             * The flags for the weapon (does not control the projectile)
+             * @see {@link EWeaponFlags}
+             */
+            flags?: constant;
+        
+            /**
+             * Amount of ammo that can be fired before a reload animation and pause.
+             * Set to 0 to disable reloading.
+             */
+            clip?: constant;
+        
+            /**
+             * Number of frames in the weapon’s reload sequence.
+             * If clip is 0, runs after every shot; otherwise when current ammo % clip === 0.
+             */
+            reload?: constant;
+        
+            /** Frame at which the weapon fires its projectile */
+            fireDelay?: constant;
+        
+            /**
+             * Frames between shooting and reloading.
+             * If flags includes {@link EWeaponFlags.RESET} and internal counter > totalTime – holdDelay,
+             * the counter resets to 1 or 0 depending on whether fire is still held.
+             */
+            holdDelay?: constant;
+        
+            /** Total number of frames in the weapon’s firing sequence */
+            totalTime?: constant;
+        
+            /** Color index used for the muzzle flash */
+            flashColor?: constant;
+        
+            /** Tile number of the projectile */
+            shoots?: constant;
+        
+            /**
+             * Number of projectiles (tile = shoots) fired when reaching the firing frame
+             */
+            shotsPerBurst?: constant;
+        
+            /**
+             * Tile number to spawn when spawnTime is reached (e.g. empty shells).
+             * Set to 0 to spawn nothing.
+             */
+            spawn?: constant;
+        
+            /** Frame at which the item in spawn appears */
+            spawnTime?: constant;
+        
+            /**
+             * First sound in the reload sequence when {@link EWeaponFlags.RELOAD_TIMING} is set.
+             * Defaults to EJECT_CLIP; only pistol uses it.
+             */
+            reloadSound1?: constant;
+        
+            /**
+             * Second sound in the reload sequence when {@link EWeaponFlags.RELOAD_TIMING} is set.
+             * Defaults to INSERT_CLIP; only pistol uses it.
+             */
+            reloadSound2?: constant;
+        
+            /** Sound played when the weapon is selected */
+            selectSound?: constant;
+        
+            /** Sound played when internal counter reaches fireDelay */
+            fireSound?: constant;
+        
+            /**
+             * Sound played when the player starts to fire the weapon
+             * (not the projectile sound; see {@link fireSound})
+             */
+            initialSound?: constant;
+        
+            /** Secondary firing sound (e.g. shotgun’s second blast) */
+            sound2Sound?: constant;
+        
+            /** Frame at which sound2Sound begins */
+            sound2Time?: constant;
+        
+            /**
+             * Random Z‐velocity adjustment for hitscan weapons.
+             * 1 = perfect Z accuracy; increase angleRange by powers of 2 to reduce accuracy.
+             */
+            zRange?: constant;
+        
+            /** Random angle adjustment for hitscan weapons (@see {@link zRange}) */
+            angleRange?: constant;
+        
+            /**
+             * Horizontal auto‐aim cone (0–1024; center = player angle).
+             * Set to 0 to disable, 512 for full 180° front auto‐aim.
+             */
+            autoAimAngle?: constant;
+        
+            /** Maximum ammo capacity for this weapon */
+            maxAmmo: constant;
+        
+            /** Ammo consumed per shot */
+            ammoDiscount?: constant;
+        
+            /**
+             * If subWeapon is true and this is true, secondary uses the same ammo pool as primary
+             */
+            ammoShared?: boolean;
+        });
+  
+
+        /**
+         * Drawing routine for the weapon sprite (use {@link hudCounter} to get which frame is the current one)
+         * @see {@link hudCounter}
+         */
+        public DrawHUD(): CON_NATIVE<void>;
+        /**
+         * This functions is called whenever you press the number key associated with this weapon
+         * (weapon ID + 1 with the exception of weapon 11 which is a sub of weapon 6)
+         */
+        public NumberKey(): CON_NATIVE<void>;
+        /**
+         * This function is called if you successfully fire the weapon
+         * @see {@link fireDelay}
+         */
+        public DoFire(): CON_NATIVE<void>;
+        /**
+         * This is called whenever you press the fire key
+         */
+        public FireKey(): CON_NATIVE<void>;
+        /**
+         * This gets called when the weapon is firing and the key is held
+         */
+        public FireKeyHeld(): CON_NATIVE<void>;
+        /**
+         * Called IF the projectile is a hitscan. Use this to control the zRange and AngleRange properties.
+         */
+        public GetShotRange(): CON_NATIVE<void>;
+        /**
+         * Called when the Auto Aim is active and the projectile gets fired
+         */
+        public GetAutoAimAngle(): CON_NATIVE<void>;
+        /**
+         * This functions is called when the weapon is changing.
+         */
+        public Changing(): CON_NATIVE<void>;
+        /**
+         * This is called when you sucessfully selects this weapon
+         */
+        public Select(): CON_NATIVE<void>;
+        /**
+         * Called whenever the weapon must be reset
+         */
+        public Reset(): CON_NATIVE<void>;
+    }
+
+    /**
+     * Holds the native weapons' configuration
+     * **Note**: available slots are 0 - 11
+     */
+    export const weapons: CWeaponNative[];
 }
