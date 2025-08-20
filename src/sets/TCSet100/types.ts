@@ -640,6 +640,16 @@ declare global {
     export function CONBreak(value: constant): CON_NATIVE<void>;
 
     /**
+     * Prints the stack and breaks the system for debugging
+     */
+    export function PrintStackAndBreak(): CON_NATIVE<void>;
+
+    /**
+     * Prints a value to the console
+     */
+    export function PrintValue(value: any): CON_NATIVE<void>;
+
+    /**
      * quote type. In TypeCON, we have strings, which are kept inside the flat memory and can be converted
      * and then we have quotes, which are kept separately from the memory and are used in native CON commands.
      * quotes have a 128 character limitation.
@@ -1531,6 +1541,14 @@ declare global {
         RESET               = 65536,
     }
 
+    /**
+     * @experimental
+     * @class CWeaponNative
+     * @classdesc In development - do not use in production code
+     * @description
+     * This class is being refactored. It's gonna offer a new weapon system
+     * that does not use the old system.
+     */
     export class CWeaponNative {
         /** True if it's secondary to any ID from 0 - 10 */
         public subWeapon: CON_NATIVE<boolean>;
@@ -1650,11 +1668,15 @@ declare global {
         public autoAimAngle: CON_NATIVE<number>;
 
         /** Gets/Sets the maximum ammo for this weapon */
-        public MaxAmmo(amount: number): CON_NATIVE<number>;
+        protected MaxAmmo(amount: number): CON_NATIVE<number>;
          /** Gets/Sets the current ammo for this weapon */
-        public CurrentAmmo(amount: number): CON_NATIVE<number>;
+        protected CurrentAmmo(amount: number): CON_NATIVE<number>;
         /** Gets/Sets how much ammo is used per-shot fired */
-        public AmmoDiscount(amount: number): CON_NATIVE<number>;
+        protected AmmoDiscount(amount: number): CON_NATIVE<number>;
+        /** Increases the current weapon ammo by @param amount */
+        protected IncreaseAmmo(amount: number): CON_NATIVE<void>;
+        /** Decreases the ammo by {@link AmmoDiscount} */
+        protected DecreaseAmmo(): CON_NATIVE<void>;
 
         /** The frame counter for the weapon. Use this to draw the weapon psrite in {@link DrawHUD}
          * or change its value whenever you need to make awesome effects.
@@ -1843,4 +1865,32 @@ declare global {
      * **Note**: available slots are 0 - 11
      */
     export const weapons: CWeaponNative[];
+
+    /**
+     * Use this interface to create a faster switch. **Only literal constant values are allowed**
+     * @property {constant} values holds the values that trigger this clause
+     * @property {object} range holds the range @property {constant} start and @property {constant} end of the clause
+     * @property {constant} exclude holds the values that are excluded from triggering this clause
+     * @property {constant} code an arrow function that gets executed once the clause is triggered
+     * @interface IFastSwitch
+     */
+    interface IFastSwitch {
+        /** Holds the values that trigger this clause */
+        values?: constant[],
+        /** Holds the range @property {constant} start and @property {constant} end of the clause */
+        range?: {
+            start: constant,
+            end: constant
+        },
+        /** Holds the values that are excluded from triggering this clause */
+        exclude?: constant[],
+        /** An arrow function that gets executed once the clause is triggered */
+        code: () => void
+    }
+
+    /**
+     * Fast switch allows to write a faster switch operation
+     * @param cases An array of {@link IFastSwitch} containing clauses
+     */
+    export function FastSwitch(cases: IFastSwitch[]);
 }

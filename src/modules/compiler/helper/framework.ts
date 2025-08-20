@@ -226,12 +226,16 @@ ${quoteInit}
 var playerDist 0 2
 
 //Internal native weapon system customization
-array nwsMaxAmmo 24
-array nwsCurAmmo 24
-array nwsAmmoDisc 24
+define NWS_MAX_WEAPONS 24
+var nwsMaxWeapons NWS_MAX_WEAPONS
+array nwsMaxAmmo NWS_MAX_WEAPONS
+array nwsCurrAmmo NWS_MAX_WEAPONS
+array nwsAmmoDisc NWS_MAX_WEAPONS
+
+define NWS_ACTIVE 0 //Set this to 1 if you wanna use the New Weapon System
 
 /*
-    Every time an user request an X amount of memory (arrays or objects), its value must fit inside a PAGE,
+    Every time an user requests an X amount of memory (arrays or objects), its value must fit inside a PAGE,
     if it's bigger than a PAGE, than allocate as many PAGES as necessary.
     The system is limited to allocating 4 GBs of memory.
     OBS: the first page must remain free (so NULL address can work properly)
@@ -317,9 +321,10 @@ defstate pushr3
 ends
 
 defstate popr3
-    sub rsp 3
+    sub rsp 2
     copy flat[rsp] rstack[0] 3
     getarrayseq rstack r0 r1 r2
+    sub rsp 1
 ends
 
 defstate pushr4
@@ -588,26 +593,34 @@ defstate realloc
     state alloc
     set r1 ra
 
-    set _HEAPi r1
-    sub _HEAPi ${stackSize}
-    div _HEAPi PAGE_SIZE
+    //This deals with stack memory
+    ifge r1 ${stackSize} {
+        set _HEAPi r1
+        sub _HEAPi ${stackSize}
+        div _HEAPi PAGE_SIZE
 
-    set _HEAPj 0
-    whilel _HEAPi heaptables {
-        ifn lookupHeap[_HEAPi] r1
-            exit
+        set _HEAPj 0
+        whilel _HEAPi heaptables {
+            ifn lookupHeap[_HEAPi] r1
+                exit
 
-        add _HEAPj 1
-        add _HEAPi 1
-    }
+            add _HEAPj 1
+            add _HEAPi 1
+        }
 
-    mul _HEAPj PAGE_SIZE
+        mul _HEAPj PAGE_SIZE
+    } else //I'm couting that the first element HOLDS the length of the stack memory
+        set _HEAPj flat[r1]
+
     set _HEAPi r1
 
     copy flat[_HEAPi] flat[rb] _HEAPj
 
-    set r0 r1
-    state free
+    //This deals with stack memory
+    ifge r1 ${stackSize} {
+        set r0 r1
+        state free
+    }
 ends
 
 defstate _GC
@@ -1044,17 +1057,13 @@ defstate _GapDist
     shiftr rb 8
 ends
 
-defstate _CurrWeapon
-    state push
-    getp[].curr_weapon rb
-    getp[].bsubweapon rb ra
-    ife ra 1
-    ife rb != GROW_WEAPON
-    ife rb != HANDREMOTE_WEAPON
-    ife rb != 12
-        add rb 13
-    state pop
-ends
+onevent EVENT_FIRE
+
+    ife NWS_ACTIVE 1
+        set RETURN -1
+
+endevent
+
 `
         }
 

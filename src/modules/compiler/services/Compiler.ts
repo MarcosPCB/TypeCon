@@ -1073,6 +1073,8 @@ export class TsToConCompiler {
         children: context.curSymRet ? context.curSymRet.children : undefined
       });
 
+      code += this.options.lineDetail ? `/*Symbol ${JSON.stringify(context.symbolTable.get(varName), undefined, 2)}*/\n` : '';
+
       context.localVarNativePointer = undefined;
       context.localVarNativePointerIndexed = false;
       context.localVarCount++;
@@ -1388,6 +1390,7 @@ export class TsToConCompiler {
 
       if (context.symbolTable.has(name)) {
         const off = context.symbolTable.get(name) as SymbolDefinition;
+        code += this.options.lineDetail ? `/*Symbol ${JSON.stringify(off, undefined, 2)}*/\n` : '';
         if(off.type & ESymbolType.constant) {
           if(direct)
             return String(off.literal);
@@ -2167,7 +2170,7 @@ set rb ra
       let argsLen = 0;
 
       if (nativeFn.type_belong)
-        argsLen++;
+        argsLen += 2;
 
       if (args.length > 0) {
         nativeFn.arguments.forEach(e => {
@@ -2220,7 +2223,7 @@ set rb ra
       }
 
       if (nativeFn.type_belong) {
-        code += `set ri rbp\nadd ri ${variable.offset}\nset r${argsLen - 1} flat[ri]\n`;
+        code += `set ri rbp\nadd ri ${variable.offset}\nset r${argsLen - 2} flat[ri]\nset r${argsLen -1} ri\n`;
         if (nativeFn.type_belong.includes('string') && nativeFn.return_type == 'string')
           context.curExpr = ESymbolType.string;
       }
@@ -2333,7 +2336,7 @@ set rb ra
     return undefined;
   }
 
-  private processObjectLiteral(objLit: ObjectLiteralExpression, context: CompilerContext): { code: string, layout: { [key: string]: SymbolDefinition }, size: number } {
+  private processObjectLiteral(objLit: ObjectLiteralExpression, context: CompilerContext): { code: string, layout: { [key: string]: SymbolDefinition }, size: number, instanceSize: number } {
     let code = this.options.lineDetail ? `/* Object literal: ${objLit.getText()} */\n` : '';
 
     // Reserve one slot for the object's base pointer.
@@ -2371,7 +2374,7 @@ set rb ra
     const aliasName = this.getTypeAliasNameForObjectLiteral(objLit);
     if (aliasName && context.typeAliases.has(aliasName)) {
       const typeDef = context.typeAliases.get(aliasName)!;
-      // Process each expected property (in declared order from the type alias).
+      // Process each expected property (in the declared order from the type alias).
       const totalProps = Object.keys(typeDef.members).length;
       curTotalSize = totalProps;
       for (const [propName, propType] of Object.entries(typeDef.members)) {
@@ -2386,9 +2389,12 @@ set rb ra
 
         if (prop && prop.isKind(SyntaxKind.PropertyAssignment)) {
           const pa = prop as PropertyAssignment;
+          //An array of objects is an array of pointers
           if (propType.endsWith("[]")) {
             curTotalSize++;
+            code += this.options.lineDetail ? `/* Object array property: ${prop.getText()} */\n` : '';
             code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
+            curTotalSize++;
             // For an array property (e.g., low: wow[])
             const baseType = propType.slice(0, -2).trim();
             const initText = pa.getInitializerOrThrow().getText();
@@ -2398,38 +2404,52 @@ set rb ra
             instanceCode += `add rsp 1\nsetarray flat[rsp] ${count}\n`;
             if (instanceType) {
               const result = this.getObjectTypeLayout(baseType, context);
+              //Set the pointer
               for (let j = 0; j < count; j++) {
+                curTotalSize ++;
+                instanceCode += this.options.lineDetail ? `/* Element ${j} pointer */\n` : '';
+                instanceCode += `add rsp 1\nset ri rsp\nadd ri 1\nsetarray flat[rsp] ri\n`;
                 for (let k = 0; k < instanceSize; k++) {
+                  instanceCode += this.options.lineDetail ? `/* Element ${j} property ${k} */\n` : '';
                   instanceCode += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
+                  curTotalSize++;
+                }
+              }
+
+              curTotalSize ++;
+
+              layout[propName] = {
+                name: propName,
+                type: ESymbolType.object | ESymbolType.array,
+                offset: totalSlots - 1,
+                size: count * instanceSize,
+                num_elements: count,
+                children: { ...result }  // clone children as plain object
+              };
+            } else {
+              code += this.options.lineDetail ? `/* Array property: ${prop.getText()} */\n` : '';
+              // For each element, allocate instanceSize slots.
+              for (let j = 0; j < count; j++) {
+                curTotalSize += 1;
+                instanceCode += this.options.lineDetail ? `/* Element ${j} pointer */\n` : '';
+                instanceCode += `add rsp 1\nset ri rsp\nadd ri 1\nsetarray flat[rsp] ri\n`;
+                instanceCode += this.options.lineDetail ? `/* Element ${j} instance */\n` : '';
+                for (let k = 0; k < instanceSize; k++) {
+                  instanceCode += `set ra 0\nadd rsp 1\nsetarray flat[i] ra\n`;
                   curTotalSize++;
                 }
               }
 
               layout[propName] = {
                 name: propName,
-                type: ESymbolType.object | ESymbolType.array,
-                offset: totalSlots,
-                size: count * instanceSize,
-                num_elements: count,
-                children: { ...result }  // clone children as plain object
-              };
-            } else {
-              // For each element, allocate instanceSize slots.
-              for (let j = 0; j < count; j++) {
-                for (let k = 0; k < instanceSize; k++) {
-                  instanceCode += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
-                  curTotalSize++;
-                }
-              }
-              layout[propName] = {
-                name: propName,
                 type: ESymbolType.array,
-                offset: totalSlots,
+                offset: totalSlots - 1,
                 size: count * instanceSize,
                 num_elements: count,
               };
             }
           } else if (context.typeAliases.has(propType)) {
+            code += this.options.lineDetail ? `/* Object property: ${prop.getText()} */\n` : '';
             curTotalSize++;
             code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
             // For a nested object property.
@@ -2440,11 +2460,13 @@ set rb ra
             layout[propName] = {
               name: propName,
               type: ESymbolType.object,
-              offset: totalSlots,
+              offset: totalSlots - 1,
               size: nestedSize,
               children: { ...result.layout }  // clone children as plain object
             };
           } else {
+            code += this.options.lineDetail ? `/* Primitive property: ${prop.getText()} */\n` : '';
+            //curTotalSize++;
             // For a primitive property.
             const init = pa.getInitializerOrThrow();
             code += this.visitExpression(init, context);
@@ -2452,7 +2474,7 @@ set rb ra
             layout[propName] = {
               name: propName,
               type: ESymbolType.number,
-              offset: totalSlots,
+              offset: totalSlots - 1,
               size: 1,
               literal: init.isKind(SyntaxKind.NumericLiteral)
                 ? (init as NumericLiteral).getLiteralValue()
@@ -2475,8 +2497,9 @@ set rb ra
           const init = p.getInitializerOrThrow();
           const propName = p.getName().replace(/[`'"]/g, "");
           if (init.isKind(SyntaxKind.ArrayLiteralExpression)) {
+            code += this.options.lineDetail ? `/* Array literal: ${p.getText()} */\n` : '';
             curTotalSize++;
-            code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize}\nsetarray flat[rsp] ri\n`
+            code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
             const initText = init.getText();
             const count = this.getArraySize(initText);
             //const instanceSize = this.getObjectSize(baseType, context);
@@ -2489,11 +2512,12 @@ set rb ra
             layout[propName] = {
               name: propName,
               type: ESymbolType.object | ESymbolType.array,
-              offset: totalSlots,
+              offset: totalSlots - 1,
               size: count,
               num_elements: count,
             };
           } else if (init.isKind(SyntaxKind.ObjectLiteralExpression)) {
+            code += this.options.lineDetail ? `/* Object literal property: ${p.getText()} */\n` : '';
             // For a nested object property.
             curTotalSize++;
             code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
@@ -2504,18 +2528,20 @@ set rb ra
             layout[p.getName()] = {
               name: propName,
               type: ESymbolType.object,
-              offset: totalSlots,
+              offset: totalSlots - 1,
               size: nestedSize,
               children: { ...result.layout }  // clone children as plain object
             };
           } else {
+            code += this.options.lineDetail ? `/* Primitive property: ${p.getText()} */\n` : '';
             // For a primitive property.
+            //curTotalSize++;
             code += this.visitExpression(init, context);
             code += `add rsp 1\nsetarray flat[rsp] ra\n`;
             layout[propName] = {
               name: propName,
               type: ESymbolType.number,
-              offset: totalSlots,
+              offset: totalSlots - 1,
               size: 1,
               literal: init.isKind(SyntaxKind.NumericLiteral)
                 ? (init as NumericLiteral).getLiteralValue()
@@ -2523,7 +2549,7 @@ set rb ra
             };
           }
         } else
-          addDiagnostic(objLit, context, "error", `No property assignmetn found during object declaration: ${objLit.getText()}`);
+          addDiagnostic(objLit, context, "error", `No property assignment found in object literal; no declaration found during object declaration: ${objLit.getText()}`);
       }
 
     }
@@ -2533,7 +2559,7 @@ set rb ra
 
     code += instanceCode;
 
-    return { code, layout: layout, size: totalSlots };
+    return { code, layout: layout, size: totalSlots, instanceSize: curTotalSize };
   }
 
 
@@ -2544,11 +2570,12 @@ set rb ra
     if (varName) {
       // Store the layout in the global symbol table.
       context.symbolTable.set(varName, { name: varName, type: ESymbolType.object, offset: context.localVarCount + 1, size: result.size, children: result.layout });
+      result.code += this.options.lineDetail ? `/*Symbol ${JSON.stringify(context.symbolTable.get(varName), undefined, 2)}*/\n` : '';
     }
     if (context.currentFile.options & ECompileOptions.no_compile)
       return '';
 
-    context.localVarCount += result.size + 1;
+    context.localVarCount += result.instanceSize - 1;
     return result.code + `set ra rbp\nadd ra ${context.localVarCount - result.size}\nset rf 0\n`;
   }
 
@@ -2620,6 +2647,8 @@ set rb ra
     let sym: SymbolDefinition | EnumDefinition | null = null;
     if (obj.kind == 'identifier' && ['sprites', 'sectors', 'walls', 'players', 'EMoveFlags'].indexOf(obj.name) == -1) {
       const eSym = context.symbolTable.get(obj.name);
+
+      code += this.options.lineDetail ? `/*Symbol ${JSON.stringify(eSym, undefined, 2)}*/\n` : '';
 
       if (eSym && eSym.type == ESymbolType.enum) {
         const seg = segments[1] as SegmentProperty
@@ -2710,7 +2739,7 @@ set rb ra
             }
             code += `state popi\n`;
             if (sym.type & (ESymbolType.object | ESymbolType.array))
-              code += `mul ra ${(sym as SymbolDefinition).size / (sym as SymbolDefinition).num_elements}\nadd ri ra\nadd ri 1\nset ri flat[ri]\n`
+              code += `mul ra ${((sym as SymbolDefinition).size / (sym as SymbolDefinition).num_elements || 1) + 1}\nadd ri ra\nadd ri 1\n`
             else
               code += `add ri ra\nadd ri 1\n`;
 

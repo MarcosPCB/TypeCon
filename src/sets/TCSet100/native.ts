@@ -749,6 +749,67 @@ al r0
         object_belong: ['console']
     },
     {
+        name: 'PrintStackAndBreak',
+        returns: false,
+        return_type: null,
+        arguments: [],
+        code: (args) => {
+            return `
+set ra 0
+al rbp
+al rsp
+set ri rsp
+add ri 1
+for ra range ri
+    al flat[ra]
+
+mul ri 4
+qputs 1022 USED STACK: %d bytes
+qsprintf 1023 1022 ri
+echo 1023
+
+set ra 0
+set rd 0
+al heaptables
+al PAGE_SIZE
+whilel ra heaptables {
+    ifn allocTable[ra] 0 {
+        al allocTable[ra]
+        al lookupHeap[ra]
+        set ri lookupHeap[ra]
+        set rsi ri
+        add rsi PAGE_SIZE
+        whilel ri rsi {
+            al flat[ri]
+            add ri 1
+        }
+        add rd 1
+    }
+
+    add ra 1
+}
+
+mul rd PAGE_SIZE
+mul rd 4
+qputs 1022 USED HEAP: %d bytes
+qsprintf 1023 1022 rd
+echo 1023
+    
+debug 0
+`}
+    },
+    {
+        name: 'PrintValue',
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        code: (args) => {
+            return `al r0`
+        }
+    },
+    {
         name: 'IsPlayerState',
         code: (constants: string[]) => {
             return `set rb 0\nifp ${constants[0]} set rb 1`;
@@ -1030,6 +1091,79 @@ state popr1
         type_belong: ['array']
     },
     {
+        name: 'push',
+        type_belong: [ 'array' ],
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        returns: false,
+        return_type: null,
+         code: (args?: boolean, fn?: string) => {
+            return `
+state push
+state pushd
+state pushr3
+
+set ra r1
+set r0 flat[ra] //Array length
+add r0 2
+set rd r0
+set r2 1
+
+state realloc
+state popr3
+
+sub rd 1
+setarray flat[rb] rd
+setarray flat[r2] rb
+
+sub rd 1
+add rb 1
+add rb rd
+setarray flat[rb] r0
+
+state popd
+state pop
+`
+        }
+    },
+    {
+        name: 'pop',
+        type_belong: [ 'array' ],
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        returns: false,
+        return_type: null,
+         code: (args?: boolean, fn?: string) => {
+            return `
+state push
+state pushd
+state pushr3
+
+set ra r1
+set r0 flat[ra] //Array length
+set rd r0
+set r2 1
+
+state realloc
+state popr3
+
+sub rd 1
+setarray flat[rb] rd
+setarray flat[r2] rb
+
+sub rd 1
+add rb 1
+add rb rd
+setarray flat[rb] r0
+
+state popd
+state pop
+`
+        }
+    },
+    {
         name: 'GetReference',
         code: (args: boolean) => {
             return `set rb r0\n`;
@@ -1115,17 +1249,15 @@ state popr1
         code: (args?: boolean) => {
             if(args !== undefined)
                 return `
-state _CurrWeapon
-setarray nwsAmmoDisc[rb] r0
+setarray nwsAmmoDisc[flat[rbp]] r0
 set rb r0`
             else return `
-state _CurrWeapon
-set rb nwsAmmoDisc[rb]`
+set rb nwsAmmoDisc[flat[rbp]]`
         },
         returns: true,
         return_type: 'variable',
         arguments: [
-
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
         ]
     },
     {
@@ -1133,17 +1265,59 @@ set rb nwsAmmoDisc[rb]`
         code: (args?: boolean) => {
             if(args !== undefined)
                 return `
-state _CurrWeapon
-setarray nwsAmmoDisc[rb] r0
+setarray nwsMaxAmmo[flat[rbp]] r0
 set rb r0`
             else return `
-state _CurrWeapon
-set rb nwsAmmoDisc[rb]`
+set rb nwsMaxAmmo[flat[rbp]]`
         },
         returns: true,
         return_type: 'variable',
         arguments: [
-
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
+        ]
+    },
+    {
+        name: 'CurrentAmmo',
+        code: (args?: boolean) => {
+            if(args !== undefined)
+                return `
+setarray nwsCurrAmmo[flat[rbp]] r0
+set rb r0`
+            else return `
+set rb nwsCurrAmmo[rb]`
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
+        ]
+    },
+    {
+        name: 'DecreaseAmmo',
+        code: (args?: boolean) => {
+                return `
+set ra nwsCurrAmmo[flat[rbp]]
+sub ra nwsAmmoDisc[flat[rbp]]
+clamp ra 0 nwsMaxAmmo[flat[rbp]]
+setarray nwsCurrAmmo[flat[rbp]] ra`;
+        },
+        returns: false,
+        return_type: null,
+        arguments: []
+    },
+    {
+        name: 'IncreaseAmmo',
+        code: (args?: boolean) => {
+                return `
+set ra nwsCurrAmmo[flat[rbp]]
+add ra r0
+clamp ra 0 nwsMaxAmmo[flat[rbp]]
+setarray nwsCurrAmmo[flat[rbp]] ra`;
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
         ]
     }
 ]
