@@ -125,30 +125,65 @@ class AssaultTrooper extends CActor {
         };
 
 
+    /**
+     * Assault Trooper constructor
+     * Extends CActor class and allows for proper definition of the actor
+     */
     constructor() {
+        /**
+         * The first parameter is the actor's tile number
+         * The second parameter tells if its and enemy or not
+         * The third parameter is the actor's strength
+         * The fourth arguments makes the label declarations be kept in memory (Actions, AIs and Moves)
+         * The fifth parameter tells the compiler that the actor has hard-coded stuff (replaces 'useractor' to 'actor')
+         */
         super(1680, true, 30, false, true);
     }
 
     Hide() {
         switch (this.curAction) {
+            /**
+             * Use the .loc property to get the action's pointer for comparison
+             */
             case this.actions.aReappear.loc:
                 if (this.ActionCount() >= 2) {
+                    /**
+                     * Notice that the list of sounds used by DN3D is inside the DN3D module
+                     * together with all the other constants and states
+                     */
                     this.Sound(DN3D.ESound.TELEPORTER);
                     this.StartAI(this.ais.aiShooting);
+                    /**
+                     * EStats contains all the possible stats for the actor
+                     */
                     this.CStat(EStats.BLOCK | EStats.BLOCK_HITSCAN);
                 } else {
+                    /**
+                     * SizeTo allows you to dictate the actor's size increment
+                     */
                     this.SizeTo(41, 40, 4, 4);
+                    /**
+                     * DN3D.ENames is a enum list of all actor definitions of Duke 3D
+                     */
                     this.Spawn(DN3D.ENames.FRAMEEFFECT1);
                 }
                 break;
 
             case this.actions.aWalking.loc:
                 if (this.playerDist < 2448 && this.playerDist > 1024) {
+                    /**
+                     * EPlayerStates holds all possible values of the current player state
+                     */
                     if (this.CeilingDist() < 48 || IsPlayerState(EPlayerStates.facing))
                         return;
 
                     if (this.GapDist() >= 48 && this.IsAwayFromWall()) {
                         this.Spawn(DN3D.ENames.TRANSPORTERSTAR);
+                        /**
+                         * Instead of sending two different commands to se the action and the move,
+                         * you can use ActionAndMove, that already does that you, making the code cleaner
+                         * In this case we se the move to null and its move flags to 0
+                         */
                         ActionAndMove(this.actions.aReappear, null, 0);
                         return;
                     }
@@ -159,6 +194,9 @@ class AssaultTrooper extends CActor {
                 if (this.ActionCount() >= 2) {
                     this.Spawn(DN3D.ENames.TRANSPORTERSTAR);
                     this.Sound(DN3D.ESound.TELEPORTER);
+                    /**
+                     * This another example sets the move to walkVels and the move flags to faceplayer
+                     */
                     ActionAndMove(this.actions.aWalking, this.moves.walkVels, EMoveFlags.faceplayer)
                     this.CStat(EStats.INVISIBLE);
                 } else {
@@ -182,7 +220,13 @@ class AssaultTrooper extends CActor {
 
         if (this.playerDist < 1024)
             this.StartAI(this.ais.aiShooting)
+        /**
+         * Here we check the actor's flags to see if it's a stayput enemy
+         */
         else if (!(this.flags & ESpriteFlags.BADGUYSTAYPUT)) {
+            /**
+             * isRandom is the same as ifrnd
+             */
             if (this.ActionCount() >= 12 && this.IsRandom(16) && this.CanShootTarget()) {
                 if (this.pal == 21 && this.IsRandom(4) && this.playerDist > 4096)
                     this.StartAI(this.ais.aiHide)
@@ -237,6 +281,12 @@ class AssaultTrooper extends CActor {
 
         if(!this.IsItMoving()) {
             if(this.IsRandom(32))
+                /**
+                 * One command to rule them all!
+                 * Operate allows the actor to oeprate not only doors, but sectors and switches.
+                 * Which means, that instead of a Operate command for each type of interaction,
+                 * you get to use only one now.
+                 */
                 this.Operate(EOperateFlags.doors)
             else if(this.Count() >= 32
                 && IsPlayerState(EPlayerStates.alive)
@@ -248,6 +298,9 @@ class AssaultTrooper extends CActor {
 
         if(this.IsRandom(1)) {
             if(this.IsRandom(128))
+                /**
+                 * Sound allows you to play sounds globally, once (soundonce) or normally.
+                 */
                 this.Sound(DN3D.ESound.PRED_ROAM, false, true);
             else
                 this.Sound(DN3D.ESound.PRED_ROAM2, false, true);
@@ -293,6 +346,10 @@ class AssaultTrooper extends CActor {
                 if(this.IsRandom(128))
                     this.StartAI(this.ais.aiSeekPlayer);
 
+                /**
+                 * Count and ActionCount are methods that allow you to
+                 * get the current actor's count and set it to a new value
+                 */
                 if(this.Count() >= 24) {
                     if(this.IsRandom(96) && this.playerDist >= 2048)
                         this.StartAI(this.ais.aiSeekPlayer);
@@ -384,6 +441,10 @@ class AssaultTrooper extends CActor {
                 return;
             }
 
+            /**
+             * DropAmmo and RandomWallJibs are methods that are linked
+             * to the CON native states inside GAME.CON
+             */
             DN3D.states.DropAmmo();
             DN3D.states.RandomWallJibs();
 
@@ -635,6 +696,12 @@ class AssaultTrooper extends CActor {
             DN3D.states.CheckSquished();
     }
 
+    /** 
+     * Here are the actor's variations of starting poses and states
+     * The method must return the picnum, the strength and maybe its first action to be executed.
+     * What happens is that after this execution,
+     * it returns to the Main method of the actor
+    */
     protected Variations: OnVariation<AssaultTrooper> = {
         OnJetpack(this: AssaultTrooper) {
             this.CheckPal();
