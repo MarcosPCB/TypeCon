@@ -1,5 +1,6 @@
 import { Dirent, readdirSync, readFileSync } from "fs";
-import { CompilerContext, indent } from "../services/Compiler";
+import { CompilerContext } from "./Compiler";
+import { indent } from "./helper/indent";
 import path from 'path';
 
 export enum ECompileOptions {

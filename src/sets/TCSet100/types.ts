@@ -647,7 +647,7 @@ declare global {
     /**
      * Prints a value to the console
      */
-    export function PrintValue(value: any): CON_NATIVE<void>;
+    export function PrintValue(value: number): CON_NATIVE<void>;
 
     /**
      * quote type. In TypeCON, we have strings, which are kept inside the flat memory and can be converted

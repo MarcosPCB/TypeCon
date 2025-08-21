@@ -2,10 +2,10 @@
 
 import fs, { Dirent } from 'fs';
 import path = require('path');
-import { compiledFiles, CONInit, ECompileOptions } from './modules/compiler/helper/framework';
+import { compiledFiles, CONInit, ECompileOptions } from './modules/compiler/framework';
 import GDBDebugger from './modules/debugger/services/GDBDebugger';
 //import { CONDebugger } from './modules/debugger/debugger';
-import { CompileResult, TsToConCompiler } from './modules/compiler/services/Compiler';
+import { CompileResult, TsToConCompiler } from './modules/compiler/Compiler';
 import * as readline from 'readline';
 import inquirer from 'inquirer';
 const fsExtra = require("fs-extra");
