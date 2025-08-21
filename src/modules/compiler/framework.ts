@@ -1071,7 +1071,7 @@ endevent
     GetPrecompiledCode() {
         let dir: Dirent[];
         try {
-            dir = readdirSync(`./include/TCSet100/precompile/CON`, {
+            dir = readdirSync(`./include/TCSet100/precompile/generated`, {
                 withFileTypes: true
             });
         } catch(err) {

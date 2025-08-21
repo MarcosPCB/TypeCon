@@ -35,6 +35,29 @@ let precompiled_modules = true;
 let heap_page_size = 8;
 let heap_page_number = 64;
 
+const helpText = `
+Usage:
+    Project options:
+    \x1b[31msetup\x1b[0m: Creates the project's basic setup including folders, include files, templates and the basic TypeScript configuration
+
+    Compile options:
+    \x1b[31m-i or --input\x1b[0m:  for the file path to be compiled
+    \x1b[37m-if or --input_folder\x1b[0m:  for the path folder to be compiled (compiles all files inside)
+    \x1b[32m-il or --input_list\x1b[0m: for a list of files to be compiled
+    \x1b[33m-o or --output\x1b[0m:  for the output file name
+    \x1b[34m-of or --output_folder\x1b[0m: for the output folder path 
+    \x1b[35m-dl or --detail_lines\x1b[0m: to write the TS lines inside the CON code 
+    \x1b[36m-ss or --stack_size\x1b[0m: to define the stack size 
+    \x1b[38m-ps or --page_size\x1b[0m: to define the heap page's size 
+    \x1b[39m-pn or --page_number\x1b[0m: to define the default number of heap pages
+    \x1b[91m-hl or --headerless\x1b[0m: Don't insert the header code (init code and states) inside the output CON 
+    \x1b[92m-h or --header\x1b[0m: Create the header file 
+    \x1b[96m-np or --no_precompiled\x1b[0m: Don't link pre-compiled modules
+    \x1b[93m-l or --link\x1b[0m: Create the header and the init files with the following list of CON files (separated by "")
+    \x1b[96m-1f or --one_file\x1b[0m: Compile all the code into one file (must be used with -o)
+    \x1b[94m-di or --default_inclusion\x1b[0m: Default inclusion (GAME.CON) 
+    \x1b[95m-ei or --eduke_init\x1b[0m: Init file is EDUKE.CON`
+
 function GetAllFilesFromPath(iPath: string) {
     let iFiles: Dirent[];
 
@@ -87,13 +110,17 @@ function AskQuestion(query: string): Promise<string> {
   
   function InstallTypescriptPlugin(projectRoot: string, pluginName: string) {
     const manager = DetectPackageManager(projectRoot);
-    const cmd = manager === 'yarn' ? 'yarn' : 'npm';
+    // Use .cmd extension on Windows for npm/yarn
+    const isWin = process.platform === 'win32';
+    const cmd = manager === 'yarn'
+      ? (isWin ? 'yarn' : 'yarn')
+      : (isWin ? 'npm' : 'npm');
     const args = manager === 'yarn' 
       ? ['add', '--dev', pluginName] 
       : ['install', '--save-dev', pluginName];
   
-    console.log(`Installing ${pluginName} using ${manager}...`);
-    const result = spawnSync(cmd, args, { stdio: 'inherit', cwd: projectRoot });
+    console.log(`Installing ${pluginName} using ${manager} at ${projectRoot}...`);
+    const result = spawnSync(cmd, args, { stdio: 'inherit', cwd: projectRoot, shell: true });
     
     if (result.error) {
       throw result.error;
@@ -128,7 +155,8 @@ async function Setup() {
 
     try {
         console.log(`Creating folder ${folder}...`);
-        fs.mkdirSync(`./${folder}`);
+        if(!fs.existsSync(`./${folder}`))
+            fs.mkdirSync(`./${folder}`);
     } catch(err) {
         console.log(`ERROR: unable to create folder ${folder}`, err);
         process.exit(1);
@@ -136,7 +164,8 @@ async function Setup() {
 
     try {
         console.log(`Setting up include folder and files...`);
-        fs.mkdirSync(`./${folder}/include`);
+        if(!fs.existsSync(`./${folder}/include`))
+            fs.mkdirSync(`./${folder}/include`);
         const incFolder = path.join(__dirname, '..', 'include');
         const prjFolder = path.join(process.cwd(), folder, 'include');
         await fsExtra.copy(incFolder, prjFolder, { overwrite: true });
@@ -173,16 +202,27 @@ async function Setup() {
     answer = await inquirer.prompt({
         type: 'list',
         name: 'choice',
-        message: `What template would you like to use? Use 'None' if you're not setting up this right now`,
+        message: `What template would you like to use? Check Baisc to see some examples or use 'None' if you're not setting up this right now`,
         choices: ['DN3D mod', 'Basic', 'None'],
         default: 'None'
     });
 
     switch(answer.choice) {
-        case 'DN3D mod':
+        case 'DN3D mod - (NOT WORKING YET)':
             break;
 
         case 'Basic':
+            try {
+                const enemyTemplate = path.join(__dirname, '../test/AssaultTrooper.ts');
+                const featuresTemplate = path.join(__dirname, '../test/test.ts');
+
+                await fsExtra.copy(enemyTemplate, path.join(process.cwd(), folder, 'AssaultTrooper.ts'));
+                await fsExtra.copy(featuresTemplate, path.join(process.cwd(), folder, 'test.ts'));
+
+                console.log('Basic templates are ready!\nCheck them out: AssaultTrooper.ts and test.ts\nCompile them using e.g: yarn tcc -i AssaultTrooper.ts -o AssaultTrooper.con');
+            } catch(err) {
+                console.log(`ERROR: unable to copy files ${path.join(process.cwd(), folder, 'include')}`, err);
+            }
             break;
 
         case 'None':
@@ -347,28 +387,7 @@ for(let i = 0; i < process.argv.length; i++) {
     }
 
     if(a == '--help' || a == '-?') {
-        console.log(`
-Usage:
-    Compile options:
-    \x1b[31m-i or --input\x1b[0m:  for the file path to be compiled
-    \x1b[37m-if or --input_folder\x1b[0m:  for the path folder to be compiled (compiles all files inside)
-    \x1b[32m-il or --input_list\x1b[0m: for a list of files to be compiled
-    \x1b[33m-o or --output\x1b[0m:  for the output file name
-    \x1b[34m-of or --output_folder\x1b[0m: for the output folder path 
-    \x1b[35m-dl or --detail_lines\x1b[0m: to write the TS lines inside the CON code 
-    \x1b[36m-ss or --stack_size\x1b[0m: to define the stack size 
-    \x1b[38m-ps or --page_size\x1b[0m: to define the heap page's size 
-    \x1b[39m-pn or --page_number\x1b[0m: to define the default number of heap pages
-    \x1b[91m-hl or --headerless\x1b[0m: Don't insert the header code (init code and states) inside the output CON 
-    \x1b[92m-h or --header\x1b[0m: Create the header file 
-    \x1b[96m-np or --no_precompiled\x1b[0m: Don't link pre-compiled modules
-    \x1b[93m-l or --link\x1b[0m: Create the header and the init files with the following list of CON files (separated by "")
-    \x1b[96m-1f or --one_file\x1b[0m: Compile all the code into one file (must be used with -o)
-    \x1b[94m-di or --default_inclusion\x1b[0m: Default inclusion (GAME.CON) 
-    \x1b[95m-ei or --eduke_init\x1b[0m: Init file is EDUKE.CON
-
-    Project options:
-    \x1b[31msetup\x1b[0m: Creates the project's basic setup including folders, include files, templates and the basic TypeScript configuration`)
+        console.log(helpText)
         process.exit(0);
     }
 }
@@ -462,7 +481,7 @@ if(debug_mode) {
     }
 
     if(fileName == '' && files.length == 0 && !link)
-        console.log(`Nothing to do!`);
+        console.log(`Nothing to do!\n${helpText}`);
     else
         console.log(`Compilation finished!`);
 
