@@ -1,4 +1,4 @@
-import '../src/sets/TCSet100/types';
+import '../include/TCSet100/types';
 
 /**
  * Type definitions for testing
@@ -83,7 +83,7 @@ class displayRest extends CEvent {
         /**
          * This will allocate a new array on the heap
          */
-        const u = [];
+        const u: number[] = [];
         /**
          * Now it must realocate the array to fit another value
          * (since it's on the heap and the size is less than one PAGE, nothing happens)
