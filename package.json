@@ -1,7 +1,8 @@
 {
   "name": "typecon",
   "version": "0.5.0",
-  "description": "Transpile typescript into CON",
+  "description": "Compiles Typescript code into CON",
+  "repository": "https://github.com/MarcosPCB/TypeCon",
   "main": "./dist/main.js",
   "author": "ItsMarcos",
   "license": "GPL-3.0-only",
