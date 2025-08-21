@@ -1,6 +1,6 @@
 {
   "name": "typecon",
-  "version": "0.5.0",
+  "version": "0.5.4",
   "description": "Compiles Typescript code into CON",
   "repository": "https://github.com/MarcosPCB/TypeCon",
   "main": "./dist/main.js",
@@ -18,7 +18,8 @@
     "debug": "IS_DEV=true ts-node-dev --inspect-brk --transpile-only --ignore-watch node_modules src/main.ts",
     "build": "tsc",
     "start": "node dist/main.js",
-    "postbuild": "node postBuild.js"
+    "postbuild": "node postBuild.js",
+    "release": "yarn run build && yarn version patch && git push && git push --tags"
   },
   "dependencies": {
     "fs-extra": "^11.3.0",

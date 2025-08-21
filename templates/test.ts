@@ -1,4 +1,4 @@
-import '../../src/sets/TCSet100/types';
+import '../src/sets/TCSet100/types';
 
 /**
  * Type definitions for testing

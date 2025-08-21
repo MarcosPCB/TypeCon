@@ -1,5 +1,5 @@
-import '../../include/TCSet100/types'
-import DN3D from '../../include/TCSet100/DN3D/game';
+import '../include/TCSet100/types'
+import DN3D from '../include/TCSet100/DN3D/game';
 
 class AssaultTrooper extends CActor {
     /* ─────────────────────────────────────────

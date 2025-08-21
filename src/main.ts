@@ -137,17 +137,18 @@ async function Setup() {
     let folder = '';
     //try {
         //folder = await askQuestion(`What's your source code folder name? e.g: src`);
-        let  answer = await inquirer.prompt(
-            {
-              type: 'input',
-              name: 'choice',
-              message: "What's your source code folder name? e.g: src"
-            });
+    let  answer = await inquirer.prompt(
+        {
+            type: 'input',
+            name: 'choice',
+            message: "What's your source code folder name? e.g: src:",
+            default: 'src'
+        });
 
-        if(!answer.choice)
-            console.log(`Using default src folder...`);
+    if(!answer.choice)
+        console.log(`Using default src folder...`);
 
-        folder = answer.choice;
+    folder = answer.choice;
     /*} catch(err) {
         console.log(`ERROR: reading input error`, err);
         process.exit(1);
@@ -164,10 +165,10 @@ async function Setup() {
 
     try {
         console.log(`Setting up include folder and files...`);
-        if(!fs.existsSync(`./${folder}/include`))
-            fs.mkdirSync(`./${folder}/include`);
+        const prjFolder = `./include`;
+        if(!fs.existsSync(prjFolder))
+            fs.mkdirSync(prjFolder);
         const incFolder = path.join(__dirname, '..', 'include');
-        const prjFolder = path.join(process.cwd(), folder, 'include');
         await fsExtra.copy(incFolder, prjFolder, { overwrite: true });
     } catch(err) {
         console.log(`ERROR: unable to copy files ${path.join(process.cwd(), folder, 'include')}`, err);
@@ -179,7 +180,33 @@ async function Setup() {
     try {
         InstallTypescriptPlugin(process.cwd(), 'typescript');
         InstallTypescriptPlugin(process.cwd(), 'typecon_plugin');
-        console.log(`Setting up TypeScript enviroment...`);
+    } catch(err) {
+        console.log(`ERROR: basic TS setup failed`, err);
+        process.exit(1);
+    }
+
+    answer = await inquirer.prompt({
+        type: 'list',
+        name: 'choice',
+        message: "Would you like to activate the TypeCON Plugin?",
+        choices: ['Yes', 'No'],
+        default: 'Yes'
+    });
+
+    if(answer.choice == 'Yes') {
+        console.log(`Preparing the Typescript enviroment...`);
+        try {
+            if(!fs.existsSync(`./.vscode`))
+                fs.mkdirSync(`./.vscode`);
+
+            fs.writeFileSync(`./.vscode/settings.json`, JSON.stringify({ "typescript.tsdk": "node_modules/typescript/lib" }));
+        } catch(err) {
+            console.log(`ERROR: failed to prepare the Typescript enviroment`, err);
+        }
+    }
+
+    try {
+        console.log(`Setting up the Typescript configuration...`);
         fs.writeFileSync(`tsconfig.json`, JSON.stringify({
             compilerOptions: {
                 plugins: [
@@ -189,11 +216,11 @@ async function Setup() {
                 ],
                 strict: true,
             },
-            include: ["data/**/*.ts"],
+            include: ["**/*.ts"],
             exclude: ["node_modules"]
         }));
     } catch(err) {
-        console.log(`ERROR: basic TS setup failed`, err);
+        console.log(`ERROR: failed to setup the TypeScript enviroment`, err);
         process.exit(1);
     }
 
@@ -202,9 +229,9 @@ async function Setup() {
     answer = await inquirer.prompt({
         type: 'list',
         name: 'choice',
-        message: `What template would you like to use? Check Baisc to see some examples or use 'None' if you're not setting up this right now`,
+        message: `What template would you like to use? Check Basic to see some examples or use 'None' if you're not setting up this right now`,
         choices: ['DN3D mod', 'Basic', 'None'],
-        default: 'None'
+        default: 'Basic'
     });
 
     switch(answer.choice) {
@@ -213,13 +240,12 @@ async function Setup() {
 
         case 'Basic':
             try {
-                const enemyTemplate = path.join(__dirname, '../test/AssaultTrooper.ts');
-                const featuresTemplate = path.join(__dirname, '../test/test.ts');
+                const templatesFolder = path.join(__dirname, '../templates');
+                const prjTemplatesFolder = path.join(process.cwd(), folder);
 
-                await fsExtra.copy(enemyTemplate, path.join(process.cwd(), folder, 'AssaultTrooper.ts'));
-                await fsExtra.copy(featuresTemplate, path.join(process.cwd(), folder, 'test.ts'));
+                await fsExtra.copy(templatesFolder, prjTemplatesFolder, { overwrite: true });
 
-                console.log('Basic templates are ready!\nCheck them out: AssaultTrooper.ts and test.ts\nCompile them using e.g: yarn tcc -i AssaultTrooper.ts -o AssaultTrooper.con');
+                console.log('Basic templates are ready!\nCheck them out: AssaultTrooper.ts and test.ts\nCompile them using e.g: yarn tcc -i templates/AssaultTrooper.ts -o AssaultTrooper.con\nThe compiled file will be at "compiled"');
             } catch(err) {
                 console.log(`ERROR: unable to copy files ${path.join(process.cwd(), folder, 'include')}`, err);
             }
