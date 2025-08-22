@@ -19,7 +19,21 @@
     "build": "tsc",
     "start": "node dist/main.js",
     "postbuild": "node postBuild.js",
+    "bin-pkg": "yarn build && yarn pkg . && mv ./pkg/typecon-win.exe ./pkg/win/tcc.exe && cp -r ./include ./pkg/win/include && mv ./pkg/typecon-macos ./pkg/mac/tcc && cp -r ./include ./pkg/mac/include && mv ./pkg/typecon-linux ./pkg/linux/tcc && cp -r ./include ./pkg/linux/include",
     "release": "yarn run build && yarn version --patch && git push && git push --tags"
+  },
+  "pkg": {
+    "scripts": "dist/**/*.js",
+    "targets": [
+      "node18-win-x64",
+      "node18-mac-x64",
+      "node18-linux-x64"
+    ],
+    "assets": [
+      "./include/**/*",
+      "./templates/**/*"
+    ],
+    "outputPath": "./pkg/"
   },
   "dependencies": {
     "fs-extra": "^11.3.0",

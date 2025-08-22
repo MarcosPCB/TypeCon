@@ -3,8 +3,6 @@
 import fs, { Dirent } from 'fs';
 import path = require('path');
 import { compiledFiles, CONInit, ECompileOptions } from './modules/compiler/framework';
-import GDBDebugger from './modules/debugger/services/GDBDebugger';
-//import { CONDebugger } from './modules/debugger/debugger';
 import { CompileResult, TsToConCompiler } from './modules/compiler/Compiler';
 import * as readline from 'readline';
 import inquirer from 'inquirer';
@@ -156,8 +154,8 @@ async function Setup() {
 
     try {
         console.log(`Creating folder ${folder}...`);
-        if(!fs.existsSync(`./${folder}`))
-            fs.mkdirSync(`./${folder}`);
+        if(!fs.existsSync(`${process.cwd()}/${folder}`))
+            fs.mkdirSync(`${process.cwd()}/${folder}`);
     } catch(err) {
         console.log(`ERROR: unable to create folder ${folder}`, err);
         process.exit(1);
@@ -165,13 +163,13 @@ async function Setup() {
 
     try {
         console.log(`Setting up include folder and files...`);
-        const prjFolder = `./include`;
+        const prjFolder = `${process.cwd()}/include`;
         if(!fs.existsSync(prjFolder))
             fs.mkdirSync(prjFolder);
         const incFolder = path.join(__dirname, '..', 'include');
         await fsExtra.copy(incFolder, prjFolder, { overwrite: true });
     } catch(err) {
-        console.log(`ERROR: unable to copy files ${path.join(process.cwd(), folder, 'include')}`, err);
+        console.log(`ERROR: unable to copy files ${path.join(process.cwd(), 'include')}`, err);
         process.exit(1);
     }
 
