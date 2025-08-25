@@ -1,7 +1,7 @@
 import { Expression } from "ts-morph";
 import { CompilerContext, SegmentIdentifier, SegmentIndex, SegmentProperty, MemberSegment, SymbolDefinition, EnumDefinition, ESymbolType } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
-import { CON_NATIVE_VAR, CON_NATIVE_FLAGS, CON_NATIVE_TYPE } from "../../../sets/TCSet100/native";
+import { CON_NATIVE_VAR, CON_NATIVE_FLAGS, CON_NATIVE_TYPE, nativeVars_Players } from "../../../sets/TCSet100/native";
 import { nativeVars_Sprites, nativeVars_Sectors, nativeVars_Walls } from "../../../sets/TCSet100/native";
 import { unrollMemberExpression } from "./unrollMemberExpression";
 import { visitExpression } from "./visitExpression";
@@ -371,6 +371,11 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
                 nativeVar = nativeVars_Walls;
                 op = 'wall';
                 break;
+
+              case 'players':
+                nativeVar = nativeVars_Players;
+                op = 'player';
+                break;
             }
 
             let nVar = nativeVar.find(e => e.name == seg.name);
@@ -455,6 +460,25 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
                     nVar = v;
                 }
               }
+            } else if(nVar.type == CON_NATIVE_FLAGS.ARRAY) {
+              let nextSeg = segments[3];
+
+              if (nextSeg.kind != 'index') {
+                addDiagnostic(expr, context, "error", `Missing index for ${seg.name}: ${expr.getText()}`);
+                return "set ra 0\n";
+              }
+
+              if(assignment)
+                code += `state push\n`;
+
+              code += visitExpression(nextSeg.expr, context);
+              code += `set rsi ra\n`;
+
+              if(assignment)
+                code += `state pop\n`;
+
+               code += `${assignment ? 'set' : 'get'}${op}[${obj.kind == 'this' ? 'THISACTOR' : 'ri'}].`;
+               code += `${nVar.code} ${reg}\n`;
             } else if (nVar.type == CON_NATIVE_FLAGS.VARIABLE) {
               if (nVar.var_type == CON_NATIVE_TYPE.native) {
                 if (!overriden)

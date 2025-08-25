@@ -96,7 +96,7 @@ export enum Names {
 
 export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound';
 export type TEventDE = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd';
-export type TEventI = 'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' | 'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10';
+export type TEventI = 'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' | 'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10' | 'DoFire' | 'Fire' | 'PressedFire';
 export type TEvents = TEventPAE | TEventDE | TEventI;
 
 export const EventList: TEvents[] = [
@@ -120,5 +120,8 @@ export const EventList: TEvents[] = [
     'WeapKey7',
     'WeapKey8',
     'WeapKey9',
-    'WeapKey10'
+    'WeapKey10',
+    'DoFire',
+    'Fire',
+    'PressedFire'
 ];

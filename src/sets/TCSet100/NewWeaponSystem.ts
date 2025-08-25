@@ -1,3 +1,5 @@
+import './types';
+
 /**
  * @file NewWeapon.ts
  * @experimental This is experimental code and may be removed or changed without warning
@@ -13,7 +15,7 @@ class CWK1 extends CEvent {
     }
 
     Prepend() {
-        returnVar = -1;
+        CONUnsafe('set RETURN -1');
     }
 }
 
@@ -23,7 +25,7 @@ class CWK2 extends CEvent {
     }
 
     Prepend() {
-        returnVar = -1;
+        CONUnsafe('set RETURN -1');
     }
 }
 
@@ -33,7 +35,7 @@ class CWK3 extends CEvent {
     }
 
     Prepend() {
-        returnVar = -1;
+        CONUnsafe('set RETURN -1');
     }
 }
 
@@ -43,7 +45,7 @@ class CWK4 extends CEvent {
     }
 
     Prepend() {
-        returnVar = -1;
+        CONUnsafe('set RETURN -1');
     }
 }
 
@@ -53,7 +55,7 @@ class CWK5 extends CEvent {
     }
 
     Prepend() {
-        returnVar = -1;
+        CONUnsafe('set RETURN -1');
     }
 }
 
@@ -63,7 +65,7 @@ class CWK6 extends CEvent {
     }
 
     Prepend() {
-        returnVar = -1;
+        CONUnsafe('set RETURN -1');
     }
 }
 
@@ -73,7 +75,7 @@ class CWK7 extends CEvent {
     }
 
     Prepend() {
-        returnVar = -1;
+        CONUnsafe('set RETURN -1');
     }
 }
 
@@ -83,7 +85,7 @@ class CWK8 extends CEvent {
     }
 
     Prepend() {
-        returnVar = -1;
+        CONUnsafe('set RETURN -1');
     }
 }
 
@@ -93,7 +95,7 @@ class CWK9 extends CEvent {
     }
 
     Prepend() {
-        returnVar = -1;
+        CONUnsafe('set RETURN -1');
     }
 }
 
@@ -103,9 +105,30 @@ class CWK10 extends CEvent {
     }
 
     Prepend() {
-        returnVar = -1;
+        CONUnsafe('set RETURN -1')
     }
 }
+
+class DDF extends CEvent {
+    constructor() {
+        super('DoFire')
+    }
+
+    Prepend() {
+        CONUnsafe('set RETURN -1')
+    }
+}
+
+class DPF extends CEvent {
+    constructor() {
+        super('PressedFire')
+    }
+
+    Prepend() {
+        CONUnsafe('set RETURN -1')
+    }
+}
+
 
 
 

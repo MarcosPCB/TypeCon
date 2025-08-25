@@ -1369,7 +1369,7 @@ declare global {
 
     export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound';
     export type TEventDE = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd';
-    export type TEventI = 'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' | 'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10';
+    export type TEventI = 'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' | 'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10' | 'DoFire' | 'Fire' | 'PressedFire';
     export type TEvents = TEventPAE | TEventDE | TEventI;
 
     export type OnEvent = Partial<{
@@ -2308,4 +2308,20 @@ declare global {
      * @param cases An array of {@link IFastSwitch} containing clauses
      */
     export function FastSwitch(cases: IFastSwitch[]);
+
+    class CPlayer {
+        public ammoAmount: CON_NATIVE<number[]>;
+        public gotWeapon: CON_NATIVE<number[]>;
+        public maxAmmoAmount: CON_NATIVE<number[]>;
+        public subOrNot: CON_NATIVE<number[]>
+        public currWeapon: CON_NATIVE<number>;
+        public weaponAnim: CON_NATIVE<number>;
+        public actor: CActor;
+        
+        Main();
+
+        protected Events: OnEvent;
+    }
+
+    const players: CPlayer[];
 }

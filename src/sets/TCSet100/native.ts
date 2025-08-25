@@ -1593,6 +1593,57 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
     }
 ];
 
+export const nativeVars_Players: CON_NATIVE_VAR[] =[
+    {
+        name: 'ammoAmount',
+        var_type: CON_NATIVE_TYPE.array,
+        type: CON_NATIVE_FLAGS.ARRAY,
+        readonly: false,
+        code: 'ammo_amount rsi',
+        init: 0
+    },
+    {
+        name: 'gotWeapon',
+        var_type: CON_NATIVE_TYPE.array,
+        type: CON_NATIVE_FLAGS.ARRAY,
+        readonly: false,
+        code: 'gotweapon rsi',
+        init: 0
+    },
+    {
+        name: 'maxAmmoAmount',
+        var_type: CON_NATIVE_TYPE.array,
+        type: CON_NATIVE_FLAGS.ARRAY,
+        readonly: false,
+        code: 'max_ammo_amount rsi',
+        init: 0
+    },
+    {
+        name: 'subOrNot',
+        var_type: CON_NATIVE_TYPE.array,
+        type: CON_NATIVE_FLAGS.ARRAY,
+        readonly: false,
+        code: 'bsubweapon rsi',
+        init: 0
+    },
+    {
+        name: 'currWeapon',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'curr_weapon',
+        init: 0
+    },
+    {
+        name: 'weaponAnim',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'kickback_pic',
+        init: 0
+    },
+]
+
 export const nativeVarsList = ['sprites', 'sectors', 'walls', 'projectiles',
     'players', 'tiledata', 'tsprites', 'paldata', 'userdef'];
 
