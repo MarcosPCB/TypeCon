@@ -235,6 +235,13 @@ array nwsAmmoDisc NWS_MAX_WEAPONS
 
 define NWS_ACTIVE 0 //Set this to 1 if you wanna use the New Weapon System
 
+// THIS WILL BE CHANGED IN THE FUTURE
+// FOR A MORE EFFICIENT MEMORY MANAGEMENT
+// PROPOSED SYSTEM -> Each page can be as long as it needs to be,
+//      but it must be a multiple of the minimum size by PAGE_SIZE.
+//      This way we can more easily manage the memory and avoid too many loops
+//      Also, it would be easier to keep track of each memory allocation size.
+
 /*
     Every time an user requests an X amount of memory (arrays or objects), its value must fit inside a PAGE,
     if it's bigger than a PAGE, than allocate as many PAGES as necessary.
@@ -588,6 +595,7 @@ defstate free
     }
 ends
 
+//This needs some refactoring to be more efficient
 defstate realloc
     set ra r1
     set r1 r2

@@ -964,6 +964,8 @@ declare global {
     /** Contains the current ID of the current actor */
     export const thisActor: CON_NATIVE_GAMEVAR<'THISACTOR', number>;
 
+    export var returnVar: CON_NATIVE_GAMEVAR<'RETURN', number>;
+
     /**
      * Plays an action and starts a movement without chaning the AI
      * @param action The action to be played
@@ -1367,7 +1369,8 @@ declare global {
 
     export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound';
     export type TEventDE = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd';
-    export type TEvents = TEventPAE | TEventDE;
+    export type TEventI = 'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' | 'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10';
+    export type TEvents = TEventPAE | TEventDE | TEventI;
 
     export type OnEvent = Partial<{
         [E in TEventPAE]: (
@@ -1542,66 +1545,80 @@ declare global {
     }
 
     /**
-     * @experimental
-     * @class CWeaponNative
-     * @classdesc In development - do not use in production code
-     * @description
-     * This class is being refactored. It's gonna offer a new weapon system
-     * that does not use the old system.
+     * Interface for the Mighty Foot weapon (weapon 00).
+     * 
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon.
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
      */
-    export class CWeaponNative {
-        /** True if it's secondary to any ID from 0 - 10 */
-        public subWeapon: CON_NATIVE<boolean>;
+    export interface IWeapon00 {
         /** 
          * The flags for the weapon (does not control the projectile)
          * @see {@link EWeaponFlags}
          */
-        public flags: CON_NATIVE<number>;
+        flags: CON_NATIVE_GAMEVAR<'WEAPON0_FLAGS', number>;
 
         /** 
          * It's the amount of ammo that can be fired before there is a reloading animation and pause.
          * If you want to disable the reloading, set {@link clip} to 0. 
          * */
-        public clip: CON_NATIVE<number>;
+        clip: CON_NATIVE_GAMEVAR<'WEAPON0_CLIP', number>;
         /** 
          * Defines the number of frames displayed in the weapon's reload sequence,
          * in a similar vein to {@link totalTime}. If {@link clip} is zero, this sequence takes place after every shot.
          * If non-zero, it takes place when the remainder of the weapon's current ammo divided by {@link clip} is zero.
          * The {@link hudCounter} values increase to a weapon's {@link totalTime} plus its {@link reload}. */
-        public reload: CON_NATIVE<number>;
+        reload: CON_NATIVE_GAMEVAR<'WEAPON0_RELOAD', number>;
 
         /** Defines what frame the weapon will fire it's projectile on. */
-        public fireDelay: CON_NATIVE<number>;
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON0_FIREDELAY', number>;
         /**
          * The number of animation frames between shooting and reloading. 
          * @see **Note**: If {@link flags} has {@link EWeaponFlags.RESET} set on the weapon
          * and {@link hudCounter} is greater than {@link totalTime} - holdDelay,
          * then {@link hudCounter} is set to either 1 or 0 depending on whether the fire key is still held.
          */
-        public holdDelay: CON_NATIVE<number>;
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON0_HOLDDELAY', number>;
         /** Defines the total number of frames a weapon uses in its firing sequence. */
-        public totalTime: CON_NATIVE<number>;
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON0_TOTALTIME', number>;
 
-        public flashColor: CON_NATIVE<number>;
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON0_FLASHCOLOR', number>;
 
         /** This is the tilenum of the projectile */
-        public shoots: CON_NATIVE<number>;
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON0_SHOOTS', number>;
         /** 
          * Defines the amount of projectiles (which itself is defined by {@link shoots})
          * that will fire when the weapon reaches it's firing frame.
          */
-        public shotsPerBurst: CON_NATIVE<number>;
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON0_SHOTSPERBURST', number>;
 
         /**
          * This defines what the weapon spawns when the {@link spawnTime} is reached.
          * Used in the default weapons to spawn empty shells.
          * To spawn nothing, set to 0.
          */
-        public spawn: CON_NATIVE<number>;
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON0_SPAWN', number>;
         /**
          * Defines what frame the item specified by {@link spawn} will spawn on.
          */
-        public spawnTime: CON_NATIVE<number>;
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON0_SPAWNTIME', number>;
 
         /**
          * If {@link EWeaponFlags.RELOAD_TIMING} is enabled in the {@link flags} bitfield,
@@ -1609,262 +1626,660 @@ declare global {
          * All weapons have this value set to **EJECT_CLIP** by default but only
          * WEAPON 1 (the pistol) utilizes it.
          */
-        public reloadSound1: CON_NATIVE<number>;
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON0_RELOADSOUND1', number>;
         /**
          * If {@link EWeaponFlags.RELOAD_TIMING} is enabled in the {@link flags} bitfield,
          * reloadSound2 is the second sound to be played in the weapon's reload sequence. {@link reloadSound1} is the first.
          * All weapons have this value set to **INSERT_CLIP** by default but only
          * WEAPON 1 (the pistol) utilizes it.
          */
-        public reloadSound2: CON_NATIVE<number>;
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON0_RELOADSOUND2', number>;
         /** The sound played when a weapon is selected. */
-        public selectSound: CON_NATIVE<number>;
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON0_SELECTSOUND', number>;
         /** 
          * Plays the corresponding sound when the {@link hudCounter} reaches
          * the number specified by {@link fireDelay}
          */
-        public fireSound: CON_NATIVE<number>;
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON0_FIRESOUND', number>;
         /**
          * Defines the sound that will play when the player starts to fire the weapon
          * **(NOT the sound that will play when the weapon actually fires its projectile**
          * that is controlled by {@link fireSound})
          * @see {@link fireSound}
          */
-        public initialSound: CON_NATIVE<number>;
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON0_INITIALSOUND', number>;
         /**
          * This is the weapon's second sound.
          * It starts on the frame number defined with {@link sound2Time}.
          */
-        public sound2Sound: CON_NATIVE<number>;
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON0_SOUND2SOUND', number>;
         /**
          * If the weapon has a second shooting sound defined in {@link sound2Sound} like the shotgun,
          * this is the frame number for the second sound to start.
          */
-        public sound2Time: CON_NATIVE<number>;
-
-        /**
-         * Determines random Z vellocity adjustment on hitscan weapons fired from player.
-         * By default, hitscan projectiles (i.e. instant hit bullet projectiles such as **SHOTSPARK1**)
-         * do not have perfect aim; there is a random component to their trajectories.
-         * zRange is the Z part of this random component.
-         * zRange can be adjusted in GetShotRange event or in the method {@link GetShotRange}.
-         * When zRange is set to 1, the hitscan projectile will fire with perfect Z axis accuracy.
-         * Increase {@link angleRange} by powers of 2 (2, 4, etc.) to increase the random angle and decrease accuracy.
-         * @see {@link angleRange}
-         */
-        public zRange: CON_NATIVE<number>;
-        /** Determines random angle adjustment on hitscan weapons fired from player.
-         * @see {@link zRange}
-         */
-        public angleRange: CON_NATIVE<number>;
-        /**
-         * This determines the horizontal range (a cone from 0-512 * 2, with the center being the player's current angle)
-         * at which shots will automatically lock onto enemies when autoaim is active.
-         * This variable must be set inside GetAutoAimAng or in the method {@link autoAimAngle} to take effect.
-         * The default is 48. Set it to 0 to disable autoaim, or to 512 for a full 180 degree autoaim in front of the player.
-         * 
-         * @see {@link autoAimAngle}
-         */
-        public autoAimAngle: CON_NATIVE<number>;
-
-        /** Gets/Sets the maximum ammo for this weapon */
-        protected MaxAmmo(amount: number): CON_NATIVE<number>;
-         /** Gets/Sets the current ammo for this weapon */
-        protected CurrentAmmo(amount: number): CON_NATIVE<number>;
-        /** Gets/Sets how much ammo is used per-shot fired */
-        protected AmmoDiscount(amount: number): CON_NATIVE<number>;
-        /** Increases the current weapon ammo by @param amount */
-        protected IncreaseAmmo(amount: number): CON_NATIVE<void>;
-        /** Decreases the ammo by {@link AmmoDiscount} */
-        protected DecreaseAmmo(): CON_NATIVE<void>;
-
-        /** The frame counter for the weapon. Use this to draw the weapon psrite in {@link DrawHUD}
-         * or change its value whenever you need to make awesome effects.
-         * **Note**: When set to 1, it starts the firing animation until it reaches {@link totalTime}
-         * @default true
-         * @see {@link totalTime}
-         * */
-        public hudCounter: CON_NATIVE<number>;
-
-        /**
-         * Set this to **false** to disable sway effects applied automatically to the sprite drawing
-         * @default true
-         * @see {@link weapon_xoffset}
-         * @see {@link gunPos}
-         */
-        public SwayEffect: CON_NATIVE<boolean>;
-
-        /**
-         * Set this to properly initialize the weapon the way you want it to work.
-         *
-         * @param config - The initial configuration for the weapon (applied when called in the WeapXKey event — X is the weapon’s corresponding key number)
-         */
-        constructor(config: {
-            /** The weapon ID (0 – 11) */
-            id: constant;
-        
-            /** True if it’s secondary to any ID from 0 – 10 */
-            subWeapon: boolean;
-        
-            /**
-             * The flags for the weapon (does not control the projectile)
-             * @see {@link EWeaponFlags}
-             */
-            flags?: constant;
-        
-            /**
-             * Amount of ammo that can be fired before a reload animation and pause.
-             * Set to 0 to disable reloading.
-             */
-            clip?: constant;
-        
-            /**
-             * Number of frames in the weapon’s reload sequence.
-             * If clip is 0, runs after every shot; otherwise when current ammo % clip === 0.
-             */
-            reload?: constant;
-        
-            /** Frame at which the weapon fires its projectile */
-            fireDelay?: constant;
-        
-            /**
-             * Frames between shooting and reloading.
-             * If flags includes {@link EWeaponFlags.RESET} and internal counter > totalTime – holdDelay,
-             * the counter resets to 1 or 0 depending on whether fire is still held.
-             */
-            holdDelay?: constant;
-        
-            /** Total number of frames in the weapon’s firing sequence */
-            totalTime?: constant;
-        
-            /** Color index used for the muzzle flash */
-            flashColor?: constant;
-        
-            /** Tile number of the projectile */
-            shoots?: constant;
-        
-            /**
-             * Number of projectiles (tile = shoots) fired when reaching the firing frame
-             */
-            shotsPerBurst?: constant;
-        
-            /**
-             * Tile number to spawn when spawnTime is reached (e.g. empty shells).
-             * Set to 0 to spawn nothing.
-             */
-            spawn?: constant;
-        
-            /** Frame at which the item in spawn appears */
-            spawnTime?: constant;
-        
-            /**
-             * First sound in the reload sequence when {@link EWeaponFlags.RELOAD_TIMING} is set.
-             * Defaults to EJECT_CLIP; only pistol uses it.
-             */
-            reloadSound1?: constant;
-        
-            /**
-             * Second sound in the reload sequence when {@link EWeaponFlags.RELOAD_TIMING} is set.
-             * Defaults to INSERT_CLIP; only pistol uses it.
-             */
-            reloadSound2?: constant;
-        
-            /** Sound played when the weapon is selected */
-            selectSound?: constant;
-        
-            /** Sound played when internal counter reaches fireDelay */
-            fireSound?: constant;
-        
-            /**
-             * Sound played when the player starts to fire the weapon
-             * (not the projectile sound; see {@link fireSound})
-             */
-            initialSound?: constant;
-        
-            /** Secondary firing sound (e.g. shotgun’s second blast) */
-            sound2Sound?: constant;
-        
-            /** Frame at which sound2Sound begins */
-            sound2Time?: constant;
-        
-            /**
-             * Random Z‐velocity adjustment for hitscan weapons.
-             * 1 = perfect Z accuracy; increase angleRange by powers of 2 to reduce accuracy.
-             */
-            zRange?: constant;
-        
-            /** Random angle adjustment for hitscan weapons (@see {@link zRange}) */
-            angleRange?: constant;
-        
-            /**
-             * Horizontal auto‐aim cone (0–1024; center = player angle).
-             * Set to 0 to disable, 512 for full 180° front auto‐aim.
-             */
-            autoAimAngle?: constant;
-        
-            /** Maximum ammo capacity for this weapon */
-            maxAmmo: constant;
-        
-            /** Ammo consumed per shot */
-            ammoDiscount?: constant;
-        
-            /**
-             * If subWeapon is true and this is true, secondary uses the same ammo pool as primary
-             */
-            ammoShared?: boolean;
-        });
-  
-
-        /**
-         * Drawing routine for the weapon sprite (use {@link hudCounter} to get which frame is the current one)
-         * @see {@link hudCounter}
-         */
-        public DrawHUD(): CON_NATIVE<void>;
-        /**
-         * This functions is called whenever you press the number key associated with this weapon
-         * (weapon ID + 1 with the exception of weapon 11 which is a sub of weapon 6)
-         */
-        public NumberKey(): CON_NATIVE<void>;
-        /**
-         * This function is called if you successfully fire the weapon
-         * @see {@link fireDelay}
-         */
-        public DoFire(): CON_NATIVE<void>;
-        /**
-         * This is called whenever you press the fire key
-         */
-        public FireKey(): CON_NATIVE<void>;
-        /**
-         * This gets called when the weapon is firing and the key is held
-         */
-        public FireKeyHeld(): CON_NATIVE<void>;
-        /**
-         * Called IF the projectile is a hitscan. Use this to control the zRange and AngleRange properties.
-         */
-        public GetShotRange(): CON_NATIVE<void>;
-        /**
-         * Called when the Auto Aim is active and the projectile gets fired
-         */
-        public GetAutoAimAngle(): CON_NATIVE<void>;
-        /**
-         * This functions is called when the weapon is changing.
-         */
-        public Changing(): CON_NATIVE<void>;
-        /**
-         * This is called when you sucessfully selects this weapon
-         */
-        public Select(): CON_NATIVE<void>;
-        /**
-         * Called whenever the weapon must be reset
-         */
-        public Reset(): CON_NATIVE<void>;
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON0_SOUND2TIME', number>;
     }
 
+    export const weapon00, wpMightFoot: CON_NATIVE_OBJECT<IWeapon00>;
+
     /**
-     * Holds the native weapons' configuration
-     * **Note**: available slots are 0 - 11
+     * Interface for the Pistol weapon (weapon 01).
+     * 
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon.
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
      */
-    export const weapons: CWeaponNative[];
+    export interface IWeapon01 {
+        /** 
+         * The flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        flags: CON_NATIVE_GAMEVAR<'WEAPON1_FLAGS', number>;
+
+        /** 
+         * It's the amount of ammo that can be fired before there is a reloading animation and pause.
+         * If you want to disable the reloading, set {@link clip} to 0. 
+         * */
+        clip: CON_NATIVE_GAMEVAR<'WEAPON1_CLIP', number>;
+        /** 
+         * Defines the number of frames displayed in the weapon's reload sequence,
+         * in a similar vein to {@link totalTime}. If {@link clip} is zero, this sequence takes place after every shot.
+         * If non-zero, it takes place when the remainder of the weapon's current ammo divided by {@link clip} is zero.
+         * The {@link hudCounter} values increase to a weapon's {@link totalTime} plus its {@link reload}. */
+        reload: CON_NATIVE_GAMEVAR<'WEAPON1_RELOAD', number>;
+
+        /** Defines what frame the weapon will fire it's projectile on. */
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON1_FIREDELAY', number>;
+        /**
+         * The number of animation frames between shooting and reloading. 
+         * @see **Note**: If {@link flags} has {@link EWeaponFlags.RESET} set on the weapon
+         * and {@link hudCounter} is greater than {@link totalTime} - holdDelay,
+         * then {@link hudCounter} is set to either 1 or 0 depending on whether the fire key is still held.
+         */
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON1_HOLDDELAY', number>;
+        /** Defines the total number of frames a weapon uses in its firing sequence. */
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON1_TOTALTIME', number>;
+
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON1_FLASHCOLOR', number>;
+
+        /** This is the tilenum of the projectile */
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON1_SHOOTS', number>;
+        /** 
+         * Defines the amount of projectiles (which itself is defined by {@link shoots})
+         * that will fire when the weapon reaches it's firing frame.
+         */
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON1_SHOTSPERBURST', number>;
+
+        /**
+         * This defines what the weapon spawns when the {@link spawnTime} is reached.
+         * Used in the default weapons to spawn empty shells.
+         * To spawn nothing, set to 0.
+         */
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON1_SPAWN', number>;
+        /**
+         * Defines what frame the item specified by {@link spawn} will spawn on.
+         */
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON1_SPAWNTIME', number>;
+
+        /**
+         * If {@link EWeaponFlags.RELOAD_TIMING} is enabled in the {@link flags} bitfield,
+         * reloadSound1 is the first sound to be played in the weapon's reload sequence. {@link reloadSound2} is the second.
+         * All weapons have this value set to **EJECT_CLIP** by default but only
+         * WEAPON 1 (the pistol) utilizes it.
+         */
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON1_RELOADSOUND1', number>;
+        /**
+         * If {@link EWeaponFlags.RELOAD_TIMING} is enabled in the {@link flags} bitfield,
+         * reloadSound2 is the second sound to be played in the weapon's reload sequence. {@link reloadSound1} is the first.
+         * All weapons have this value set to **INSERT_CLIP** by default but only
+         * WEAPON 1 (the pistol) utilizes it.
+         */
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON1_RELOADSOUND2', number>;
+        /** The sound played when a weapon is selected. */
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON1_SELECTSOUND', number>;
+        /** 
+         * Plays the corresponding sound when the {@link hudCounter} reaches
+         * the number specified by {@link fireDelay}
+         */
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON1_FIRESOUND', number>;
+        /**
+         * Defines the sound that will play when the player starts to fire the weapon
+         * **(NOT the sound that will play when the weapon actually fires its projectile**
+         * that is controlled by {@link fireSound})
+         * @see {@link fireSound}
+         */
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON1_INITIALSOUND', number>;
+        /**
+         * This is the weapon's second sound.
+         * It starts on the frame number defined with {@link sound2Time}.
+         */
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON1_SOUND2SOUND', number>;
+        /**
+         * If the weapon has a second shooting sound defined in {@link sound2Sound} like the shotgun,
+         * this is the frame number for the second sound to start.
+         */
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON1_SOUND2TIME', number>;
+    }
+
+
+    export const weapon01, wpPistol: CON_NATIVE_OBJECT<IWeapon01>;
+
+    /**
+     * Interface for the Shotgun weapon (weapon 02).
+     * @see {@link weapon02}
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
+     */
+    export interface IWeapon02 {
+        /**
+         * Flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        flags: CON_NATIVE_GAMEVAR<'WEAPON2_FLAGS', number>;
+        clip: CON_NATIVE_GAMEVAR<'WEAPON2_CLIP', number>;
+        reload: CON_NATIVE_GAMEVAR<'WEAPON2_RELOAD', number>;
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON2_FIREDELAY', number>;
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON2_HOLDDELAY', number>;
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON2_TOTALTIME', number>;
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON2_FLASHCOLOR', number>;
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON2_SHOOTS', number>;
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON2_SHOTSPERBURST', number>;
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON2_SPAWN', number>;
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON2_SPAWNTIME', number>;
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON2_RELOADSOUND1', number>;
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON2_RELOADSOUND2', number>;
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON2_SELECTSOUND', number>;
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON2_FIRESOUND', number>;
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON2_INITIALSOUND', number>;
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON2_SOUND2SOUND', number>;
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON2_SOUND2TIME', number>;
+    }
+    export const weapon02, wpShotgun: CON_NATIVE_OBJECT<IWeapon02>;
+
+    /**
+     * Interface for the Chaingun weapon (weapon 03).
+     * @see {@link weapon03}
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon.
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
+     */
+    export interface IWeapon03 {
+        /**
+         * Flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        flags: CON_NATIVE_GAMEVAR<'WEAPON3_FLAGS', number>;
+        clip: CON_NATIVE_GAMEVAR<'WEAPON3_CLIP', number>;
+        reload: CON_NATIVE_GAMEVAR<'WEAPON3_RELOAD', number>;
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON3_FIREDELAY', number>;
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON3_HOLDDELAY', number>;
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON3_TOTALTIME', number>;
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON3_FLASHCOLOR', number>;
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON3_SHOOTS', number>;
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON3_SHOTSPERBURST', number>;
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON3_SPAWN', number>;
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON3_SPAWNTIME', number>;
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON3_RELOADSOUND1', number>;
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON3_RELOADSOUND2', number>;
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON3_SELECTSOUND', number>;
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON3_FIRESOUND', number>;
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON3_INITIALSOUND', number>;
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON3_SOUND2SOUND', number>;
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON3_SOUND2TIME', number>;
+    }
+    export const weapon03, wpChaingun: CON_NATIVE_OBJECT<IWeapon03>;
+
+    /**
+     * Interface for the RPG weapon (weapon 04).
+     * @see {@link weapon04}
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon.
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
+     */
+    export interface IWeapon04 {
+        /**
+         * Flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        flags: CON_NATIVE_GAMEVAR<'WEAPON4_FLAGS', number>;
+        clip: CON_NATIVE_GAMEVAR<'WEAPON4_CLIP', number>;
+        reload: CON_NATIVE_GAMEVAR<'WEAPON4_RELOAD', number>;
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON4_FIREDELAY', number>;
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON4_HOLDDELAY', number>;
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON4_TOTALTIME', number>;
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON4_FLASHCOLOR', number>;
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON4_SHOOTS', number>;
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON4_SHOTSPERBURST', number>;
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON4_SPAWN', number>;
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON4_SPAWNTIME', number>;
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON4_RELOADSOUND1', number>;
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON4_RELOADSOUND2', number>;
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON4_SELECTSOUND', number>;
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON4_FIRESOUND', number>;
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON4_INITIALSOUND', number>;
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON4_SOUND2SOUND', number>;
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON4_SOUND2TIME', number>;
+    }
+    export const weapon04, wpRPG: CON_NATIVE_OBJECT<IWeapon04>;
+
+    /**
+     * Interface for the Pipebomb weapon (weapon 05).
+     * @see {@link weapon05}
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon.
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
+     */
+    export interface IWeapon05 {
+        /**
+         * Flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        flags: CON_NATIVE_GAMEVAR<'WEAPON5_FLAGS', number>;
+        clip: CON_NATIVE_GAMEVAR<'WEAPON5_CLIP', number>;
+        reload: CON_NATIVE_GAMEVAR<'WEAPON5_RELOAD', number>;
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON5_FIREDELAY', number>;
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON5_HOLDDELAY', number>;
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON5_TOTALTIME', number>;
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON5_FLASHCOLOR', number>;
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON5_SHOOTS', number>;
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON5_SHOTSPERBURST', number>;
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON5_SPAWN', number>;
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON5_SPAWNTIME', number>;
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON5_RELOADSOUND1', number>;
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON5_RELOADSOUND2', number>;
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON5_SELECTSOUND', number>;
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON5_FIRESOUND', number>;
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON5_INITIALSOUND', number>;
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON5_SOUND2SOUND', number>;
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON5_SOUND2TIME', number>;
+    }
+    export const weapon05, wpPipebomb: CON_NATIVE_OBJECT<IWeapon05>;
+
+    /**
+     * Interface for the Shrinker weapon (weapon 06).
+     * @see {@link weapon06}
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon.
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
+     */
+    export interface IWeapon06 {
+        /**
+         * Flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        flags: CON_NATIVE_GAMEVAR<'WEAPON6_FLAGS', number>;
+        clip: CON_NATIVE_GAMEVAR<'WEAPON6_CLIP', number>;
+        reload: CON_NATIVE_GAMEVAR<'WEAPON6_RELOAD', number>;
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON6_FIREDELAY', number>;
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON6_HOLDDELAY', number>;
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON6_TOTALTIME', number>;
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON6_FLASHCOLOR', number>;
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON6_SHOOTS', number>;
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON6_SHOTSPERBURST', number>;
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON6_SPAWN', number>;
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON6_SPAWNTIME', number>;
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON6_RELOADSOUND1', number>;
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON6_RELOADSOUND2', number>;
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON6_SELECTSOUND', number>;
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON6_FIRESOUND', number>;
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON6_INITIALSOUND', number>;
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON6_SOUND2SOUND', number>;
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON6_SOUND2TIME', number>;
+    }
+    export const weapon06, wpShrinker: CON_NATIVE_OBJECT<IWeapon06>;
+
+    /**
+     * Interface for the Devastator weapon (weapon 07).
+     * @see {@link weapon07}
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon.
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
+     */
+    export interface IWeapon07 {
+        /**
+         * Flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        flags: CON_NATIVE_GAMEVAR<'WEAPON7_FLAGS', number>;
+        clip: CON_NATIVE_GAMEVAR<'WEAPON7_CLIP', number>;
+        reload: CON_NATIVE_GAMEVAR<'WEAPON7_RELOAD', number>;
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON7_FIREDELAY', number>;
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON7_HOLDDELAY', number>;
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON7_TOTALTIME', number>;
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON7_FLASHCOLOR', number>;
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON7_SHOOTS', number>;
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON7_SHOTSPERBURST', number>;
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON7_SPAWN', number>;
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON7_SPAWNTIME', number>;
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON7_RELOADSOUND1', number>;
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON7_RELOADSOUND2', number>;
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON7_SELECTSOUND', number>;
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON7_FIRESOUND', number>;
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON7_INITIALSOUND', number>;
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON7_SOUND2SOUND', number>;
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON7_SOUND2TIME', number>;
+    }
+    export const weapon07, wpDevastator: CON_NATIVE_OBJECT<IWeapon07>;
+
+    /**
+     * Interface for the Tripbomb weapon (weapon 08).
+     * @see {@link weapon08}
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon.
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
+     */
+    export interface IWeapon08 {
+        /**
+         * Flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        flags: CON_NATIVE_GAMEVAR<'WEAPON8_FLAGS', number>;
+        clip: CON_NATIVE_GAMEVAR<'WEAPON8_CLIP', number>;
+        reload: CON_NATIVE_GAMEVAR<'WEAPON8_RELOAD', number>;
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON8_FIREDELAY', number>;
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON8_HOLDDELAY', number>;
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON8_TOTALTIME', number>;
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON8_FLASHCOLOR', number>;
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON8_SHOOTS', number>;
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON8_SHOTSPERBURST', number>;
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON8_SPAWN', number>;
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON8_SPAWNTIME', number>;
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON8_RELOADSOUND1', number>;
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON8_RELOADSOUND2', number>;
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON8_SELECTSOUND', number>;
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON8_FIRESOUND', number>;
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON8_INITIALSOUND', number>;
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON8_SOUND2SOUND', number>;
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON8_SOUND2TIME', number>;
+    }
+    export const weapon08, wpTripBomb: CON_NATIVE_OBJECT<IWeapon08>;
+
+    /**
+     * Interface for the Freezethrower weapon (weapon 09).
+     * @see {@link weapon09}
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon.
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
+     */
+    export interface IWeapon09 {
+        /**
+         * Flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        flags: CON_NATIVE_GAMEVAR<'WEAPON9_FLAGS', number>;
+        clip: CON_NATIVE_GAMEVAR<'WEAPON9_CLIP', number>;
+        reload: CON_NATIVE_GAMEVAR<'WEAPON9_RELOAD', number>;
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON9_FIREDELAY', number>;
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON9_HOLDDELAY', number>;
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON9_TOTALTIME', number>;
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON9_FLASHCOLOR', number>;
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON9_SHOOTS', number>;
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON9_SHOTSPERBURST', number>;
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON9_SPAWN', number>;
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON9_SPAWNTIME', number>;
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON9_RELOADSOUND1', number>;
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON9_RELOADSOUND2', number>;
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON9_SELECTSOUND', number>;
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON9_FIRESOUND', number>;
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON9_INITIALSOUND', number>;
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON9_SOUND2SOUND', number>;
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON9_SOUND2TIME', number>;
+    }
+    export const weapon09, wpFreezethrower: CON_NATIVE_OBJECT<IWeapon09>;
+
+    /**
+     * Interface for the Hand Remote weapon (weapon 10).
+     * @see {@link weapon10}
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon.
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
+     */
+    export interface IWeapon10 {
+        /**
+         * Flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        flags: CON_NATIVE_GAMEVAR<'WEAPON10_FLAGS', number>;
+        clip: CON_NATIVE_GAMEVAR<'WEAPON10_CLIP', number>;
+        reload: CON_NATIVE_GAMEVAR<'WEAPON10_RELOAD', number>;
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON10_FIREDELAY', number>;
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON10_HOLDDELAY', number>;
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON10_TOTALTIME', number>;
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON10_FLASHCOLOR', number>;
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON10_SHOOTS', number>;
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON10_SHOTSPERBURST', number>;
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON10_SPAWN', number>;
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON10_SPAWNTIME', number>;
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON10_RELOADSOUND1', number>;
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON10_RELOADSOUND2', number>;
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON10_SELECTSOUND', number>;
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON10_FIRESOUND', number>;
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON10_INITIALSOUND', number>;
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON10_SOUND2SOUND', number>;
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON10_SOUND2TIME', number>;
+    }
+    export const weapon10, wpHandRemote: CON_NATIVE_OBJECT<IWeapon10>;
+
+    /**
+     * Interface for the Expander weapon (weapon 11).
+     * @see {@link weapon11}
+     * Use this interface to define the properties and behaviors of the weapon in the game.
+     * Available properties:
+     * @property {CON_NATIVE_GAMEVAR} flags - The flags for the weapon (does not control the projectile)
+     * @property {CON_NATIVE_GAMEVAR} clip - It's the amount of ammo that can be fired before there is a reloading animation and pause.
+     * @property {CON_NATIVE_GAMEVAR} reload - Defines the number of frames displayed in the weapon's reload sequence
+     * @property {CON_NATIVE_GAMEVAR} fireDelay - Defines what frame the weapon will fire its projectile on.
+     * @property {CON_NATIVE_GAMEVAR} holdDelay - The number of animation frames between shooting and reloading.
+     * @property {CON_NATIVE_GAMEVAR} totalTime - Defines the total number of frames a weapon uses in its firing sequence.
+     * @property {CON_NATIVE_GAMEVAR} flashColor - The flash color of the weapon.
+     * @property {CON_NATIVE_GAMEVAR} shoots - This is the tilenum of the projectile.
+     * @property {CON_NATIVE_GAMEVAR} shotsPerBurst - Defines the amount of projectiles that will fire when the weapon reaches its firing frame.
+     * @property {CON_NATIVE_GAMEVAR} spawn - This defines what the weapon spawns when the spawnTime is reached.
+     * @property {CON_NATIVE_GAMEVAR} spawnTime - Defines what frame the item specified by spawn will spawn on.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound1 - If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} reloadSound2 - If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.
+     * @property {CON_NATIVE_GAMEVAR} selectSound - The sound played when a weapon is selected.
+     * @property {CON_NATIVE_GAMEVAR} fireSound - Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.
+     * @property {CON_NATIVE_GAMEVAR} initialSound - Defines the sound that will play when the player starts to fire the weapon.
+     * @property {CON_NATIVE_GAMEVAR} sound2Sound - This is the weapon's second sound.
+     * @property {CON_NATIVE_GAMEVAR} sound2Time - If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.
+     */
+    export interface IWeapon11 {
+        /**
+         * Flags for the weapon (does not control the projectile)
+         * @see {@link EWeaponFlags}
+         */
+        flags: CON_NATIVE_GAMEVAR<'WEAPON11_FLAGS', number>;
+        clip: CON_NATIVE_GAMEVAR<'WEAPON11_CLIP', number>;
+        reload: CON_NATIVE_GAMEVAR<'WEAPON11_RELOAD', number>;
+        fireDelay: CON_NATIVE_GAMEVAR<'WEAPON11_FIREDELAY', number>;
+        holdDelay: CON_NATIVE_GAMEVAR<'WEAPON11_HOLDDELAY', number>;
+        totalTime: CON_NATIVE_GAMEVAR<'WEAPON11_TOTALTIME', number>;
+        flashColor: CON_NATIVE_GAMEVAR<'WEAPON11_FLASHCOLOR', number>;
+        shoots: CON_NATIVE_GAMEVAR<'WEAPON11_SHOOTS', number>;
+        shotsPerBurst: CON_NATIVE_GAMEVAR<'WEAPON11_SHOTSPERBURST', number>;
+        spawn: CON_NATIVE_GAMEVAR<'WEAPON11_SPAWN', number>;
+        spawnTime: CON_NATIVE_GAMEVAR<'WEAPON11_SPAWNTIME', number>;
+        reloadSound1: CON_NATIVE_GAMEVAR<'WEAPON11_RELOADSOUND1', number>;
+        reloadSound2: CON_NATIVE_GAMEVAR<'WEAPON11_RELOADSOUND2', number>;
+        selectSound: CON_NATIVE_GAMEVAR<'WEAPON11_SELECTSOUND', number>;
+        fireSound: CON_NATIVE_GAMEVAR<'WEAPON11_FIRESOUND', number>;
+        initialSound: CON_NATIVE_GAMEVAR<'WEAPON11_INITIALSOUND', number>;
+        sound2Sound: CON_NATIVE_GAMEVAR<'WEAPON11_SOUND2SOUND', number>;
+        sound2Time: CON_NATIVE_GAMEVAR<'WEAPON11_SOUND2TIME', number>;
+    }
+    export const weapon11, wpExpander: CON_NATIVE_OBJECT<IWeapon11>;
 
     /**
      * Use this interface to create a faster switch. **Only literal constant values are allowed**
