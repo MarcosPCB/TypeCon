@@ -25,16 +25,15 @@ export const compiledFiles: Map<string, ICompiledFile> = new Map();
 export let pageSize = 8;
 
 export class CONInit {
-    public readonly heapSize: number;
     private initCode: string;
     private initStates: string;
 
     constructor(public readonly stackSize = 1024,
-        public readonly heapPageSize = 8,
-        public readonly heapNumPages = 64,
+        public readonly heapPageSize = 4,
+        public readonly heapNumPages = 128,
         public readonly precompiled = true,
+        public readonly heapSize = 4 * 128
     ) {
-            this.heapSize = heapNumPages * heapPageSize;
             pageSize = heapPageSize;
 
             let quoteInit = '';
@@ -235,21 +234,14 @@ array nwsAmmoDisc NWS_MAX_WEAPONS
 
 define NWS_ACTIVE 0 //Set this to 1 if you wanna use the New Weapon System
 
-// THIS WILL BE CHANGED IN THE FUTURE
-// FOR A MORE EFFICIENT MEMORY MANAGEMENT
-// PROPOSED SYSTEM -> Each page can be as long as it needs to be,
-//      but it must be a multiple of the minimum size by PAGE_SIZE.
-//      This way we can more easily manage the memory and avoid too many loops
-//      Also, it would be easier to keep track of each memory allocation size.
-
 /*
-    Every time an user requests an X amount of memory (arrays or objects), its value must fit inside a PAGE,
-    if it's bigger than a PAGE, than allocate as many PAGES as necessary.
+    Every time an user requests an X amount of memory (arrays or objects), its value must be at least
+    one PAGE_SIZE (8 slots or 16 bytes by default). If the requested size is not a multiple of PAGE_SIZE, it must be rounded up
     The system is limited to allocating 4 GBs of memory.
     OBS: the first page must remain free (so NULL address can work properly)
 */
 
-//Internal size of the heap pages - for every X entries, 1 page, this way we can optimize the free and allocation systems
+//Internal minimum size of the heap pages
 define PAGE_SIZE ${heapPageSize}
 
 //This is where we store if a page is free or not and its type
@@ -263,11 +255,14 @@ array allocTable ${heapNumPages} 0
 //Holds the starting addresses of the a allocated pages.
 array lookupHeap ${heapNumPages} 0
 
+//Holds the sizes of the allocated pages.
+array pageSizes ${heapNumPages} 0
+
 //The current number of pages available
 var heaptables ${heapNumPages} REG_FLAGS
 
 //The current heap memory size
-var heapsize ${this.heapSize} REG_FLAGS //heaptables * PAGE_SIZE
+var heapsize ${this.heapSize} REG_FLAGS
 
 //For pushing the r0-12 registers
 array rstack 24 0
@@ -512,62 +507,96 @@ defstate popi
 ends
 
 defstate _GetFreePages
-    set _HEAPi 0
-    set _HEAPj 0
+    set _HEAPi 0 //Page index
+    set _HEAPj ${stackSize} //Current address
     set _HEAP_pointer -1
+    //Search for free pages
     whilel _HEAPi heaptables {
+        //If one is found, check if there's enough space
         ife allocTable[_HEAPi] 0 {
-            add _HEAPj PAGE_SIZE
-            ifge _HEAPj _HEAP_request {
-                set _HEAP_pointer _HEAPi
-                div _HEAPj PAGE_SIZE
-                sub _HEAP_pointer _HEAPj
-                add _HEAP_pointer 1
-                mul _HEAP_pointer PAGE_SIZE
-                set _HEAP_request _HEAPj
-                exit
+            set _HEAPk _HEAPi
+            add _HEAPk 1 //Next page
+            whilel _HEAPk heaptables {
+                ifn allocTable[_HEAPk] 0 {
+                    set _HEAPl lookupHeap[_HEAPk]
+                    sub _HEAPl _HEAPj
+
+                    //We found enough space
+                    ifge _HEAPl _HEAP_request
+                        set _HEAP_pointer _HEAPj
+                    else {
+                        set _HEAPj lookupHeap[_HEAPk]
+                        add _HEAPj pageSizes[_HEAPk]
+                        set _HEAPi _HEAPk
+                    }
+
+                    exit
+                }
+
+                set _HEAPl heaptables
+                sub _HEAPl _HEAPk
+
+                //No pages left
+                ife _HEAPl 1 {
+                    set _HEAPl ${heapSize}
+                    add _HEAPl ${stackSize}
+                    sub _HEAPl _HEAPj
+
+                    ifge _HEAPl _HEAP_request
+                        set _HEAP_pointer _HEAPj
+                }
+
+                add _HEAPk 1
             }
-        } else set _HEAPj 0
+            
+            ifn _HEAP_pointer -1
+                exit
+        } else {
+            set _HEAPj lookupHeap[_HEAPi]
+            add _HEAPj pageSizes[_HEAPi]
+        }
 
         add _HEAPi 1
     }
 
     ife _HEAP_pointer -1 {
         //Get the exact size we need
-        set _HEAPj _HEAP_request
-        div _HEAPj PAGE_SIZE
-        add _HEAPj 1
-        set _HEAPi _HEAPj
-        mul _HEAPj PAGE_SIZE
-        
-        set _HEAP_pointer heapsize
-        add _HEAP_pointer ${stackSize}
-        add heapsize _HEAPj
+        set _HEAP_pointer ${stackSize}
+        add _HEAP_pointer heapsize
+        add heapsize _HEAP_request
         add heapsize ${stackSize}
         resizearray flat heapsize
         sub heapsize ${stackSize}
-        add heaptables _HEAPi
+        add heaptables 1
         resizearray lookupHeap heaptables
         resizearray allocTable heaptables
+        resizearray pageSizes heaptables
+        set _HEAPi heaptables
+        sub _HEAPi 1
     }
+
+    set rb _HEAPi
 ends
 
 defstate alloc
     set _HEAP_request r0
-    ife _HEAP_request 0
-        set _HEAP_request 1
-    state _GetFreePages
 
-    set _HEAPi _HEAP_pointer
-    add _HEAP_pointer ${stackSize}
-    div _HEAPi PAGE_SIZE
-    set _HEAPj _HEAP_request
-    add _HEAPj _HEAPi
-    whilel _HEAPi _HEAPj {
-        setarray lookupHeap[_HEAPi] _HEAP_pointer
-        setarray allocTable[_HEAPi] r1
-        add _HEAPi 1
-    }
+    //Minimum allocation size is one PAGE_SIZE
+    ifl _HEAP_request PAGE_SIZE
+        set _HEAP_request PAGE_SIZE
+
+    //The requested size must be a multiple of PAGE_SIZE
+    set _HEAPi _HEAP_request
+    mod _HEAPi PAGE_SIZE
+    ifn _HEAPi 0
+        add _HEAP_request _HEAPi
+    
+    state _GetFreePages
+    set _HEAPi rb
+
+    setarray lookupHeap[_HEAPi] _HEAP_pointer
+    setarray allocTable[_HEAPi] r1
+    setarray pageSizes[_HEAPi] _HEAP_request
 
     set rb _HEAP_pointer
 ends
@@ -582,13 +611,14 @@ defstate free
         return
     }
     add _HEAP_pointer ${stackSize}
-    set _HEAPi _HEAP_pointer
-    sub _HEAPi ${stackSize}
-    div _HEAPi PAGE_SIZE
+    set _HEAPi 0
+
     whilel _HEAPi heaptables {
         ife lookupHeap[_HEAPi] _HEAP_pointer {
             setarray lookupHeap[_HEAPi] 0
             setarray allocTable[_HEAPi] 0
+            setarray pageSizes[_HEAPi] 0
+            exit
         }
 
         add _HEAPi 1
@@ -597,31 +627,36 @@ ends
 
 //This needs some refactoring to be more efficient
 defstate realloc
+    //Get the current size of the allocation
+    set _HEAPi 0
+    whilel _HEAPi heaptables {
+        ife lookupHeap[_HEAPi] r1 {
+            set _HEAPj pageSizes[_HEAPi]
+            exit    
+        }
+
+        add _HEAPi 1
+    }
+
+    //Since pages must be multiple of PAGE_SIZE
+    //we check if the requested size can fit in the current allocation
+    ifl r0 _HEAPj {
+        set rb r1
+        terminate
+    }
+
+    state push
+    set ra _HEAPj
+    state push
+
     set ra r1
     set r1 r2
     state alloc
     set r1 ra
 
-    //This deals with stack memory
-    ifge r1 ${stackSize} {
-        set _HEAPi r1
-        sub _HEAPi ${stackSize}
-        div _HEAPi PAGE_SIZE
-
-        set _HEAPj 0
-        whilel _HEAPi heaptables {
-            ifn lookupHeap[_HEAPi] r1
-                exit
-
-            add _HEAPj 1
-            add _HEAPi 1
-        }
-
-        mul _HEAPj PAGE_SIZE
-    } else //I'm couting that the first element HOLDS the length of the stack memory
-        set _HEAPj flat[r1]
-
-    set _HEAPi r1
+    state pop
+    set _HEAPj ra
+    state pop
 
     copy flat[_HEAPi] flat[rb] _HEAPj
 
@@ -640,10 +675,13 @@ defstate _GC
             continue
         }
 
+        //Get the address of the allocation
         set _HEAP_pointer lookupHeap[_HEAPi]
 
+        //Check if it's being used by the stack
         set _HEAPj rbp
         set _HEAPk 0
+        add rsp 1
         whilel _HEAPj rsp {
             ife flat[_HEAPj] _HEAP_pointer {
                 set _HEAPk 1
@@ -653,101 +691,33 @@ defstate _GC
             add _HEAPj 1
         }
 
-        ife _HEAPk 0 {
-            set _HEAPj _HEAPi
-            add _HEAPj 1
+        sub rsp 1
 
-            whilel _HEAPj heaptables {
-                set _HEAPl 0
-                ifand allocTable[_HEAPj] 1
-                    set _HEAPl 1
-
-                ifand allocTable[_HEAPj] 4
-                    set _HEAPl 1
-
-                ife _HEAPl 1 {
-                    set _HEAPl lookupHeap[_HEAPj]
-                    set ra _HEAPl
-                    set rc 0
-
-                    whilee lookupHeap[_HEAPj] ra {
-                        ife flat[_HEAPl] _HEAP_pointer {
-                            set _HEAPk 1
-                            exit
-                        }
-
-                        ife rc PAGE_SIZE {
-                            add _HEAPj 1
-                            set rc 0
-                            ifge _HEAPj heaptables
-                                exit
-
-                            set ra lookupHeap[_HEAPj]
-                        } else
-                            add rc 1
-
-                        add _HEAPl 1
-                    }
-                }
-
-                add _HEAPj 1
-            }
-
-            ife _HEAPk 1 {
-                ifand allocTable[_HEAPi] 1024 {
-                    set ra allocTable[_HEAPi]
-                    and ra 1024
-                    setarray allocTable[_HEAPi] ra
-
-                    whilel _HEAPi heaptables {
-                        ifn lookupHeap[_HEAPi] _HEAP_pointer
-                            exit
-
-                        setarray allocTable[_HEAPi] ra
-                        add _HEAPi 1
-                    }
-
-                    add _HEAPi 1
-                    continue
-                }
-
-                whilel _HEAPi heaptables {
-                    ifn lookupHeap[_HEAPi] _HEAP_pointer
-                        exit
-
-                    add _HEAPi 1
-                }
-
-                add _HEAPi 1
-                continue
-            }
-
+        //If it's being used, check if it's marked to be freed
+        ife _HEAPk 1 {
+            //Clean the mark
             ifand allocTable[_HEAPi] 1024 {
-                setarray allocTable[_HEAPi] 0
-                setarray lookupHeap[_HEAPi] 0
-            } else {
                 set ra allocTable[_HEAPi]
-                or ra 1024
+                and ra 1024
                 setarray allocTable[_HEAPi] ra
             }
-            
+
             add _HEAPi 1
+            continue
+        }
 
-            whilel _HEAPi heaptables {
-                ifn lookupHeap[_HEAPi] _HEAP_pointer
-                    exit
-
-                ifand allocTable[_HEAPi] 1024 {
-                    setarray allocTable[_HEAPi] 0
-                    setarray lookupHeap[_HEAPi] 0
-                } else {
-                    set ra allocTable[_HEAPi]
-                    or ra 1024
-                    setarray allocTable[_HEAPi] ra
-                }
-
-                add _HEAPi 1
-            }
+        //If it's not being used, check if it's marked to be freed
+        ifand allocTable[_HEAPi] 1024 {
+            //Free it
+            setarray lookupHeap[_HEAPi] 0
+            setarray allocTable[_HEAPi] 0
+            setarray lookupHeap[_HEAPi] 0
+            setarray pageSizes[_HEAPi] 0
+        } else {
+            //Else, mark to be freed
+            set ra allocTable[_HEAPi]
+            or ra 1024
+            setarray allocTable[_HEAPi] ra
         }
 
         add _HEAPi 1

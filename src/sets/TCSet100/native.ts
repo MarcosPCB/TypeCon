@@ -755,13 +755,23 @@ al r0
         arguments: [],
         code: (args) => {
             return `
+qputs 1022 STARTING STACK AND HEAP DUMP
+echo 1022
 set ra 0
+qputs 1022 BASE STACK ADDR:
+echo 1022
 al rbp
+qputs 1022 STACK POINTER ADDR:
+echo 1022
 al rsp
 set ri rsp
 add ri 1
-for ra range ri
+getarraysize flat rd
+for ra range ri {
+    ifge ra rd
+        exit
     al flat[ra]
+}
 
 mul ri 4
 qputs 1022 USED STACK: %d bytes
@@ -770,26 +780,23 @@ echo 1023
 
 set ra 0
 set rd 0
+qputs 1022 MAX. OF HEAP PAGES
+echo 1022
 al heaptables
+qputs 1022 PAGE SIZE:
+echo 1022
 al PAGE_SIZE
 whilel ra heaptables {
     ifn allocTable[ra] 0 {
         al allocTable[ra]
         al lookupHeap[ra]
-        set ri lookupHeap[ra]
-        set rsi ri
-        add rsi PAGE_SIZE
-        whilel ri rsi {
-            al flat[ri]
-            add ri 1
-        }
-        add rd 1
+        al pageSizes[ra]
+        add rd pageSizes[ra]
     }
 
     add ra 1
 }
 
-mul rd PAGE_SIZE
 mul rd 4
 qputs 1022 USED HEAP: %d bytes
 qsprintf 1023 1022 rd

@@ -9,6 +9,8 @@ import inquirer from 'inquirer';
 const fsExtra = require("fs-extra");
 import { spawnSync } from 'child_process';
 const packConfig = require('../package.json');
+import https from 'https';
+import semver from 'semver';
 
 let fileName = '';
 let input_folder = '';
@@ -30,8 +32,8 @@ let gdb_log = false;
 let gdb_err = false;
 let initFunc = false;
 let precompiled_modules = true;
-let heap_page_size = 8;
-let heap_page_number = 64;
+let heap_page_size = 4;
+let heap_page_number = 128;
 
 const helpText = `
 Usage:
@@ -46,7 +48,8 @@ Usage:
     \x1b[34m-of or --output_folder\x1b[0m: for the output folder path 
     \x1b[35m-dl or --detail_lines\x1b[0m: to write the TS lines inside the CON code 
     \x1b[36m-ss or --stack_size\x1b[0m: to define the stack size 
-    \x1b[38m-ps or --page_size\x1b[0m: to define the heap page's size 
+    \x1b[36m-hs or --heap_size\x1b[0m: to define the heap's size
+    \x1b[38m-ps or --page_size\x1b[0m: to define the heap page's minimum size 
     \x1b[39m-pn or --page_number\x1b[0m: to define the default number of heap pages
     \x1b[91m-hl or --headerless\x1b[0m: Don't insert the header code (init code and states) inside the output CON 
     \x1b[92m-h or --header\x1b[0m: Create the header file 
@@ -55,6 +58,27 @@ Usage:
     \x1b[96m-1f or --one_file\x1b[0m: Compile all the code into one file (must be used with -o)
     \x1b[94m-di or --default_inclusion\x1b[0m: Default inclusion (GAME.CON) 
     \x1b[95m-ei or --eduke_init\x1b[0m: Init file is EDUKE.CON`
+
+
+
+const currentVersion = packConfig.version;
+const packageName = packConfig.name;
+
+function checkForUpdates() {
+  https.get(`https://registry.npmjs.org/${packageName}/latest`, (res) => {
+    let data = '';
+    res.on('data', chunk => data += chunk);
+    res.on('end', () => {
+      try {
+        const latest = JSON.parse(data).version;
+        if (semver.gt(latest, currentVersion)) {
+          const isCrucial = semver.diff(currentVersion, latest) === 'minor';
+          console.log(`\x1b[33mA new version (${latest}) is available!${isCrucial ? ' This is a crucial update.' : ''}\x1b[0m`);
+        }
+      } catch (e) {}
+    });
+  });
+}
 
 function GetAllFilesFromPath(iPath: string) {
     let iFiles: Dirent[];
@@ -277,7 +301,7 @@ async function Setup() {
 */
 let compile_options = 0;
 
-console.log(`\n\x1b[36mTypeCON Compiler \x1b[93mBETA\x1b[0m \x1b[92mVersion ${packConfig.version}\x1b[0m\x1b[94m
+console.log(`\n\x1b[36mTypeCON Compiler \x1b[31mALPHA\x1b[0m \x1b[92mVersion ${packConfig.version}\x1b[0m\x1b[94m
 By ItsMarcos\x1b[0m - Use \x1b[95m'--help or -?'\x1b[0m to get the list of commands`)
 
 if(!fs.existsSync('compiled'))
@@ -311,8 +335,10 @@ for(let i = 0; i < process.argv.length; i++) {
             process.exit(1);
         }
 
-        if(!fs.existsSync(fileName))
+        if(!fs.existsSync(fileName)) {
+            console.log(`File: ${fileName} not found!`);
             process.exit(1);
+        }
     }
 
     if(a == '--input_folder' || a == '-if') {
@@ -324,7 +350,7 @@ for(let i = 0; i < process.argv.length; i++) {
         }
 
         if(!fs.existsSync(input_folder) || !fs.readdirSync(input_folder)) {
-            console.log(`Path: ${input_folder} is not a folder or do not exist.`);
+            console.log(`Path: ${input_folder} is not a folder or does not exist.`);
             process.exit(1);
         }
 
@@ -455,8 +481,8 @@ if(debug_mode) {
                     code = initSys.BuildFullCodeFile(code);
             }
 
-            console.log(`Writing ${output_folder}/${fileName}.con`);
-            fs.writeFileSync(`${output_folder}/${fileName}.con`, code);
+            console.log(`Writing ${output_folder}/${fileName}${fileName.endsWith('.con') ? '' : '.con'}`);
+            fs.writeFileSync(`${output_folder}/${fileName}${fileName.endsWith('.con') ? '' : '.con'}`, code);
         }
     }
 
@@ -478,18 +504,18 @@ if(debug_mode) {
             if(!(compile_options & 1))
                 code = initSys.BuildFullCodeFile(code);
 
-            console.log(`Writing ${output_folder}/${output_file}.con`);
-            fs.writeFileSync(`${output_folder}/${output_file}.con`, code);
+            console.log(`Writing ${output_folder}/${output_file}${output_file.endsWith('.con') ? '' : '.con'}`);
+            fs.writeFileSync(`${output_folder}/${output_file}${output_file.endsWith('.con') ? '' : '.con'}`, code);
         } else {
             compiledFiles.forEach(c => {
                 if(c.options != 0)
                     return;
                 const name = GetOutputName(c.path);
-                console.log(`Writing ${output_folder}/${name}.con`);
-                fs.writeFileSync(`${output_folder}/${name}.con`, c.code);
+                console.log(`Writing ${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`);
+                fs.writeFileSync(`${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`, c.code);
 
                 if(compile_options & 4)
-                    linkList.push(`${output_folder}/${name}.con`);
+                    linkList.push(`${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`);
             });
 
             if(compile_options & 4)
@@ -508,6 +534,8 @@ if(debug_mode) {
         console.log(`Nothing to do!\n${helpText}`);
     else
         console.log(`Compilation finished!`);
+
+    checkForUpdates();
 
     process.exit(0);
 }
