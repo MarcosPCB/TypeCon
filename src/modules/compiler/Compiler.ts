@@ -11,6 +11,7 @@ import { compiledFiles, ECompileOptions, ICompiledFile, pageSize } from "./frame
 import { visitFunctionDeclaration } from './services/visitFunctionDeclaration';
 import { visitClassDeclaration } from './services/visitClassDeclaration';
 import { visitStatement } from './services/visitStatement';
+import { colorText } from '../../main';
 
 export type DiagnosticSeverity = "error" | "warning";
 
@@ -228,7 +229,7 @@ export class TsToConCompiler {
       paths: [path.dirname(baseFile)]
     });
   } catch (err) {
-    console.error(`Could not resolve '${importPath}' from '${baseFile}'`);
+    console.error(`${colorText('Could not resolve', 'red')} '${importPath}' from '${baseFile}'`);
     return null;
   }
 }
@@ -304,7 +305,7 @@ export class TsToConCompiler {
 
         const resolved = this.resolveImport(file, fName);
         if (!resolved) {
-          console.log(`\nUnable to include file: ${fName}`);
+          console.log(`\n${colorText('Unable to include file:', 'red')} ${fName}`);
           continue;
         }
 
@@ -319,14 +320,14 @@ export class TsToConCompiler {
           context.currentFile = prvFile;
           context.diagnostics.length = 0;
         } catch (err) {
-          console.log(`\nCannot open include file: ${resolved}`);
+          console.log(`\n${colorText('Cannot open include file:', 'red')} ${resolved}`);
           console.log(err);
         }
       }
     }
 
     if (prvContext)
-      console.log(`Including ${file}...`);
+      console.log(`\n${colorText('Including', 'yellow')}' ${file}...`);
 
     const modules = sf.getModules();
 
@@ -335,7 +336,7 @@ export class TsToConCompiler {
     if (modules.length > 0) {
       if (modules.findIndex(e => e.getName() == 'noread') != -1) {
         context.currentFile.options = ECompileOptions.no_read;
-        console.log(`Ignoring...\n`);
+        console.log(`Ignoring...`);
         return null;
       } else {
         if (modules.findIndex(e => e.getName() == 'nocompile') != -1) {
@@ -350,9 +351,9 @@ export class TsToConCompiler {
 
         if (!(context.currentFile.options & ECompileOptions.state_decl)
           || !(context.currentFile.options & ECompileOptions.no_compile))
-          console.log(`Compiling ${file}...`);
+          console.log(`\n${colorText('Compiling', 'yellow')}' ${file}...`);
       }
-    } else console.log(`Compiling ${file}...`);
+    } else console.log(`\n${colorText('Compiling', 'yellow')}' ${file}...`);
 
     sf.getStatements().forEach(st => {
       if (st.isKind(SyntaxKind.FunctionDeclaration)) {
@@ -371,14 +372,14 @@ export class TsToConCompiler {
     } else context.currentFile.code = outputLines.join('\n');
 
     if (context.diagnostics.length > 0) {
-      console.log("\n=== DIAGNOSTICS ===");
+      console.log(colorText('=== DIAGNOSTICS ===', 'red'));
 
       for (const diag of context.diagnostics) {
-        console.log(`[${diag.severity}] line ${diag.line}: ${diag.message}`);
+        console.log(`[${diag.severity == 'error' ? colorText('ERROR', 'red') : colorText('WARNING', 'yellow')}] line ${diag.line}: ${colorText(diag.message, 'magenta')}`);
       }
       console.log('\n');
     } else {
-      console.log("No errors or warnings.\n");
+      console.log(colorText('Succesfully compiled', 'green') + ` ${file}`);
     }
 
     return {

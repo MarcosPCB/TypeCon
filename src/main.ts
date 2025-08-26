@@ -36,6 +36,33 @@ let precompiled_modules = true;
 let heap_page_size = 4;
 let heap_page_number = 128;
 
+export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
+    switch(color) {
+        case 'red':
+            color = '31';
+            break;
+        case 'green':
+            color = '32';
+            break;
+        case 'yellow':
+            color = '33';
+            break;
+        case 'blue':
+            color = '34';
+            break;
+        case 'magenta':
+            color = '35';
+            break;
+        case 'cyan':
+            color = '36';
+            break;
+        case 'white':
+            color = '37';
+            break;
+    }
+    return `\x1b[${color}m${text}\x1b[0m`;
+}
+
 const helpText = `
 Usage:
     Project options:
@@ -470,12 +497,14 @@ if(debug_mode) {
 
         fileName = GetOutputName(fileName);
 
+        console.log(' ');
+
         if(compile_options & 4) {
             CreateInit([`${output_folder}/${fileName}.con`]);
-            console.log(`Writing header file: ${output_folder}/header.con`);
+            console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
             fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
 
-            console.log(`Writing ${output_folder}/${fileName}.con`);
+            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}.con`);
             fs.writeFileSync(`${output_folder}/${fileName}.con`, code);
         } else {
             if(default_inclusion)
@@ -485,7 +514,7 @@ if(debug_mode) {
                     code = initSys.BuildFullCodeFile(code);
             }
 
-            console.log(`Writing ${output_folder}/${fileName}${fileName.endsWith('.con') ? '' : '.con'}`);
+            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.endsWith('.con') ? '' : '.con'}`);
             fs.writeFileSync(`${output_folder}/${fileName}${fileName.endsWith('.con') ? '' : '.con'}`, code);
         }
     }
@@ -499,7 +528,7 @@ if(debug_mode) {
         }
 
         if(compile_options & 8) {
-            console.log(`Compiling into one file...`);
+            console.log(colorText(`Compiling into one file...`, 'magenta'));
             for(let i = compiledFiles.size - 1; i >= 0; i--) {
                 const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
                 code += f.code;
@@ -508,14 +537,14 @@ if(debug_mode) {
             if(!(compile_options & 1))
                 code = initSys.BuildFullCodeFile(code);
 
-            console.log(`Writing ${output_folder}/${output_file}${output_file.endsWith('.con') ? '' : '.con'}`);
+            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${output_file}${output_file.endsWith('.con') ? '' : '.con'}`);
             fs.writeFileSync(`${output_folder}/${output_file}${output_file.endsWith('.con') ? '' : '.con'}`, code);
         } else {
             compiledFiles.forEach(c => {
                 if(c.options != 0)
                     return;
                 const name = GetOutputName(c.path);
-                console.log(`Writing ${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`);
+                console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`);
                 fs.writeFileSync(`${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`, c.code);
 
                 if(compile_options & 4)
@@ -528,16 +557,16 @@ if(debug_mode) {
     }
 
     if(link) {
-        console.log(`Linking...`);
+        console.log(colorText(`Linking...`, 'blue'));
         CreateInit(linkList);
-        console.log(`Writing header file: ${output_folder}/header.con`);
+        console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
         fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
     }
 
     if(fileName == '' && files.length == 0 && !link)
         console.log(`Nothing to do!\n${helpText}`);
     else
-        console.log(`Compilation finished!`);
+        console.log(colorText(`Compilation finished!`, 'green'));
 
     checkForUpdates();
 
@@ -547,7 +576,7 @@ if(debug_mode) {
 function CreateInit(outputFiles: string[]) {
     let code = '';
 
-    console.log(`Writing init file: ${init_file}`);
+    console.log(`${colorText('Writing:', 'green')} init file: ${init_file}`);
 
     if(default_inclusion)
         code = `include GAME.CON\n\n`;
