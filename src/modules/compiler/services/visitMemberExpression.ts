@@ -441,12 +441,21 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
                     i++;
                   }
 
+                  if(nVar.type == CON_NATIVE_FLAGS.ARRAY) {
+                    code += `set rsi ra\n`;
+                    if(assignment)
+                      code += `state pop\n`;
+
+                    code += `${assignment ? 'set' : 'get'}${op}[${obj.kind == 'this' ? 'THISACTOR' : 'ri'}].`;
+                    code += `${nVar.code} ${reg}\n`;
+                  }
+
                   continue;
                 }
 
                 if (nVar.var_type == CON_NATIVE_TYPE.object) {
                   if (s.kind != 'property') {
-                    addDiagnostic(expr, context, "error", `Segment after ${seg.name} is not a property: ${expr.getText()}`);
+                    addDiagnostic(expr, context, "error", `Segment after ${seg.name}: ${(s as SegmentIndex).expr.getText()} is not a property: ${expr.getText()}`);
                     return "set ra 0\n";
                   }
 
@@ -474,7 +483,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
                     code += `${v.code} ${reg}\n`;
                   }
 
-                  if (v.var_type == CON_NATIVE_TYPE.object)
+                  if (v.var_type == CON_NATIVE_TYPE.object || v.var_type == CON_NATIVE_TYPE.array)
                     nVar = v;
                 }
               }

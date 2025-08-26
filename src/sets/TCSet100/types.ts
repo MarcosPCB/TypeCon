@@ -2309,14 +2309,198 @@ declare global {
      */
     export function FastSwitch(cases: IFastSwitch[]);
 
+    export interface IPlayerWeapon {
+        ammoAmount: CON_NATIVE<number[]>;
+        gotWeapon: CON_NATIVE<number[]>;
+        maxAmmoAmount: CON_NATIVE<number[]>;
+        subOrNot: CON_NATIVE<number[]>
+        currWeapon: CON_NATIVE<number>;
+        weaponAnim: CON_NATIVE<number>;
+        bSubWeapon: CON_NATIVE<number>;
+        hbombHoldDelay: CON_NATIVE<number>;
+        hbombOn: CON_NATIVE<number>;
+        holsterWeapon: CON_NATIVE<number>;
+        kickbackPic: CON_NATIVE<number>;
+        subWeapon: CON_NATIVE<number>;
+        reloading: CON_NATIVE<number>;
+    }
+
+    export interface IPlayerInventory {
+        bootAmount: CON_NATIVE<number>;
+        firstaidAmount: CON_NATIVE<number>;
+        gotAccess: CON_NATIVE<number>;
+        heatAmount: CON_NATIVE<number>;
+        heatOn: CON_NATIVE<number>;
+        holodukeAmount: CON_NATIVE<number>;
+        holodukeOn: CON_NATIVE<number>;
+        invdisptime: CON_NATIVE<number>;
+        invenIcon: CON_NATIVE<number>;
+        jetpackAmount: CON_NATIVE<number>;
+        jetpackOn: CON_NATIVE<number>;
+        refreshInventory: CON_NATIVE<number>;
+        scubaAmount: CON_NATIVE<number>;
+        scubaOn: CON_NATIVE<number>;
+        shieldAmount: CON_NATIVE<number>;
+        maxShieldAmount: CON_NATIVE<number>;
+        steroidsAmount: CON_NATIVE<number>;
+    }
+
     class CPlayer {
-        public ammoAmount: CON_NATIVE<number[]>;
-        public gotWeapon: CON_NATIVE<number[]>;
-        public maxAmmoAmount: CON_NATIVE<number[]>;
-        public subOrNot: CON_NATIVE<number[]>
-        public currWeapon: CON_NATIVE<number>;
-        public weaponAnim: CON_NATIVE<number>;
         public actor: CON_NATIVE<CActor>;
+
+        public aimMode: CON_NATIVE<number>;
+        public autoAim: CON_NATIVE<number>;
+        public weaponSwitch: CON_NATIVE<number>;
+
+        public cheatPhase: CON_NATIVE<number>;
+
+        public bobCounter: CON_NATIVE<number>;
+        public bobPos: CON_NATIVE<vec2>;
+        
+        public crackTime: CON_NATIVE<number>;
+        public fistIncs: CON_NATIVE<number>;
+        
+        public kneeIncs: CON_NATIVE<number>;
+        public knuckleIncs: CON_NATIVE<number>;
+
+        public lastFullWeapon: CON_NATIVE<number>;
+        public lastQuickKick: CON_NATIVE<number>;
+        public lastPissedTime: CON_NATIVE<number>;
+        public lastWeapon: CON_NATIVE<number>;
+        public lastUsedWeapon: CON_NATIVE<number>;
+
+        public quickKick: CON_NATIVE<number>;
+        public randomClubFrame: CON_NATIVE<number>;
+        public rapidFireHold: CON_NATIVE<number>;
+        
+        public showEmptyWeapon: CON_NATIVE<number>;
+
+        public weaponSystem: CON_NATIVE<IPlayerWeapon>;
+
+        public wantWeaponFire: CON_NATIVE<number>;
+        public weaponAng: CON_NATIVE<number>;
+        public weaponPos: CON_NATIVE<number>;
+        public weaponSway: CON_NATIVE<number>;
+        public weapRecs: CON_NATIVE<number[]>;
+        public weapRecCNT: CON_NATIVE<number>;
+
+        public inventory: CON_NATIVE<IPlayerInventory>;
+
+        public ang: CON_NATIVE<number>;
+        public currSector: CON_NATIVE<CSector>;
+        public currSectorID: CON_NATIVE<number>;
+
+        public i: CON_NATIVE<number>;
+        public index: CON_NATIVE<number>;
+
+        public previousAng: CON_NATIVE<number>;
+
+        public previousPos: CON_NATIVE<vec3>;
+        public pos: CON_NATIVE<vec3>;
+        public vel: CON_NATIVE<vec3>;
+
+        public angVel: CON_NATIVE<number>;
+        public crouchToggle: CON_NATIVE<number>;
+        
+        public runSpeed: CON_NATIVE<number>;
+        public jumpingCounter: CON_NATIVE<number>;
+        public jumpingToggle: CON_NATIVE<number>;
+        public movementLock: CON_NATIVE<number>;
+
+        public deadFlag: CON_NATIVE<number>;
+
+        public horiz: CON_NATIVE<number>;
+        public verticalAngle: CON_NATIVE<number>;
+
+        public verticalAngleOff: CON_NATIVE<number>;
+        public horizOff: CON_NATIVE<number>;
+
+        public hudpal: CON_NATIVE<number>;
+        public lookAng: CON_NATIVE<number>;
+        public newowner: CON_NATIVE<number>;
+        public opositeYoff: CON_NATIVE<number>;
+        public overShoulderOn: CON_NATIVE<number>;
+        public palette: CON_NATIVE<number>;
+        public palookup: CON_NATIVE<number>;
+        public pals: CON_NATIVE<number[]>;
+        public palsTime: CON_NATIVE<number>;
+        public opositeHoriz: CON_NATIVE<number>;
+        public opositeHorizoff: CON_NATIVE<number>;
+        public pycount: CON_NATIVE<number>;
+        public pyoff: CON_NATIVE<number>;
+        public returnToCenter: CON_NATIVE<number>;
+        public rotscrnang: CON_NATIVE<number>;
+        public visibility: CON_NATIVE<number>;
+        public zoom: CON_NATIVE<number>;
+
+        public fta: CON_NATIVE<number>;
+        public ftq: CON_NATIVE<number>;
+
+        public actorsKilled: CON_NATIVE<number>;
+        public maxActorsKilled: CON_NATIVE<number>;
+        public maxSecretRooms: CON_NATIVE<number>;
+        public playerPar: CON_NATIVE<number>;
+        public secretRooms: CON_NATIVE<number>;
+
+        public connected: CON_NATIVE<number>;
+        public deaths: CON_NATIVE<number>;
+        public frag: CON_NATIVE<number>;
+        public fragPs: CON_NATIVE<number>;
+        public fraggedSelf: CON_NATIVE<number>;
+        public frags: CON_NATIVE<number>;
+        public interfaceToggleFlag: CON_NATIVE<number>;
+        public team: CON_NATIVE<number>;
+
+        public exitx: CON_NATIVE<number[]>;
+        public exity: CON_NATIVE<number[]>;
+        public lastrandomspot: CON_NATIVE<number[]>;
+        public name: CON_NATIVE<string[]>;
+        public randomflamex: CON_NATIVE<number[]>;
+
+        public accessIncs: CON_NATIVE<number>;
+        public accessSpritenum: CON_NATIVE<number>;
+        public accessWallnum: CON_NATIVE<number>;
+        public actorsqu: CON_NATIVE<number>;
+        public airleft: CON_NATIVE<number>;
+        public autostep: CON_NATIVE<number>;
+        public autostepSbw: CON_NATIVE<number>;
+        public buttonpalette: CON_NATIVE<number>;
+        public customexitsound: CON_NATIVE<number>;
+        public dummyplayersprite: CON_NATIVE<number>;
+        public extra_extra8: CON_NATIVE<number>;
+        public fallingCounter: CON_NATIVE<number>;
+        public footprintcount: CON_NATIVE<number>;
+        public footprintpal: CON_NATIVE<number>;
+        public footprintshade: CON_NATIVE<number>;
+        public gm: CON_NATIVE<number>;
+        public hardLanding: CON_NATIVE<number>;
+        public hurtDelay: CON_NATIVE<number>;
+        public lastExtra: CON_NATIVE<number>;
+
+        public loogCNT: CON_NATIVE<number>;
+        public numloogs: CON_NATIVE<number>;
+        public loogiePos: CON_NATIVE<vec2>;
+
+        public maxPlayerHealth: CON_NATIVE<number>;
+        
+        public onCrane: CON_NATIVE<number>;
+        public onGround: CON_NATIVE<number>;
+        public onWarpingSector: CON_NATIVE<number>;
+        public oneEightyCount: CON_NATIVE<number>;
+        public oneParallaxSectnum: CON_NATIVE<number>;
+        public sbs: CON_NATIVE<number>;
+        public screamVoice: CON_NATIVE<number>;
+        public somethingonplayer: CON_NATIVE<number>;
+        public soundPitch: CON_NATIVE<number>;
+        public spritebridge: CON_NATIVE<number>;
+        public timebeforeexit: CON_NATIVE<number>;
+        public tipincs: CON_NATIVE<number>;
+        public toggleKeyFlag: CON_NATIVE<number>;
+        public transporterHold: CON_NATIVE<number>;
+        public truefz: CON_NATIVE<number>;
+        public truecz: CON_NATIVE<number>;
+        public wackedbyactor: CON_NATIVE<number>;
+        public walkingSndToggle: CON_NATIVE<number>;
         
         Main();
 

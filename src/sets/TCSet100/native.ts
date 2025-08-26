@@ -1595,52 +1595,62 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
 
 export const nativeVars_Players: CON_NATIVE_VAR[] =[
     {
-        name: 'ammoAmount',
-        var_type: CON_NATIVE_TYPE.array,
-        type: CON_NATIVE_FLAGS.ARRAY,
-        readonly: false,
-        code: 'ammo_amount rsi',
-        init: 0
-    },
-    {
-        name: 'gotWeapon',
-        var_type: CON_NATIVE_TYPE.array,
-        type: CON_NATIVE_FLAGS.ARRAY,
-        readonly: false,
-        code: 'gotweapon rsi',
-        init: 0
-    },
-    {
-        name: 'maxAmmoAmount',
-        var_type: CON_NATIVE_TYPE.array,
-        type: CON_NATIVE_FLAGS.ARRAY,
-        readonly: false,
-        code: 'max_ammo_amount rsi',
-        init: 0
-    },
-    {
-        name: 'subOrNot',
-        var_type: CON_NATIVE_TYPE.array,
-        type: CON_NATIVE_FLAGS.ARRAY,
-        readonly: false,
-        code: 'bsubweapon rsi',
-        init: 0
-    },
-    {
-        name: 'currWeapon',
-        var_type: CON_NATIVE_TYPE.native,
-        type: CON_NATIVE_FLAGS.VARIABLE,
-        readonly: false,
-        code: 'curr_weapon',
-        init: 0
-    },
-    {
-        name: 'weaponAnim',
-        var_type: CON_NATIVE_TYPE.native,
-        type: CON_NATIVE_FLAGS.VARIABLE,
-        readonly: false,
-        code: 'kickback_pic',
-        init: 0
+        name: 'weaponSystem',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: true,
+        code: '',
+        init: 0,
+        object: [
+            {
+                name: 'ammoAmount',
+                var_type: CON_NATIVE_TYPE.array,
+                type: CON_NATIVE_FLAGS.ARRAY,
+                readonly: false,
+                code: 'ammo_amount rsi',
+                init: 0
+            },
+            {
+                name: 'gotWeapon',
+                var_type: CON_NATIVE_TYPE.array,
+                type: CON_NATIVE_FLAGS.ARRAY,
+                readonly: false,
+                code: 'gotweapon rsi',
+                init: 0
+            },
+            {
+                name: 'maxAmmoAmount',
+                var_type: CON_NATIVE_TYPE.array,
+                type: CON_NATIVE_FLAGS.ARRAY,
+                readonly: false,
+                code: 'max_ammo_amount rsi',
+                init: 0
+            },
+            {
+                name: 'subOrNot',
+                var_type: CON_NATIVE_TYPE.array,
+                type: CON_NATIVE_FLAGS.ARRAY,
+                readonly: false,
+                code: 'bsubweapon rsi',
+                init: 0
+            },
+            {
+                name: 'currWeapon',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                code: 'curr_weapon',
+                init: 0
+            },
+            {
+                name: 'weaponAnim',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                code: 'kickback_pic',
+                init: 0
+            },
+        ]
     },
     {
         name: 'actor',
@@ -1651,6 +1661,182 @@ export const nativeVars_Players: CON_NATIVE_VAR[] =[
         init: 0,
         override_code: true,
         object: nativeVars_Sprites
+    },
+    {
+        name: 'pos',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: true,
+        code: '',
+        init: 0,
+        object: [
+            {
+                name: 'x',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                code: 'posx',
+                init: 0
+            },
+            {
+                name: 'y',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                code: 'posy',
+                init: 0
+            },
+            {
+                name: 'z',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                code: 'posz',
+                init: 0
+            }
+        ]
+    },
+    {
+        name: 'previousPos',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: true,
+        code: '',
+        init: 0,
+        object: [
+            {
+                name: 'x',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                code: 'oposx',
+                init: 0
+            },
+            {
+                name: 'y',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                code: 'oposy',
+                init: 0
+            },
+            {
+                name: 'z',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                code: 'oposz',
+                init: 0
+            }
+        ]
+    },
+    {
+        name: 'vel',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: true,
+        code: '',
+        init: 0,
+        object: [
+            {
+                name: 'x',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                code: 'posxv',
+                init: 0
+            },
+            {
+                name: 'y',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                code: 'posyv',
+                init: 0
+            },
+            {
+                name: 'z',
+                var_type: CON_NATIVE_TYPE.native,
+                type: CON_NATIVE_FLAGS.VARIABLE,
+                readonly: false,
+                code: 'poszv',
+                init: 0
+            }
+        ]
+    },
+    {
+        name: 'currSector',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: true,
+        code: ['getp[ri].cursectnum ri\ngetsector[ri].', 'getp[ri].cursectnum ri\nsetsector[ri].'],
+        init: 0,
+        override_code: true,
+        object: nativeVars_Sectors
+    },
+    {
+        name: 'currSectorID',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'cursectnum',
+        init: 0,
+    },
+    {
+        name: 'ang',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'ang',
+        init: 0
+    },
+    {
+        name: 'angVel',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'angvel',
+        init: 0
+    },
+    {
+        name: 'previousAng',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'oang',
+        init: 0
+    },
+    {
+        name: 'horiz',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'horiz',
+        init: 0
+    },
+    {
+        name: 'verticalAngle',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'horiz',
+        init: 0
+    },
+    {
+        name: 'horizOff',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'horizoff',
+        init: 0
+    },
+    {
+        name: 'verticalAngle',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'horizoff',
+        init: 0
     }
 ]
 
