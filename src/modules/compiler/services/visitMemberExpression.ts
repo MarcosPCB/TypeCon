@@ -21,7 +21,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
     if (obj.kind == 'identifier' && ['sprites', 'sectors', 'walls', 'players', 'EMoveFlags'].indexOf(obj.name) == -1) {
       const eSym = context.symbolTable.get(obj.name);
 
-      code += context.options.lineDetail ? `/*Symbol ${JSON.stringify(eSym, undefined, 2)}*/\n` : '';
+      code += context.options.symbolPrint ? `/*Symbol ${JSON.stringify(eSym, undefined, 2)}*/\n` : '';
 
       if (eSym && eSym.type == ESymbolType.enum) {
         const seg = segments[1] as SegmentProperty
@@ -183,6 +183,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
     }
 
     if (obj.kind == 'identifier' || obj.kind == 'this') {
+      let currSegIndex = 1;
       switch (obj.name) {
         case 'EMoveFlags':
           if (direct)
@@ -223,6 +224,8 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
             if (context.currentActorPicnum)
               obj.name = 'sprites';
+            else if (context.isPlayer)
+              obj.name = 'players';
           }
 
           //Go no further, it just wants the reference
@@ -281,7 +284,8 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
               } else if (pSym.offset != 0)
                 code += `add ri ${pSym.offset}\n`;
 
-              for (let i = 2; i < segments.length; i++) {
+              currSegIndex++;
+              for (let i = currSegIndex; i < segments.length; i++) {
                 const s = segments[i];
 
                 if (pSym.type & ESymbolType.object || pSym.type & ESymbolType.array)
@@ -356,6 +360,8 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
             let nativeVar: CON_NATIVE_VAR[];
 
+            currSegIndex = obj.kind == 'this' ? 2 : 3;
+
             switch (obj.name) {
               case 'sprites':
                 nativeVar = nativeVars_Sprites;
@@ -374,8 +380,12 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
               case 'players':
                 nativeVar = nativeVars_Players;
-                op = 'player';
+                op = 'p';
                 break;
+
+              default:
+                addDiagnostic(expr, context, "error", `Object ${obj.name} does not exist: ${expr.getText()}`);
+                return "set ra 0\n";
             }
 
             let nVar = nativeVar.find(e => e.name == seg.name);
@@ -396,7 +406,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
             if (nVar.type == CON_NATIVE_FLAGS.OBJECT) {
               let v = nVar.object;
 
-              for (let i = 3; i < segments.length; i++) {
+              for (let i = currSegIndex; i < segments.length; i++) {
                 const s = segments[i];
 
                 if (nVar.var_type == CON_NATIVE_TYPE.array) {
@@ -447,6 +457,14 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
                     return "set ra 0\n";
                   }
 
+                  if (nVar.override_code) {
+                    if(!setRI)
+                      code = 'set ri THISACTOR\n' + code;
+                    setRI = true;
+                    code += nVar.code[assignment ? 1 : 0];
+                    overriden = true;
+                  }
+
                   if (v.var_type == CON_NATIVE_TYPE.native) {
                     for(let i = 0; i < pushes; i++)
                       code += `state pop\n`;
@@ -461,7 +479,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
                 }
               }
             } else if(nVar.type == CON_NATIVE_FLAGS.ARRAY) {
-              let nextSeg = segments[3];
+              let nextSeg = segments.at(-1);
 
               if (nextSeg.kind != 'index') {
                 addDiagnostic(expr, context, "error", `Missing index for ${seg.name}: ${expr.getText()}`);

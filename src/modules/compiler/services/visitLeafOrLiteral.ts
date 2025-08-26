@@ -43,7 +43,7 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
 
       if (context.symbolTable.has(name)) {
         const off = context.symbolTable.get(name) as SymbolDefinition;
-        code += context.options.lineDetail ? `/*Symbol ${JSON.stringify(off, undefined, 2)}*/\n` : '';
+        code += context.options.symbolPrint ? `/*Symbol ${JSON.stringify(off, undefined, 2)}*/\n` : '';
         if(off.type & ESymbolType.constant) {
           if(direct)
             return String(off.literal);

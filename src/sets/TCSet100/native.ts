@@ -1642,6 +1642,16 @@ export const nativeVars_Players: CON_NATIVE_VAR[] =[
         code: 'kickback_pic',
         init: 0
     },
+    {
+        name: 'actor',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: true,
+        code: ['getp[ri].i ri\ngeta[ri].', 'getp[ri].i ri\nseta[ri].'],
+        init: 0,
+        override_code: true,
+        object: nativeVars_Sprites
+    }
 ]
 
 export const nativeVarsList = ['sprites', 'sectors', 'walls', 'projectiles',

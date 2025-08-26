@@ -2316,7 +2316,7 @@ declare global {
         public subOrNot: CON_NATIVE<number[]>
         public currWeapon: CON_NATIVE<number>;
         public weaponAnim: CON_NATIVE<number>;
-        public actor: CActor;
+        public actor: CON_NATIVE<CActor>;
         
         Main();
 

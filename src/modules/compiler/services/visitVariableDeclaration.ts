@@ -78,7 +78,7 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
         children: context.curSymRet ? context.curSymRet.children : undefined
       });
 
-      code += context.options.lineDetail ? `/*Symbol ${JSON.stringify(context.symbolTable.get(varName), undefined, 2)}*/\n` : '';
+      code += context.options.symbolPrint ? `/*Symbol ${JSON.stringify(context.symbolTable.get(varName), undefined, 2)}*/\n` : '';
 
       context.localVarNativePointer = undefined;
       context.localVarNativePointerIndexed = false;

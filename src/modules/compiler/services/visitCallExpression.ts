@@ -27,6 +27,9 @@ export function visitCallExpression(call: CallExpression, context: CompilerConte
       if (obj.kind == 'this') {
         if (segments.length == 2 && segments[1].kind != 'index')
           fnNameRaw = segments[1].name;
+        else //Special case for player class with actor property
+          if(segments[1].kind == 'property' && segments[1].name == 'actor')
+            fnNameRaw = (segments[2] as SegmentProperty).name;
         else {
           //Assume it's greater than 2
           //In this case, we know this is not a native function

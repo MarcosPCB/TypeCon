@@ -14,7 +14,8 @@ import semver from 'semver';
 
 let fileName = '';
 let input_folder = '';
-let lineDetail = false;
+let line_print = false;
+let symbol_print = false;
 let parse_only = false;
 let stack_size = 1024;
 let output_folder = 'compiled';
@@ -357,8 +358,11 @@ for(let i = 0; i < process.argv.length; i++) {
         GetAllFilesFromPath(input_folder);
     }
 
-    if(a == '--detail_lines' || a == '-dl')
-        lineDetail = true;
+    if(a == '--line_print' || a == '-lp')
+        line_print = true;
+
+    if(a == '--symbol_print' || a == '-sp')
+        symbol_print = true;
 
     if(a == '--stack_size' || a == '-ss')
         stack_size = Number(process.argv[i + 1]);
@@ -448,7 +452,7 @@ if(debug_mode) {
     if(stack_size < 1024)
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
-    const compiler = new TsToConCompiler({lineDetail});
+    const compiler = new TsToConCompiler({lineDetail: line_print, symbolPrint: symbol_print});
 
     let code = '';
 

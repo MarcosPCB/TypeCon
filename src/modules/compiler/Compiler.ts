@@ -40,6 +40,7 @@ interface CompileDiagnostic {
 export interface CompilerOptions {
   debug?: boolean;
   lineDetail?: boolean;
+  symbolPrint?: boolean;
 }
 
 export enum EHeapType {
@@ -145,6 +146,7 @@ export interface CompilerContext {
   currentActorLabels: Record<string, SymbolDefinition>;
   currentActorLabelAsObj: boolean;
   currentActorHardcoded: boolean;
+  isPlayer?: boolean;
 
   // For event classes if needed
   currentEventName?: string;

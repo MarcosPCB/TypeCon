@@ -40,6 +40,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
       currentActorMoves: [],
       currentActorAis: [],
       currentActorLabels: {},
+      isPlayer: undefined,
       mainBFunc: false,
       curFunc: undefined,
     };
@@ -86,6 +87,8 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
         type: ESymbolType.constant,
         literal: localCtx.currentActorExtra
       });
+    } else if(type == 'CPlayer') {
+      localCtx.isPlayer = true;
     }
 
     // visit properties
