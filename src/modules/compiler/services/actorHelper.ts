@@ -1,4 +1,4 @@
-import { PropertyDeclaration, ObjectLiteralExpression, SyntaxKind, CallExpression } from "ts-morph";
+import { PropertyDeclaration, ObjectLiteralExpression, SyntaxKind, CallExpression, Expression } from "ts-morph";
 import { CompilerContext, SymbolDefinition, ESymbolType, SegmentProperty } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
 import { evaluateLiteralExpression } from "../helper/helpers";
@@ -245,7 +245,7 @@ export function parseVarForActionsMovesAi(
       switch (key) {
         case "action": action = ctx.currentActorLabels[seg.name]; break;
         case "move": move = ctx.currentActorLabels[seg.name]; break;
-        case "flags": flags = Number(evaluateLiteralExpression(valNode)); break;
+        case "flags": flags = Number(evaluateLiteralExpression(valNode, ctx)); break;
       }
     });
 
@@ -272,10 +272,9 @@ export function parseVarForActionsMovesAi(
     // super(picnum, isEnemy, extra, actions, firstAction, moves, ais)
     const args = call.getArguments();
     if (args.length >= 1) {
-      const a0 = args[0];
-      if (a0.isKind(SyntaxKind.NumericLiteral)) {
-        context.currentActorPicnum = parseInt(a0.getText(), 10);
-      }
+      const a0 = evaluateLiteralExpression(args[0] as Expression, context);
+      if (a0)
+        context.currentActorPicnum = a0 as number;
     }
     if (args.length >= 2) {
       const a1 = args[1];
@@ -286,10 +285,9 @@ export function parseVarForActionsMovesAi(
       }
     }
     if (args.length >= 3) {
-      const a2 = args[2];
-      if (a2.isKind(SyntaxKind.NumericLiteral)) {
-        context.currentActorExtra = parseInt(a2.getText(), 10);
-      }
+      const a2 = evaluateLiteralExpression(args[2] as Expression, context);
+      if (a2)
+        context.currentActorExtra = a2 as number;
     }
     if (args.length >= 4) {
       // label as objects in memory

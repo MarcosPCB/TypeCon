@@ -1,4 +1,4 @@
-import { ConstructorDeclaration, Block, ExpressionStatement, SyntaxKind, CallExpression } from "ts-morph";
+import { ConstructorDeclaration, Block, ExpressionStatement, SyntaxKind, CallExpression, Expression } from "ts-morph";
 import { CompilerContext, ESymbolType, SymbolDefinition } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
 import { EventList } from "../types";
@@ -6,6 +6,7 @@ import { indent } from "../helper/indent";
 import { parseActorSuperCall } from "./actorHelper";
 import { getObjectTypeLayout } from "./getObjectLayout";
 import { visitStatement } from "./visitStatement";
+import { evaluateLiteralExpression } from "../helper/helpers";
 
  /******************************************************************************
    * CONSTRUCTOR => skip code, parse object literals for IAction, IMove, IAi, parse super(...) for picnum
@@ -32,6 +33,47 @@ export function visitConstructorDeclaration(
               const call = expr as CallExpression;
               if (call.getExpression().getText() === "super") {
                 parseActorSuperCall(call, context);
+              } else {
+                addDiagnostic(ctor, context, 'warning', `Only super calls are allowed inside CActor constructors`);
+              }
+            }
+          }
+        }
+      } else if (type == 'CPlayer') {
+        const statements = body.getStatements();
+        if(statements.length > 1) {
+          addDiagnostic(ctor, context, 'warning', `Only super calls are allowed inside CPlayer constructors`);
+        }
+        for (const st of statements) {
+          // expression => super(...)
+          if (st.isKind(SyntaxKind.ExpressionStatement)) {
+            const es = st as ExpressionStatement;
+            const expr = es.getExpression();
+            if (expr.isKind(SyntaxKind.CallExpression)) {
+              const call = expr as CallExpression;
+              if (call.getExpression().getText() === "super") {
+                const arg = call.getArguments();
+
+                if (arg.length > 2)
+                  addDiagnostic(call, context, 'warning', `Too many arguments in CPlayer Constructor: ${call.getText()}`);
+
+                let value = evaluateLiteralExpression(arg[0] as Expression, context);
+
+                if (value === null) {
+                  addDiagnostic(call, context, 'error', `First argument of CPlayer constructor must be a valid constant: ${call.getText()}`);
+                  return '';
+                }
+
+                context.currentActorPicnum = value as number;
+
+                value = evaluateLiteralExpression(arg[1] as Expression, context);
+
+                if (value === null) {
+                  addDiagnostic(call, context, 'error', `Second argument of CPlayer constructor must be a valid constant: ${call.getText()}`);
+                  return '';
+                }
+
+                context.currentActorExtra = value as number;
               } else {
                 addDiagnostic(ctor, context, 'warning', `Only super calls are allowed inside CActor constructors`);
               }

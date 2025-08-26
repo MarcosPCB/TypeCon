@@ -2501,8 +2501,13 @@ declare global {
         public truecz: CON_NATIVE<number>;
         public wackedbyactor: CON_NATIVE<number>;
         public walkingSndToggle: CON_NATIVE<number>;
+
+        constructor(
+            picnum: constant,
+            health: constant
+        )
         
-        Main();
+        Main(first_action?: IAction);
 
         protected Events: OnEvent;
     }

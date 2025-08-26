@@ -225,15 +225,6 @@ ${quoteInit}
 //Internal per-actor vars
 var playerDist 0 2
 
-//Internal native weapon system customization
-define NWS_MAX_WEAPONS 24
-var nwsMaxWeapons NWS_MAX_WEAPONS
-array nwsMaxAmmo NWS_MAX_WEAPONS
-array nwsCurrAmmo NWS_MAX_WEAPONS
-array nwsAmmoDisc NWS_MAX_WEAPONS
-
-define NWS_ACTIVE 0 //Set this to 1 if you wanna use the New Weapon System
-
 /*
     Every time an user requests an X amount of memory (arrays or objects), its value must be at least
     one PAGE_SIZE (8 slots or 16 bytes by default). If the requested size is not a multiple of PAGE_SIZE, it must be rounded up
@@ -1035,13 +1026,6 @@ defstate _GapDist
     sub rb sector[ri].ceilingz
     shiftr rb 8
 ends
-
-onevent EVENT_FIRE
-
-    ife NWS_ACTIVE 1
-        set RETURN -1
-
-endevent
 
 `
         }

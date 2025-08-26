@@ -27,7 +27,7 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
     
     if (opText.includes("=") && !['>=', '<=', '=='].includes(opText)) {
       // assignment
-      const valD = evaluateLiteralExpression(right);
+      const valD = evaluateLiteralExpression(right, context);
       if(typeof valD === 'undefined')
         code += visitExpression(right, context,);
 
@@ -91,7 +91,7 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
 
     //code += `set rd ra\n`;
     code += context.options.lineDetail ? `// right side\n` : '';
-    const valD = evaluateLiteralExpression(right);
+    const valD = evaluateLiteralExpression(right, context);
 
     if(typeof valD === 'undefined')
       code += visitExpression(right, context);

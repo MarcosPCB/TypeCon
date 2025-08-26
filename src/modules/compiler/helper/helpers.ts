@@ -7,7 +7,7 @@ import {
     PrefixUnaryExpression,
     Node,
   } from "ts-morph";
-  import { CompilerContext } from '../Compiler'
+  import { CompilerContext, ESymbolType } from '../Compiler'
   import { addDiagnostic } from "../services/addDiagnostic";
   // The line above is hypothetical; adapt to your actual imports.
   
@@ -104,7 +104,8 @@ import {
  *  - undefined          if not fully constant
  */
 export function evaluateLiteralExpression(
-  node: Expression
+  node: Expression,
+  context: CompilerContext
 ): number | Record<string, any> | undefined {
   // --- 1) Plain numeric literal ---
   if (Node.isNumericLiteral(node)) {
@@ -113,7 +114,7 @@ export function evaluateLiteralExpression(
 
   // --- 2) Prefix unary (+, -, ~) ---
   if (Node.isPrefixUnaryExpression(node)) {
-    const v = evaluateLiteralExpression(node.getOperand());
+    const v = evaluateLiteralExpression(node.getOperand(), context);
     if (typeof v !== "number") return;
     switch (node.getOperatorToken()) {
       case SyntaxKind.PlusToken:  return +v;
@@ -125,8 +126,8 @@ export function evaluateLiteralExpression(
 
   // --- 3) Binary ops (+, -, *, /, %, <<, >>, >>>, &, |, ^) ---
   if (Node.isBinaryExpression(node)) {
-    const L = evaluateLiteralExpression(node.getLeft());
-    const R = evaluateLiteralExpression(node.getRight());
+    const L = evaluateLiteralExpression(node.getLeft(), context);
+    const R = evaluateLiteralExpression(node.getRight(), context);
     if (typeof L !== "number" || typeof R !== "number") return;
     switch (node.getOperatorToken().getKind()) {
       case SyntaxKind.PlusToken:    return L + R;
@@ -150,8 +151,8 @@ export function evaluateLiteralExpression(
     for (const prop of node.getProperties()) {
       if (Node.isPropertyAssignment(prop) && Node.isIdentifier(prop.getNameNode())) {
         const key = prop.getNameNode().getText();
-        const val = evaluateLiteralExpression(prop.getInitializer()!);
-        if (val === undefined) return;
+        const val = evaluateLiteralExpression(prop.getInitializer()!, context);
+        if (val === undefined) return null;
         obj[key] = val;
       } else {
         // we’re not handling spreads, methods, etc.
@@ -164,10 +165,10 @@ export function evaluateLiteralExpression(
   // --- 5) PropertyAccess (nested-object or real enum) ---
   if (Node.isPropertyAccessExpression(node)) {
     // a) first try nested-object lookup
-    const leftVal = evaluateLiteralExpression(node.getExpression());
+    const leftVal = evaluateLiteralExpression(node.getExpression(), context);
     if (leftVal && typeof leftVal === "object") {
       const key = node.getName();
-      if (key in leftVal) return leftVal[key];
+      if (leftVal.children && key in leftVal.children) return leftVal.children[key];
     }
 
     // b) else try TS enum member
@@ -185,21 +186,22 @@ export function evaluateLiteralExpression(
   if (Node.isElementAccessExpression(node)) {
     const arg = node.getArgumentExpression();
     if (arg && Node.isStringLiteral(arg)) {
-      const L = evaluateLiteralExpression(node.getExpression());
-      if (L && typeof L === "object") {
-        return (L as any)[arg.getLiteralValue()];
+      const L = evaluateLiteralExpression(node.getExpression(), context);
+      if (L && typeof L === "object" && L.children) {
+        return (L as any).children[arg.getLiteralValue()];
       }
     }
   }
 
   // --- 7) Identifier (const-enum in same file) ---
   if (Node.isIdentifier(node)) {
-    const sym = node.getSymbol();
+    const sym = context.symbolTable.get(node.getText());
     if (sym) {
-      const decl = sym.getDeclarations().find(Node.isEnumMember);
-      if (decl) {
-        return Number(decl.getValue());
-      }
+      if(sym.type == ESymbolType.enum || sym.type == ESymbolType.module)
+        return sym
+
+      if(sym.type == ESymbolType.constant)
+        return sym.literal as number;
     }
   }
 

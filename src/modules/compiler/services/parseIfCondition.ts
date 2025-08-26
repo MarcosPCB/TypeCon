@@ -28,8 +28,8 @@ export function parseIfCondition(expr: Expression, context: CompilerContext): If
         ">=": "ifge"
       };
       if (mapping[op]) {
-        const l = evaluateLiteralExpression(bin.getLeft());
-        const r = evaluateLiteralExpression(bin.getRight());
+        const l = evaluateLiteralExpression(bin.getLeft(), context);
+        const r = evaluateLiteralExpression(bin.getRight(), context);
         return { op: mapping[op], left: typeof l !== 'undefined' ? Number(l) : bin.getLeft(), right: typeof r !== 'undefined' ? Number(r) : bin.getRight() };
       }
       addDiagnostic(expr, context, "error", `if condition must be (A&&B), (A||B), a comparison, or a function call. Found operator "${op}"`);

@@ -18,7 +18,7 @@ export function visitExpression(expr: Expression, context: CompilerContext, reg 
     context.curExpr = ESymbolType.number;
     context.curSymRet = null;
 
-    const val = evaluateLiteralExpression(expr);
+    const val = evaluateLiteralExpression(expr, context);
 
     if(typeof val === 'number')
       return (context.options.lineDetail ? `/* Evaluated: ${expr.getText()}*/\n` : '') + `set ${reg} ${val}\n`;

@@ -222,10 +222,10 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
             if (context.curClass)
               code += `set ri flat[rbp]\n`;
 
-            if (context.currentActorPicnum)
-              obj.name = 'sprites';
-            else if (context.isPlayer)
+            if (context.isPlayer)
               obj.name = 'players';
+            else if (context.currentActorPicnum)
+              obj.name = 'sprites';
           }
 
           //Go no further, it just wants the reference

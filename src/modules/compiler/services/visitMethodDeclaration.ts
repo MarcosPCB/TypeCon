@@ -29,7 +29,7 @@ export function visitMethodDeclaration(
       hasLocalVars: false
     };
 
-    if (type == 'CActor' && mName.toLowerCase() === "main") {
+    if ((type == 'CActor' || type == 'CPlayer') && mName.toLowerCase() === "main") {
       const pic = localCtx.currentActorPicnum || 0;
       const extra = localCtx.currentActorExtra || 0;
       let firstAction = '0';
@@ -63,7 +63,7 @@ export function visitMethodDeclaration(
         }
       });
 
-      let code = `${context.options.lineDetail ? `/*${md.getText()}*/` : ''}\n${localCtx.currentActorHardcoded ? 'actor' : `useractor ${enemy}` } ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
+      let code = `${context.options.lineDetail ? `/*${md.getText()}*/` : ''}\n${localCtx.currentActorHardcoded || type == 'CPlayer' ? 'actor' : `useractor ${enemy}` } ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
       const body = md.getBody() as any;
       if (body) {
         body.getStatements().forEach(st => {

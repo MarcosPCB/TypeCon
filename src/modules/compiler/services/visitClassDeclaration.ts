@@ -73,6 +73,17 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
       code += visitConstructorDeclaration(ctors[0], localCtx, type);
     }
 
+    if(type == 'CPlayer') {
+      localCtx.isPlayer = true;
+
+      localCtx.symbolTable.set('defaultPicnum', {
+        name: 'defaultPicnum',
+        offset: 0,
+        type: ESymbolType.constant,
+        literal: localCtx.currentActorPicnum
+      });
+    }
+
     if(type == 'CActor') {
       localCtx.symbolTable.set('defaultPicnum', {
         name: 'defaultPicnum',
@@ -87,8 +98,6 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
         type: ESymbolType.constant,
         literal: localCtx.currentActorExtra
       });
-    } else if(type == 'CPlayer') {
-      localCtx.isPlayer = true;
     }
 
     // visit properties
