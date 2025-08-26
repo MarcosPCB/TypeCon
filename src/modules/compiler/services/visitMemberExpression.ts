@@ -360,7 +360,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
             let nativeVar: CON_NATIVE_VAR[];
 
-            currSegIndex = obj.kind == 'this' ? 2 : 3;
+            currSegIndex = obj.kind === 'this' ? 2 : 3;
 
             switch (obj.name) {
               case 'sprites':
@@ -422,8 +422,12 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
                   code += visitExpression(s.expr, context);
                   if (nVar.override_code) {
-                    if(!setRI)
-                      code = 'set ri THISACTOR\n' + code;
+                    if(!setRI && obj.kind == 'this') {
+                      if(obj.name == 'players')
+                        code = 'getp[].index ri\n' + code;
+                      else
+                        code = 'set ri THISACTOR\n' + code;
+                    }
                     setRI = true;
                     code += nVar.code[assignment ? 1 : 0];
                     overriden = true;
@@ -446,7 +450,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
                     if(assignment)
                       code += `state pop\n`;
 
-                    code += `${assignment ? 'set' : 'get'}${op}[${obj.kind == 'this' ? 'THISACTOR' : 'ri'}].`;
+                    code += `${assignment ? 'set' : 'get'}${op}[${obj.kind === 'this' ? 'THISACTOR' : 'ri'}].`;
                     code += `${nVar.code} ${reg}\n`;
                   }
 
@@ -467,8 +471,12 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
                   }
 
                   if (nVar.override_code) {
-                    if(!setRI)
-                      code = 'set ri THISACTOR\n' + code;
+                    if(!setRI && obj.kind == 'this') {
+                      if(obj.name == 'players')
+                        code = 'getp[].index ri\n' + code;
+                      else
+                        code = 'set ri THISACTOR\n' + code;
+                    }
                     setRI = true;
                     code += nVar.code[assignment ? 1 : 0];
                     overriden = true;
@@ -478,7 +486,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
                     for(let i = 0; i < pushes; i++)
                       code += `state pop\n`;
                     if (!overriden)
-                      code += `${assignment ? 'set' : 'get'}${op}[${obj.kind == 'this' ? 'THISACTOR' : 'ri'}].`;
+                      code += `${assignment ? 'set' : 'get'}${op}[${obj.kind === 'this' ? 'THISACTOR' : 'ri'}].`;
 
                     code += `${v.code} ${reg}\n`;
                   }
@@ -504,12 +512,12 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
               if(assignment)
                 code += `state pop\n`;
 
-               code += `${assignment ? 'set' : 'get'}${op}[${obj.kind == 'this' ? 'THISACTOR' : 'ri'}].`;
+               code += `${assignment ? 'set' : 'get'}${op}[${obj.kind === 'this' ? 'THISACTOR' : 'ri'}].`;
                code += `${nVar.code} ${reg}\n`;
             } else if (nVar.type == CON_NATIVE_FLAGS.VARIABLE) {
               if (nVar.var_type == CON_NATIVE_TYPE.native) {
                 if (!overriden)
-                  code += `${assignment ? 'set' : 'get'}${op}[${obj.kind == 'this' ? 'THISACTOR' : 'ri'}].`;
+                  code += `${assignment ? 'set' : 'get'}${op}[${obj.kind === 'this' ? 'THISACTOR' : 'ri'}].`;
 
                 code += `${nVar.code} ${reg}\n`;
               } else code += `set ${assignment ? (nVar.code + ` ${reg}\n`)

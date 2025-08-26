@@ -107,6 +107,7 @@ export function evaluateLiteralExpression(
   node: Expression,
   context: CompilerContext
 ): number | Record<string, any> | undefined {
+
   // --- 1) Plain numeric literal ---
   if (Node.isNumericLiteral(node)) {
     return parseFloat(node.getText());
@@ -162,13 +163,23 @@ export function evaluateLiteralExpression(
     return obj;
   }
 
+  
+
   // --- 5) PropertyAccess (nested-object or real enum) ---
   if (Node.isPropertyAccessExpression(node)) {
     // a) first try nested-object lookup
     const leftVal = evaluateLiteralExpression(node.getExpression(), context);
     if (leftVal && typeof leftVal === "object") {
       const key = node.getName();
-      if (leftVal.children && key in leftVal.children) return leftVal.children[key];
+      if (leftVal.children && key in leftVal.children) {
+        if(typeof leftVal.children[key] === "object") {
+          const o = leftVal.children[key];
+          if(o.type & ESymbolType.constant)
+            return o.value;
+        }
+        
+        return leftVal.children[key];
+      }
     }
 
     // b) else try TS enum member
@@ -200,7 +211,7 @@ export function evaluateLiteralExpression(
       if(sym.type == ESymbolType.enum || sym.type == ESymbolType.module)
         return sym
 
-      if(sym.type == ESymbolType.constant)
+      if(sym.type & ESymbolType.constant)
         return sym.literal as number;
     }
   }

@@ -137,7 +137,7 @@ class AssaultTrooper extends CActor {
          * The fourth arguments makes the label declarations be kept in memory (Actions, AIs and Moves)
          * The fifth parameter tells the compiler that the actor has hard-coded stuff (replaces 'useractor' to 'actor')
          */
-        super(1680, true, 30, false, true);
+        super(DN3D.ENames.LIZTROOP, true, 30, false, true);
     }
 
     Hide() {
