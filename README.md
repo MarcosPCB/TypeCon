@@ -1,5 +1,7 @@
 # TypeScript to Build Engine CON Compiler
 
+[View the documentation website](https://marcospcb.github.io/TypeCon)
+
 *This is a very early-stage development tool.*
 
 Welcome to the TypeScript to Build Engine CON Compiler! This tool leverages the power of TypeScript to simplify the process of creating or modifying Duke Nukem 3D mods and developing games with the Build Engine. By writing TypeScript code, you can produce CON files that adhere to the Build Engine's scripting language requirements.
