@@ -2,9 +2,8 @@
 
 import fs, { Dirent } from 'fs';
 import path = require('path');
-import { compiledFiles, CONInit, ECompileOptions } from './modules/compiler/framework';
+import { compiledFiles, CONInit } from './modules/compiler/framework';
 import { CompileResult, TsToConCompiler } from './modules/compiler/Compiler';
-import * as readline from 'readline';
 import inquirer from 'inquirer';
 const fsExtra = require("fs-extra");
 import { spawnSync } from 'child_process';
@@ -16,7 +15,6 @@ let fileName = '';
 let input_folder = '';
 let line_print = false;
 let symbol_print = false;
-let parse_only = false;
 let stack_size = 1024;
 let output_folder = 'compiled';
 let output_file = '';
@@ -24,20 +22,14 @@ let linkList: string[] = [];
 let files: string[] = [];
 let link = false;
 let default_inclusion = false;
-let eduke_init = false;
 let init_file = 'init.con';
-let debug_mode = false;
-let path_or_PID = '';
-let PID = false;
-let gdb_log = false;
-let gdb_err = false;
 let initFunc = false;
 let precompiled_modules = true;
 let heap_page_size = 4;
 let heap_page_number = 128;
 
 export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
-    switch(color) {
+    switch (color) {
         case 'red':
             color = '31';
             break;
@@ -93,19 +85,19 @@ const currentVersion = packConfig.version;
 const packageName = packConfig.name;
 
 function checkForUpdates() {
-  https.get(`https://registry.npmjs.org/${packageName}/latest`, (res) => {
-    let data = '';
-    res.on('data', chunk => data += chunk);
-    res.on('end', () => {
-      try {
-        const latest = JSON.parse(data).version;
-        if (semver.gt(latest, currentVersion)) {
-          const isCrucial = semver.diff(currentVersion, latest) === 'minor';
-          console.log(`\x1b[33mA new version (${latest}) is available!${isCrucial ? ' This is a crucial update.' : ''}\x1b[0m`);
-        }
-      } catch (e) {}
+    https.get(`https://registry.npmjs.org/${packageName}/latest`, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+            try {
+                const latest = JSON.parse(data).version;
+                if (semver.gt(latest, currentVersion)) {
+                    const isCrucial = semver.diff(currentVersion, latest) === 'minor';
+                    console.log(`\x1b[33mA new version (${latest}) is available!${isCrucial ? ' This is a crucial update.' : ''}\x1b[0m`);
+                }
+            } catch (e) { }
+        });
     });
-  });
 }
 
 function GetAllFilesFromPath(iPath: string) {
@@ -115,79 +107,94 @@ function GetAllFilesFromPath(iPath: string) {
         iFiles = fs.readdirSync(iPath, {
             withFileTypes: true
         });
-    } catch(err) {
+    } catch (err) {
         console.log(`Path ${iPath} is not valid or is not a folder`);
         return;
     }
 
-    if(iFiles.length == 0)
+    if (iFiles.length == 0)
         return;
 
-    for(const f of iFiles) {
-        if(f.isFile()) {
+    for (const f of iFiles) {
+        if (f.isFile()) {
             files.push(path.join(f.parentPath, f.name));
             console.log(`Added ${path.join(f.parentPath, f.name)} to compile list`);
         }
 
-        if(f.isDirectory())
+        if (f.isDirectory())
             GetAllFilesFromPath(path.join(f.parentPath, f.name));
     }
 }
 
-/** 
- * Helper function that wraps readline.question into a Promise.
- */
-function AskQuestion(query: string): Promise<string> {
-    // Create readline interface
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-  
-    return new Promise((resolve) => {
-      rl.question(query, (answer: string) => {
-        rl.close();
-        resolve(answer);
-      });
-    });
-  }
-
-  function DetectPackageManager(projectRoot: string): 'yarn' | 'npm' {
+function DetectPackageManager(projectRoot: string): 'yarn' | 'npm' {
     return fs.existsSync(path.join(projectRoot, 'yarn.lock'))
-      ? 'yarn'
-      : 'npm';
-  }
-  
-  function InstallTypescriptPlugin(projectRoot: string, pluginName: string) {
-    const manager = DetectPackageManager(projectRoot);
+        ? 'yarn'
+        : fs.existsSync(path.join(projectRoot, 'package.json')) ?'npm' : null;
+}
+
+async function InstallTypescriptPlugin(projectRoot: string, pluginName: string) {
+    let manager = DetectPackageManager(projectRoot);
+    if(!manager) {
+        console.log(colorText(`No package manager found in ${projectRoot}`, 'yellow'));
+        let answer = await inquirer.prompt({
+            type: 'list',
+            name: 'choice',
+            message: 'Would you like to initialize a new yarn/npm project?',
+            choices: ['yarn', 'npm', 'cancel'],
+            default: 'yarn'
+        });
+
+        if(answer.choice === 'cancel') {
+            console.log(colorText('Aborting...', 'magenta'));
+            process.exit(1);
+        }
+        
+        if(answer.choice === 'yarn') {
+            console.log(colorText('Initializing yarn project...', 'magenta'));
+            const result = await spawnSync('yarn', ['init', '-y'], { stdio: 'inherit', cwd: projectRoot, shell: true });
+
+            if(result.status !== 0) {
+                console.log(colorText('An error occurred during yarn initialization', 'red'));
+                process.exit(1);
+            }
+
+            manager = 'yarn';
+        } else if(answer.choice === 'npm') {
+            console.log(colorText('Initializing npm project...', 'magenta'));
+            const result = await spawnSync('npm', ['init', '-y'], { stdio: 'inherit', cwd: projectRoot, shell: true });
+            if(result.status !== 0) {
+                console.log(colorText('An error occurred during yarn initialization', 'red'));
+                process.exit(1);
+            }
+
+            manager = 'npm';
+        }
+    }
     // Use .cmd extension on Windows for npm/yarn
     const isWin = process.platform === 'win32';
     const cmd = manager === 'yarn'
-      ? (isWin ? 'yarn' : 'yarn')
-      : (isWin ? 'npm' : 'npm');
-    const args = manager === 'yarn' 
-      ? ['add', '--dev', pluginName] 
-      : ['install', '--save-dev', pluginName];
-  
+        ? (isWin ? 'yarn' : 'yarn')
+        : (isWin ? 'npm' : 'npm');
+    const args = manager === 'yarn'
+        ? ['add', '--dev', pluginName]
+        : ['install', '--save-dev', pluginName];
+
     console.log(`Installing ${pluginName} using ${manager} at ${projectRoot}...`);
-    const result = spawnSync(cmd, args, { stdio: 'inherit', cwd: projectRoot, shell: true });
+    const result = await spawnSync(cmd, args, { stdio: 'inherit', cwd: projectRoot, shell: true });
+
+    if (result.error)
+        throw result.error;
     
-    if (result.error) {
-      throw result.error;
-    }
-    if (result.status !== 0) {
-      throw new Error(`${manager} install failed with exit code ${result.status}`);
-    }
+    if (result.status !== 0)
+        throw new Error(`${manager} install failed with exit code ${result.status}`);
+    
 
     console.log(`\n✅ Installed ${pluginName} successfully.`);
-  }
+}
 
 async function Setup() {
-
     let folder = '';
-    //try {
-        //folder = await askQuestion(`What's your source code folder name? e.g: src`);
-    let  answer = await inquirer.prompt(
+    let answer = await inquirer.prompt(
         {
             type: 'input',
             name: 'choice',
@@ -195,20 +202,16 @@ async function Setup() {
             default: 'src'
         });
 
-    if(!answer.choice)
+    if (!answer.choice)
         console.log(`Using default src folder...`);
 
     folder = answer.choice;
-    /*} catch(err) {
-        console.log(`ERROR: reading input error`, err);
-        process.exit(1);
-    }*/
 
     try {
         console.log(`Creating folder ${folder}...`);
-        if(!fs.existsSync(`${process.cwd()}/${folder}`))
+        if (!fs.existsSync(`${process.cwd()}/${folder}`))
             fs.mkdirSync(`${process.cwd()}/${folder}`);
-    } catch(err) {
+    } catch (err) {
         console.log(`ERROR: unable to create folder ${folder}`, err);
         process.exit(1);
     }
@@ -216,21 +219,21 @@ async function Setup() {
     try {
         console.log(`Setting up include folder and files...`);
         const prjFolder = `${process.cwd()}/include`;
-        if(!fs.existsSync(prjFolder))
+        if (!fs.existsSync(prjFolder))
             fs.mkdirSync(prjFolder);
-        const incFolder = path.join(__dirname, '..', 'include');
+        const incFolder = path.join(process.execPath, '..', 'include');
         await fsExtra.copy(incFolder, prjFolder, { overwrite: true });
-    } catch(err) {
-        console.log(`ERROR: unable to copy files ${path.join(process.cwd(), 'include')}`, err);
+    } catch (err) {
+        console.log(`ERROR: unable to copy files to ${path.join(process.cwd(), 'include')}`, err);
         process.exit(1);
     }
 
     console.log(`Source files copied!`);
 
     try {
-        InstallTypescriptPlugin(process.cwd(), 'typescript');
-        InstallTypescriptPlugin(process.cwd(), 'typecon_plugin');
-    } catch(err) {
+        await InstallTypescriptPlugin(process.cwd(), 'typescript');
+        await InstallTypescriptPlugin(process.cwd(), 'typecon_plugin');
+    } catch (err) {
         console.log(`ERROR: basic TS setup failed`, err);
         process.exit(1);
     }
@@ -243,14 +246,14 @@ async function Setup() {
         default: 'Yes'
     });
 
-    if(answer.choice == 'Yes') {
+    if (answer.choice == 'Yes') {
         console.log(`Preparing the Typescript enviroment...`);
         try {
-            if(!fs.existsSync(`./.vscode`))
-                fs.mkdirSync(`./.vscode`);
+            if (!fs.existsSync(process.cwd() + `..vscode`))
+                fs.mkdirSync(process.cwd() + `/.vscode`);
 
-            fs.writeFileSync(`./.vscode/settings.json`, JSON.stringify({ "typescript.tsdk": "node_modules/typescript/lib" }));
-        } catch(err) {
+            fs.writeFileSync(process.cwd() + `/.vscode/settings.json`, JSON.stringify({ "typescript.tsdk": "node_modules/typescript/lib" }));
+        } catch (err) {
             console.log(`ERROR: failed to prepare the Typescript enviroment`, err);
         }
     }
@@ -269,7 +272,7 @@ async function Setup() {
             include: ["**/*.ts"],
             exclude: ["node_modules"]
         }));
-    } catch(err) {
+    } catch (err) {
         console.log(`ERROR: failed to setup the TypeScript enviroment`, err);
         process.exit(1);
     }
@@ -284,20 +287,20 @@ async function Setup() {
         default: 'Basic'
     });
 
-    switch(answer.choice) {
+    switch (answer.choice) {
         case 'DN3D mod - (NOT WORKING YET)':
             break;
 
         case 'Basic':
             try {
-                const templatesFolder = path.join(__dirname, '../templates');
+                const templatesFolder = path.join(process.execPath, '../templates');
                 const prjTemplatesFolder = path.join(process.cwd(), folder);
 
                 await fsExtra.copy(templatesFolder, prjTemplatesFolder, { overwrite: true });
 
                 console.log('Basic templates are ready!\nCheck them out: AssaultTrooper.ts and test.ts\nCompile them using e.g: yarn tcc -i templates/AssaultTrooper.ts -o AssaultTrooper.con\nThe compiled file will be at "compiled"');
-            } catch(err) {
-                console.log(`ERROR: unable to copy files ${path.join(process.cwd(), folder, 'include')}`, err);
+            } catch (err) {
+                console.log(`ERROR: unable to copy files to ${path.join(process.cwd(), folder, 'include')}`, err);
             }
             break;
 
@@ -330,54 +333,90 @@ async function Setup() {
 let compile_options = 0;
 
 console.log(`\n\x1b[36mTypeCON Compiler \x1b[31mALPHA\x1b[0m \x1b[92mVersion ${packConfig.version}\x1b[0m\x1b[94m
-By ItsMarcos\x1b[0m - Use \x1b[95m'--help or -?'\x1b[0m to get the list of commands`)
+By ItsMarcos\x1b[0m - Use \x1b[95m'--help or -?'\x1b[0m to get the list of commands`);
 
-if(!fs.existsSync('compiled'))
-    fs.mkdirSync('compiled');
+async function Main() {
+    const isPkg = require.main === module && process.execPath && process.execPath !== __filename;
 
-for(let i = 0; i < process.argv.length; i++) {
-    const a = process.argv[i];
+    if(isPkg) {
+        const pathEnv = process.env.PATH?.split(path.delimiter) || [];
+        const existence = pathEnv.some(p => {
+            try {
+                return fs.existsSync(path.join(p, process.platform === 'win32' ? 'tcc.exe' : 'tcc'));
+            } catch {
+                return false;
+            }
+        });
+        if (!existence) {
+            console.log(colorText('TypeCON is not in your PATH', 'magenta'));
+            let answer = await inquirer.prompt({
+                type: 'confirm',
+                name: 'choice',
+                message: `Would you like to add TypeCON to your PATH?`,
+                default: true
+            });
 
-    //If enabled, it ignores all the other stuff
-    if(a == '-debug') {
-        debug_mode = true;
-        const arg = process.argv[i + 1];
-        if(arg.startsWith('PID=')) {
-            PID = true;
-            path_or_PID = arg.slice(4, arg.length);
-        } else path_or_PID = arg;
-        break;
+            if (answer.choice) {
+                const pathEnv = process.env.PATH?.split(path.delimiter) || [];
+                const pathToAdd = path.join(path.dirname(process.execPath), process.platform === 'win32' ? 'tcc.exe' : 'tcc');
+                pathEnv.push(pathToAdd);
+                process.env.PATH = pathEnv.join(path.delimiter);
+                if (process.platform === 'win32') {
+                    try {
+                        const result = spawnSync('setx', ['PATH', process.env.PATH]);
+                        if (result.status === 0) {
+                            console.log('PATH set');
+                        } else {
+                            console.log('Error setting PATH', result.stderr.toString());
+                        }
+                    } catch (error) {
+                        console.log('Error setting PATH', error);
+                    }
+                } else {
+                    try {
+                        const result = spawnSync('export', ['PATH=' + process.env.PATH]);
+                        if (result.status === 0) {
+                            console.log('PATH set');
+                        } else {
+                            console.log('Error setting PATH', result.stderr.toString());
+                        }
+                    } catch (error) {
+                        console.log('Error setting PATH', error);
+                    }
+                }
+            }
+        }
     }
 
-    if(a == `-gdblog`)
-        gdb_log = true;
+    if (!fs.existsSync(process.cwd() + '/compiled'))
+    fs.mkdirSync(process.cwd() + '/compiled');
 
-    if(a == `-gdberr`)
-        gdb_err = true;
+for (let i = 0; i < process.argv.length; i++) {
+    const a = process.argv[i];
 
-    if(a == '--input' || a == '-i') {
+    if (a == '--input' || a == '-i') {
         fileName = process.argv[i + 1];
 
-        if(input_folder != '') {
+        if (input_folder != '') {
             console.log(`Input folder already defined`);
             process.exit(1);
         }
 
-        if(!fs.existsSync(fileName)) {
+        if (!fs.existsSync(fileName)) {
             console.log(`File: ${fileName} not found!`);
             process.exit(1);
         }
     }
 
-    if(a == '--input_folder' || a == '-if') {
+    if (a == '--input_folder' || a == '-if') {
         input_folder = process.argv[i + 1];
 
-        if(fileName != '') {
+        if (fileName != '') {
             console.log(`Input file already defined`);
             process.exit(1);
         }
 
-        if(!fs.existsSync(input_folder) || !fs.readdirSync(input_folder)) {
+        if (!fs.existsSync(input_folder) || !fs.readdirSync(input_folder)) {
             console.log(`Path: ${input_folder} is not a folder or does not exist.`);
             process.exit(1);
         }
@@ -385,48 +424,48 @@ for(let i = 0; i < process.argv.length; i++) {
         GetAllFilesFromPath(input_folder);
     }
 
-    if(a == '--line_print' || a == '-lp')
+    if (a == '--line_print' || a == '-lp')
         line_print = true;
 
-    if(a == '--symbol_print' || a == '-sp')
+    if (a == '--symbol_print' || a == '-sp')
         symbol_print = true;
 
-    if(a == '--stack_size' || a == '-ss')
+    if (a == '--stack_size' || a == '-ss')
         stack_size = Number(process.argv[i + 1]);
 
-    if(a == '--page_size' || a == '-ps')
+    if (a == '--page_size' || a == '-ps')
         heap_page_size = Number(process.argv[i + 1]);
 
-    if(a == '--page_number' || a == '-pn')
+    if (a == '--page_number' || a == '-pn')
         heap_page_number = Number(process.argv[i + 1]);
 
-    if(a == '--output_folder' || a == '-of')
+    if (a == '--output_folder' || a == '-of')
         output_folder = process.argv[i + 1];
 
-    if(a == '--output' || a == '-o')
+    if (a == '--output' || a == '-o')
         output_file = process.argv[i + 1];
 
-    if(a == '--headerless' || a == '-hl')
+    if (a == '--headerless' || a == '-hl')
         compile_options |= 1;
 
-    if(a == '--header' || a == '-h') {
-        if(compile_options & 2) {
+    if (a == '--header' || a == '-h') {
+        if (compile_options & 2) {
             console.log(`ERROR: you can't use -h with -nh parameters together`);
             process.exit(1);
         }
         compile_options |= 4 + 1;
     }
 
-    if(a == '--no_precompiled' || a == '-np')
+    if (a == '--no_precompiled' || a == '-np')
         precompiled_modules = false;
 
-    if(a == '--one_file' || a == '-1f') {
-        if(compile_options & 4) {
+    if (a == '--one_file' || a == '-1f') {
+        if (compile_options & 4) {
             console.log(`ERROR: you can't use -1f with -h parameter`)
             process.exit(1);
         }
 
-        if(!output_file.length) {
+        if (!output_file.length) {
             console.log(`ERROR: you must provide a name for the output file when using -1f`)
             process.exit(1);
         }
@@ -434,63 +473,59 @@ for(let i = 0; i < process.argv.length; i++) {
         compile_options |= 8;
     }
 
-    if(a == '--link' || a == '-l') {
+    if (a == '--link' || a == '-l') {
         link = true;
-        for(let j = i + 1; j < process.argv.length; j++) {
+        for (let j = i + 1; j < process.argv.length; j++) {
             const arg = process.argv[j];
-            if(arg.charAt(0) == '"' && arg.charAt(-1) == '"')
+            if (arg.charAt(0) == '"' && arg.charAt(-1) == '"')
                 linkList.push(arg);
             else break;
         }
     }
 
-    if(a == '--input_list' || a == '-il') {
+    if (a == '--input_list' || a == '-il') {
         link = true;
-        for(let j = i + 1; j < process.argv.length; j++) {
+        for (let j = i + 1; j < process.argv.length; j++) {
             const arg = process.argv[j];
-            if(arg.charAt(0) == '"' && arg.charAt(-1) == '"')
+            if (arg.charAt(0) == '"' && arg.charAt(-1) == '"')
                 files.push(arg);
             else break;
         }
     }
 
-    if(a == '--default_inclusion' || a == '-di')
+    if (a == '--default_inclusion' || a == '-di')
         default_inclusion = true;
 
-    if(a == '--eduke_init' || a == '-ei') {
-        eduke_init = true;
+    if (a == '--eduke_init' || a == '-ei')
         init_file = 'EDUKE.CON';
-    }
 
-    if(a == 'setup') {
+    if (a == 'setup') {
         initFunc = true;
         Setup();
     }
 
-    if(a == '--help' || a == '-?') {
+    if (a == '--help' || a == '-?') {
         console.log(helpText)
         process.exit(0);
     }
 }
 
-if(debug_mode) {
-    //CONDebugger(path_or_PID, PID, gdb_log, gdb_err);
-} else if(!initFunc) {
-    if(stack_size < 1024)
+if (!initFunc) {
+    if (stack_size < 1024)
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
-    const compiler = new TsToConCompiler({lineDetail: line_print, symbolPrint: symbol_print});
+    const compiler = new TsToConCompiler({ lineDetail: line_print, symbolPrint: symbol_print });
 
     let code = '';
 
     const initSys = new CONInit(stack_size, heap_page_size, heap_page_number, precompiled_modules);
 
-    if(fileName != '') {
+    if (fileName != '') {
         const file = fs.readFileSync(fileName);
 
         const result = compiler.compile(file.toString(), fileName);
 
-        for(let i = compiledFiles.size - 1; i >= 0; i--) {
+        for (let i = compiledFiles.size - 1; i >= 0; i--) {
             const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
             code += f.code;
         }
@@ -499,7 +534,7 @@ if(debug_mode) {
 
         console.log(' ');
 
-        if(compile_options & 4) {
+        if (compile_options & 4) {
             CreateInit([`${output_folder}/${fileName}.con`]);
             console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
             fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
@@ -507,10 +542,10 @@ if(debug_mode) {
             console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}.con`);
             fs.writeFileSync(`${output_folder}/${fileName}.con`, code);
         } else {
-            if(default_inclusion)
+            if (default_inclusion)
                 code = `include GAME.CON\n\n` + initSys.BuildFullCodeFile(code);
             else {
-                if(!(compile_options & 1))
+                if (!(compile_options & 1))
                     code = initSys.BuildFullCodeFile(code);
             }
 
@@ -519,51 +554,51 @@ if(debug_mode) {
         }
     }
 
-    if(files.length > 0) {
+    if (files.length > 0) {
         let result: CompileResult;
-        for(const f of files) {
+        for (const f of files) {
             const file = fs.readFileSync(f);
 
             result = compiler.compile(file.toString(), f, result ? result.context : undefined);
         }
 
-        if(compile_options & 8) {
+        if (compile_options & 8) {
             console.log(colorText(`Compiling into one file...`, 'magenta'));
-            for(let i = compiledFiles.size - 1; i >= 0; i--) {
+            for (let i = compiledFiles.size - 1; i >= 0; i--) {
                 const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
                 code += f.code;
             }
 
-            if(!(compile_options & 1))
+            if (!(compile_options & 1))
                 code = initSys.BuildFullCodeFile(code);
 
             console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${output_file}${output_file.endsWith('.con') ? '' : '.con'}`);
             fs.writeFileSync(`${output_folder}/${output_file}${output_file.endsWith('.con') ? '' : '.con'}`, code);
         } else {
             compiledFiles.forEach(c => {
-                if(c.options != 0)
+                if (c.options != 0)
                     return;
                 const name = GetOutputName(c.path);
                 console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`);
                 fs.writeFileSync(`${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`, c.code);
 
-                if(compile_options & 4)
+                if (compile_options & 4)
                     linkList.push(`${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`);
             });
 
-            if(compile_options & 4)
+            if (compile_options & 4)
                 link = true;
         }
     }
 
-    if(link) {
+    if (link) {
         console.log(colorText(`Linking...`, 'blue'));
         CreateInit(linkList);
         console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
         fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
     }
 
-    if(fileName == '' && files.length == 0 && !link)
+    if (fileName == '' && files.length == 0 && !link)
         console.log(`Nothing to do!\n${helpText}`);
     else
         console.log(colorText(`Compilation finished!`, 'green'));
@@ -572,33 +607,36 @@ if(debug_mode) {
 
     process.exit(0);
 }
+}
 
 function CreateInit(outputFiles: string[]) {
     let code = '';
 
     console.log(`${colorText('Writing:', 'green')} init file: ${init_file}`);
 
-    if(default_inclusion)
+    if (default_inclusion)
         code = `include GAME.CON\n\n`;
 
     code = `include header.con\n`;
 
-    for(const o of outputFiles)
+    for (const o of outputFiles)
         code += `include ${o}.con\n`
 
     fs.writeFileSync(`${output_folder}/${init_file}`, code);
 }
 
 function GetOutputName(filename: string) {
-    if(output_file.length > 0)
+    if (output_file.length > 0)
         return output_file;
 
     //Remove extension
     const ext = path.extname(filename);
     const final = path.basename(filename);
 
-    if(ext != '')
+    if (ext != '')
         return final.slice(0, final.length - ext.length);
 
     return final;
 }
+
+Main();

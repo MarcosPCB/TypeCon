@@ -16,6 +16,10 @@ compiled
 *.py
 *.gdb
 *.con
-pkg
+pkg/linux/**/.*
+pkg/linux/tcc
+pkg/mac/**/.*
+pkg/mac/tcc
+pkg/win/**/.*
 src/sets/TCSet100/precompile/CON/*.con
 src/sets/TCSet100/precompile/generated/*.con
