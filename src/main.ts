@@ -336,58 +336,6 @@ console.log(`\n\x1b[36mTypeCON Compiler \x1b[31mALPHA\x1b[0m \x1b[92mVersion ${p
 By ItsMarcos\x1b[0m - Use \x1b[95m'--help or -?'\x1b[0m to get the list of commands`);
 
 async function Main() {
-    const isPkg = require.main === module && process.execPath && process.execPath !== __filename;
-
-    if(isPkg) {
-        const pathEnv = process.env.PATH?.split(path.delimiter) || [];
-        const existence = pathEnv.some(p => {
-            try {
-                return fs.existsSync(path.join(p, process.platform === 'win32' ? 'tcc.exe' : 'tcc'));
-            } catch {
-                return false;
-            }
-        });
-        if (!existence) {
-            console.log(colorText('TypeCON is not in your PATH', 'magenta'));
-            let answer = await inquirer.prompt({
-                type: 'confirm',
-                name: 'choice',
-                message: `Would you like to add TypeCON to your PATH?`,
-                default: true
-            });
-
-            if (answer.choice) {
-                const pathEnv = process.env.PATH?.split(path.delimiter) || [];
-                const pathToAdd = path.join(path.dirname(process.execPath), process.platform === 'win32' ? 'tcc.exe' : 'tcc');
-                pathEnv.push(pathToAdd);
-                process.env.PATH = pathEnv.join(path.delimiter);
-                if (process.platform === 'win32') {
-                    try {
-                        const result = spawnSync('setx', ['PATH', process.env.PATH]);
-                        if (result.status === 0) {
-                            console.log('PATH set');
-                        } else {
-                            console.log('Error setting PATH', result.stderr.toString());
-                        }
-                    } catch (error) {
-                        console.log('Error setting PATH', error);
-                    }
-                } else {
-                    try {
-                        const result = spawnSync('export', ['PATH=' + process.env.PATH]);
-                        if (result.status === 0) {
-                            console.log('PATH set');
-                        } else {
-                            console.log('Error setting PATH', result.stderr.toString());
-                        }
-                    } catch (error) {
-                        console.log('Error setting PATH', error);
-                    }
-                }
-            }
-        }
-    }
-
     if (!fs.existsSync(process.cwd() + '/compiled'))
     fs.mkdirSync(process.cwd() + '/compiled');
 

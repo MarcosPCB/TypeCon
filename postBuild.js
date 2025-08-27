@@ -6,6 +6,8 @@ console.log("Build completed successfully!");
 
 // compile the extra modules
 console.log(`Compiling extra modules...`);
+console.log(`Creating the directory ./src/sets/TCSet100/precompile/generated`);
+fsExtra.ensureDirSync(path.join(__dirname, "./src/sets/TCSet100/precompile/generated"));
 execSync(`yarn start -if ./src/sets/TCSet100/precompile/src -of ./src/sets/TCSet100/precompile/generated -hl -np`,
     { stdio: 'inherit'}
 );

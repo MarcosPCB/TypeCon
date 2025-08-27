@@ -19,28 +19,18 @@
     "build": "tsc",
     "start": "node dist/main.js",
     "postbuild": "node postBuild.js",
-    "bin-pkg": "yarn build && yarn pkg . && mv ./pkg/typecon-win.exe ./pkg/win/tcc.exe && cp -r ./include ./pkg/win/include && cp -r ./templates ./pkg/win/templates && mv ./pkg/typecon-macos ./pkg/mac/tcc && cp -r ./include ./pkg/mac/include && cp -r ./templates ./pkg/mac/templates && mv ./pkg/typecon-linux ./pkg/linux/tcc && cp -r ./include ./pkg/linux/include && cp -r ./templates ./pkg/linux/templates",
     "release-patch": "yarn run build && yarn version --patch && git push && git push --tags",
     "release-minor": "yarn run build && yarn version --minor && git push && git push --tags",
     "release-major": "yarn run build && yarn version --major && git push && git push --tags"
   },
-  "pkg": {
-    "scripts": "dist/**/*.js",
-    "targets": [
-      "node18-win-x64",
-      "node18-mac-x64",
-      "node18-linux-x64"
-    ],
-    "outputPath": "./pkg/"
-  },
   "dependencies": {
     "fs-extra": "^11.3.0",
     "inquirer": "^12.5.0",
+    "semver": "^7.7.2",
     "ts-morph": "^25.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.11",
-    "pkg": "^5.8.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.2"
   }

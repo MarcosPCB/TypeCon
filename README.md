@@ -25,9 +25,27 @@ TypeCON Compiler BETA Version 0.5.0
 By ItsMarcos - Use '--help or -?' to get the list of commands 
 ```
 
+---
+
+## Getting Started
+
+The easiest way to get started with TypeCON is to install it globally using `npm install -g typecon`. This will allow you to use the `tcc` command to compile your CON code from anywhere.
+
+If you don't want to install it globally, you can still install it locally using a package manager like `yarn`. To do this, add TypeCON as a dependency to your project using `yarn add typecon`. Then, you can use the `tcc` command to compile your CON code by running `yarn tcc`.
+
+After installation, you can use the `tcc` command to generate the base files for your project. To do this, run `yarn tcc setup` in your project directory. This will create the necessary files and directories to get you started.
+
+Alternatively, if you're using NPM, you can install TypeCON using `npm install typecon`. After installation, you can use the same `tcc` command to set up your project.
+
+Once you've installed TypeCON and set up your project, you can start using it to write CON code in a more modern, object-oriented syntax. The `include` folder will contain the necessary type definitions and classes to get you started. Just import the `types.ts` file and start writing your code!
+
+**Important Note:** To work with TypeCON, you need to have NPM or Yarn package manager installed, since you need TypeScript to compile the project.
+
+---
+
 #### Currently Available Commands
 
-- **`yarn tcc`**: CLI - use --help or -? to check out the options available
+- **`tcc`**: If you installed with `npm install -g typecon`, then use `tcc` directly in the terminal. Otherwise, use `npm tcc` or `yarn tcc`
 
 ### Parameters
 
@@ -98,18 +116,6 @@ Currently, the available TypeCON set is **TCSet100**, which includes:
 **Important:** To work with TypeCON, you must at least import the `types.ts` file in your project. This is the minimum requirement to get access to the basic types and functionalities.
 
 All the classes, methods, and functions in the TypeCON sets are fully documented with JSDoc comments to help you understand their purpose and usage.
-
----
-
-## Getting Started
-
-The easiest way to get started with TypeCON is to use the `yarn` package manager. First, you'll need to create a new project and initialize it with `yarn init`. Then, you can install the TypeCON package using `yarn add typecon`.
-
-After installation, you can use the `tcc` command to generate the base files for your project. To do this, run `yarn tcc setup` in your project directory. This will create the necessary files and directories to get you started.
-
-Alternatively, if you're using NPM, you can install TypeCON using `npm install typecon`. After installation, you can use the same `tcc` command to set up your project.
-
-Once you've installed TypeCON and set up your project, you can start using it to write CON code in a more modern, object-oriented syntax. The `include` folder will contain the necessary type definitions and classes to get you started. Just import the `types.ts` file and start writing your code!
 
 ---
 
