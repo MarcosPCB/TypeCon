@@ -488,12 +488,12 @@ if (!initFunc) {
         console.log(' ');
 
         if (compile_options & 4) {
-            CreateInit([`${output_folder}/${fileName}.con`]);
+            CreateInit([`${fileName}${fileName.endsWith('.con') ? '' : '.con'}`]);
             console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
             fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
 
-            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}.con`);
-            fs.writeFileSync(`${output_folder}/${fileName}.con`, code);
+            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.endsWith('.con') ? '' : '.con'}`);
+            fs.writeFileSync(`${output_folder}/${fileName}${fileName.endsWith('.con') ? '' : '.con'}`, code);
         } else {
             if (default_inclusion)
                 code = `include GAME.CON\n\n` + initSys.BuildFullCodeFile(code);
@@ -572,8 +572,9 @@ function CreateInit(outputFiles: string[]) {
 
     code = `include header.con\n`;
 
-    for (const o of outputFiles)
-        code += `include ${o}.con\n`
+    for (const o of outputFiles) {
+        code += `include ${o}\n`
+    }
 
     fs.writeFileSync(`${output_folder}/${init_file}`, code);
 }

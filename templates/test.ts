@@ -1,4 +1,5 @@
 import '../include/TCSet100/types';
+import { DN3D } from '../include/TCSet100/DN3D/game.ts';
 
 /**
  * Type definitions for testing
@@ -96,6 +97,19 @@ class displayRest extends CEvent {
          * This commands prints the entire stack and heap usage to the console and breaks the game
          * unless you're using a debug version of Eduke32
          */
-        PrintStackAndBreak();
+        //PrintStackAndBreak();
+    }
+}
+
+class Player extends CPlayer {
+
+    constructor() {
+        super(1405, DN3D.ENames.AMMO);
+    }
+    
+    Main() {
+        this.weaponSystem.ammoAmount[1] = 72;
+        this.actor.extra = 100;
+        this.actor.Flash();
     }
 }
