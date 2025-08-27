@@ -1,6 +1,6 @@
 {
   "name": "typecon",
-  "version": "0.6.0-rc2",
+  "version": "0.6.0-rc3",
   "description": "Compiles Typescript code into CON",
   "repository": "https://github.com/MarcosPCB/TypeCon",
   "main": "./dist/main.js",
@@ -23,6 +23,30 @@
     "release-minor": "yarn run build && yarn version --minor && git push && git push --tags",
     "release-major": "yarn run build && yarn version --major && git push && git push --tags"
   },
+  "keywords": [
+    "log",
+    "useful",
+    "logger",
+    "level",
+    "debug",
+    "debugging",
+    "console",
+    "error",
+    "warning"
+  ],
+  "homepage": "https://github.com/MarcosPCB/TypeCon",
+  "bugs": "https://github.com/MarcosPCB/TypeCon/issues",
+  "files": [
+    "dist/main.js",
+    "dist/*.js",
+    "dist/*.ts",
+    "dist/sets/*.ts",
+    "dist/modules/*.js",
+    "include",
+    "templates",
+    "README.md",
+    "postBuild.js"
+  ],
   "dependencies": {
     "fs-extra": "^11.3.0",
     "inquirer": "^12.5.0",

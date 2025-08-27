@@ -342,6 +342,11 @@ async function Main() {
 for (let i = 0; i < process.argv.length; i++) {
     const a = process.argv[i];
 
+    if(a == '--version') {
+        console.log('Current version: ' + colorText('ALPHA', 'red') + ' ' + colorText(packConfig.version, 'green'));
+        process.exit(0);
+    }
+
     if (a == '--input' || a == '-i') {
         fileName = process.argv[i + 1];
 
