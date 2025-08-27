@@ -1425,6 +1425,30 @@ declare global {
          * @param sound - the sound ID to be played
          */
         public ScreenSound(sound: number): CON_NATIVE<void>;
+
+        /**
+         * Writes text to the screen
+         * @param picnum the tile number of the font
+         * @param x the X position
+         * @param y the Y position
+         * @param scale the scaling of the text (65536 is the normal size)
+         * @param block_ang the angle of the entire text block
+         * @param character_ang the angle of each character
+         * @param quote the quote number
+         * @param shade the shading value
+         * @param pal the pallete value
+         * @param orientation the orientation flags @see {@link EOrientationFlags}
+         * @param alpha the alpha value
+         * @param xspace the space between words
+         * @param yline the space between lines
+         * @param xbetween the X space between characters
+         * @param ybetween the Y space between characters
+         * @param flags the text flags @see {@link ETextFlags}
+         * @param x0 the window x0 value
+         * @param y0 the window y0 value
+         * @param x1 the window x1 value
+         * @param y1 the window y1 value
+         */
         public ScreenText(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
 
         public QuoteDimension(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<vec2>;

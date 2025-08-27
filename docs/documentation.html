@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TypeCON Language Reference</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            padding-left: 220px; /* Space for the nav */
+        }
+        #container {
+            width: 80%;
+            /* margin: auto; */ /* Remove this */
+            overflow: hidden;
+            padding: 20px;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        nav {
+            position: fixed; /* Stick to the screen */
+            left: 0;
+            top: 0;
+            width: 200px; /* Give it a fixed width */
+            height: 100%; /* Full height */
+            background: #333;
+            color: #fff;
+            padding: 10px;
+            overflow-y: auto; /* Add scroll for long menus */
+        }
+        nav ul {
+            padding: 0;
+            margin: 0;
+            list-style: none;
+        }
+        nav ul li {
+            margin-bottom: 10px; /* Space out the items */
+        }
+        nav a {
+            color: #fff;
+            text-decoration: none;
+            display: block; /* Make the whole area clickable */
+            padding: 5px;
+        }
+        nav > ul > li > a {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #eee;
+        }
+        nav ul ul {
+            padding-left: 15px; /* Indent sub-menus */
+            margin-top: 5px;
+        }
+        nav > ul > li > ul > li > a {
+            font-weight: normal;
+            font-size: 1em;
+            color: #ccc;
+            padding-left: 15px;
+        }
+        nav > ul > li > ul > li > a:hover {
+            background-color: #555;
+        }
+        .section {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #ccc;
+        }
+        .code {
+            background: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ccc;
+            text-align: left;
+        }
+        th {
+            background: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="#introduction">Introduction</a></li>
+            <li><a href="#getting-started">Getting Started</a></li>
+            <li><a href="#language-concepts">Language Concepts</a></li>
+            <li>
+                <a href="#class-reference">Class Reference</a>
+                <ul>
+                    <li><a href="#CFile">CFile</a></li>
+                    <li><a href="#CActor">CActor</a></li>
+                    <li><a href="#CEvent">CEvent</a></li>
+                    <li><a href="#CWall">CWall</a></li>
+                    <li><a href="#CSector">CSector</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#interface-reference">Interface Reference</a>
+                <ul>
+                    <li><a href="#IFont">IFont</a></li>
+                    <li><a href="#ISys">ISys</a></li>
+                    <li><a href="#IWeapon00">IWeapon00 (Mighty Foot)</a></li>
+                    <li><a href="#IWeapon01">IWeapon01 (Pistol)</a></li>
+                    <li><a href="#IWeapon02">IWeapon02 (Shotgun)</a></li>
+                    <li><a href="#IWeapon03">IWeapon03 (Chaingun)</a></li>
+                    <li><a href="#IWeapon04">IWeapon04 (RPG)</a></li>
+                    <li><a href="#IWeapon05">IWeapon05 (Pipebomb)</a></li>
+                    <li><a href="#IWeapon06">IWeapon06 (Shrinker)</a></li>
+                    <li><a href="#IWeapon07">IWeapon07 (Devastator)</a></li>
+                    <li><a href="#IWeapon08">IWeapon08 (Tripbomb)</a></li>
+                    <li><a href="#IWeapon09">IWeapon09 (Freezer)</a></li>
+                    <li><a href="#IWeapon10">IWeapon10 (Hand Remot/Detonator)</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#enum-reference">Enum Reference</a>
+                <ul>
+                    <li><a href="#FileReadType">FileReadType</a></li>
+                    <li><a href="#EOrientationFlags">EOrientationFlags</a></li>
+                    <li><a href="#ETextFlags">ETextFlags</a></li>
+                    <li><a href="#ESpriteFlags">ESpriteFlags</a></li>
+                    <li><a href="#EPlayerStates">EPlayerStates</a></li>
+                    <li><a href="#EStats">EStats</a></li>
+                    <li><a href="#EMoveFlags">EMoveFlags</a></li>
+                    <li><a href="#EOperateFlags">EOperateFlags</a></li>
+                </ul>
+            </li>
+        </ul>
+    </nav>
+    <div id="container">
+        <header>
+            <h1>TypeCON Language Reference</h1>
+        </header>
+
+        <div id="introduction" class="section">
+            <h2>Introduction</h2>
+            <p>Welcome to the TypeScript to Build Engine CON Compiler! This tool leverages the power of TypeScript to simplify the process of creating or modifying Duke Nukem 3D mods and developing games with the Build Engine. By writing TypeScript code, you can produce CON files that adhere to the Build Engine's scripting language requirements.</p>
+        </div>
+
+        <div id="project-idea" class="section">
+            <h2>The Idea Behind TypeCON</h2>
+            <p>The Build Engine's CON scripting language, while powerful, has a steep learning curve and lacks many conveniences of modern programming languages. Its syntax can be unforgiving, and developers often face limitations such as a lack of proper local variables, complex data structures, and a formal class system. This can make developing and maintaining complex game logic a challenging and error-prone process.</p>
+            <p>TypeCON was created to address these challenges. By leveraging TypeScript, a powerful, statically-typed superset of JavaScript, TypeCON brings modern programming features to the Build Engine. This allows developers to write cleaner, more maintainable code using familiar concepts like classes, objects, modules, and a robust type system. The goal of TypeCON is to empower modders and game creators to build more ambitious projects for the Build Engine with greater ease and efficiency.</p>
+        </div>
+
+        <div id="getting-started" class="section">
+            <h2>Installation and Usage</h2>
+
+            <h3>Installation</h3>
+            <p>To get started with TypeCON, you can install it globally using npm:</p>
+            <div class="code">
+                npm install -g typecon
+            </div>
+            <p>This will make the <code>tcc</code> command available in your terminal.</p>
+            <p>Alternatively, if you prefer a local installation, you can add TypeCON as a dependency to your project using yarn or npm:</p>
+            <div class="code">
+                # Using Yarn
+                yarn add typecon
+
+                # Using NPM
+                npm install typecon
+            </div>
+            <p>With a local installation, you can run the compiler using <code>yarn tcc</code> or <code>npm tcc</code>.</p>
+
+            <h3>Project Setup</h3>
+            <p>Once TypeCON is installed, you need to set up your project. Navigate to your project's root directory and run the following command:</p>
+            <div class="code">
+                tcc setup
+            </div>
+            <p>This command will create the necessary folders, include files, templates, and a basic TypeScript configuration to get you started.</p>
+
+            <h3>Compiling Files</h3>
+            <p>TypeCON provides several command-line options to control the compilation process. Here is a list of all the available commands:</p>
+            <ul>
+                <li><code>setup</code>: Creates the project's basic setup including folders, include files, templates and the basic TypeScript configuration</li>
+                <li><code>-i, --input</code>: for the file path to be compiled</li>
+                <li><code>-if, --input_folder</code>: for the path folder to be compiled (compiles all files inside)</li>
+                <li><code>-il, --input_list</code>: for a list of files to be compiled</li>
+                <li><code>-o, --output</code>: for the output file name</li>
+                <li><code>-of, --output_folder</code>: for the output folder path </li>
+                <li><code>-lp, --line_print</code>: to write the TS lines inside the CON code </li>
+                <li><code>-sp, --symbol_print</code>: to write the symbols inside the CON code </li>
+                <li><code>-ss, --stack_size</code>: to define the stack size </li>
+                <li><code>-hs, --heap_size</code>: to define the heap's size</li>
+                <li><code>-ps, --page_size</code>: to define the heap page's minimum size </li>
+                <li><code>-pn, --page_number</code>: to define the default number of heap pages</li>
+                <li><code>-hl, --headerless</code>: Don't insert the header code (init code and states) inside the output CON </li>
+                <li><code>-h, --header</code>: Create the header file </li>
+                <li><code>-np, --no_precompiled</code>: Don't link pre-compiled modules</li>
+                <li><code>-l, --link</code>: Create the header and the init files with the following list of CON files (separated by "")</li>
+                <li><code>-1f, --one_file</code>: Compile all the code into one file (must be used with -o)</li>
+                <li><code>-di, --default_inclusion</code>: Default inclusion (GAME.CON) </li>
+                <li><code>-ei, --eduke_init</code>: Init file is EDUKE.CON</li>
+            </ul>
+            <p>For a full list of commands, you can also use the <code>--help</code> or <code>-?</code> flag:</p>
+            <div class="code">
+                tcc --help
+            </div>
+        </div>
+
+        <div id="language-concepts" class="section">
+            <h2>Language Concepts</h2>
+            <p>TypeCON uses TypeScript to generate CON files. The core of the language is based on classes that represent game objects like Actors, Players, and Events. These classes have properties and methods that translate to native CON commands.</p>
+            <p>The <code>include</code> folder contains the TypeCON sets that provide you with the necessary classes, methods, functions, constants, and variable declarations to start coding. Currently, the available TypeCON set is <strong>TCSet100</strong>.</p>
+            <p>To work with TypeCON, you must at least import the <code>types.ts</code> file in your project. This is the minimum requirement to get access to the basic types and functionalities.</p>
+            
+            <h3>Limitations</h3>
+            <p>To ensure compatibility with the Build Engine's scripting capabilities, the following limitations apply:</p>
+            <ul>
+                <li><strong>Code Optimization</strong>: Currently, the generated CON code is not optimized and should be used very carefully.</li>
+                <li><strong>Constructor Restrictions</strong>:
+                    <ul>
+                        <li>Function calls (other than <code>super()</code>) are not allowed within <code>constructor()</code> methods.</li>
+                        <li><code>if</code> statements are prohibited in <code>constructor()</code> methods.</li>
+                    </ul>
+                </li>
+                <li><strong>Block-Scoped Variables</strong>:
+                    <ul>
+                        <li>Local variables are limited to their current block's scope. Variables declared in one block cannot be accessed from another.</li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+
+        <div id="examples" class="section">
+            <h2>Examples</h2>
+        
+            <p>The following examples demonstrate how to use TypeCON to create game logic. You can find these files in the <code>templates</code> directory of the project.</p>
+        
+            <h3>Compiling the Examples</h3>
+            <p>To compile the examples, you can use the <code>tcc</code> command-line tool. For instance, to compile the <code>AssaultTrooper.ts</code> example, you would run the following command:</p>
+            <div class="code">
+                tcc --input templates/AssaultTrooper.ts --output assault_trooper.con
+            </div>
+            <p>This will create the <code>assault_trooper.con</code> file in the <code>compiled</code> folder, which is the default output directory.</p>
+            <p>Similarly, to compile the <code>test.ts</code> example, you would run:</p>
+            <div class="code">
+                tcc --input templates/test.ts --output test.con
+            </div>
+        
+            <details>
+                <summary><strong>AssaultTrooper.ts</strong></summary>
+                <p>This file is a complete implementation of an enemy from Duke Nukem 3D, the Assault Trooper. It showcases how to create a complex actor with multiple states and behaviors using an object-oriented approach with TypeScript.</p>
+                <div class="code">
+                    <pre>
+import '../include/TCSet100/types'
+import DN3D from '../include/TCSet100/DN3D/game';
+
+class AssaultTrooper extends CActor {
+    /* ─────────────────────────────────────────
+    *  ACTIONS
+    * ───────────────────────────────────────── */
+    protected readonly actions: TAction< | 'aStand' | 'aGrow' | 'aStayStand'
+        | 'aWalking' | 'aWalkingBack' | 'aRunning'
+        | 'aShoot' | 'aJetpack' | 'aJetpackIll'
+        | 'aFlintch' | 'aDying' | 'aDead'
+        | 'aPlayDead' | 'aSufferDead' | 'aSuffering'
+        | 'aDuck' | 'aDuckShoot' | 'aAboutHide'
+        | 'aHide' | 'aReappear' | 'aFrozen'
+    > = {
+            aStand: { start: 0, length: 1, viewType: 5, incValue: 1, delay: 1 },
+            aGrow: { start: 0, length: 1, viewType: 5, incValue: 1, delay: 1 },
+            aStayStand: { start: -2, length: 1, viewType: 5, incValue: 1, delay: 1 },
+            aWalking: { start: 0, length: 4, viewType: 5, incValue: 1, delay: 12 },
+            aWalkingBack: { start: 15, length: 4, viewType: 5, incValue: -1, delay: 12 },
+            aRunning: { start: 0, length: 4, viewType: 5, incValue: 1, delay: 8 },
+            aShoot: { start: 35, length: 1, viewType: 5, incValue: 1, delay: 30 },
+            aJetpack: { start: 40, length: 1, viewType: 5, incValue: 1, delay: 1 },
+            aJetpackIll: { start: 40, length: 2, viewType: 5, incValue: 1, delay: 50 },
+            aFlintch: { start: 50, length: 1, viewType: 1, incValue: 1, delay: 6 },
+            aDying: { start: 50, length: 5, viewType: 1, incValue: 1, delay: 16 },
+            aDead: { start: 54, length: 1, viewType: 1, incValue: 0, delay: 0 },
+            aPlayDead: { start: 54, length: 1, viewType: 1, incValue: 0, delay: 0 },
+            aSufferDead: { start: 58, length: 2, viewType: 1, incValue: -4, delay: 24 },
+            aSuffering: { start: 59, length: 2, viewType: 1, incValue: 1, delay: 21 },
+            aDuck: { start: 64, length: 1, viewType: 5, incValue: 1, delay: 3 },
+            aDuckShoot: { start: 64, length: 2, viewType: 5, incValue: 1, delay: 25 },
+            aAboutHide: { start: 74, length: 1, viewType: 1, incValue: 1, delay: 25 },
+            aHide: { start: 79, length: 1, viewType: 1, incValue: 1, delay: 25 },
+            aReappear: { start: 74, length: 1, viewType: 1, incValue: 1, delay: 25 },
+            aFrozen: { start: 0, length: 1, viewType: 5, incValue: 0, delay: 0 },
+        };
+
+
+    /* ─────────────────────────────────────────
+    *  MOVES
+    * ───────────────────────────────────────── */
+    protected readonly moves: TMove< | 'walkVels' | 'walkVelsBack'
+        | 'jetpackVels' | 'jetpackIllVels'
+        | 'runVels' | 'stopped'
+        | 'dontGetUp' | 'shrunkVels'
+    > = {
+            walkVels: { horizontal_vel: 72, vertical_vel: 0 },
+            walkVelsBack: { horizontal_vel: -72, vertical_vel: 0 },
+            jetpackVels: { horizontal_vel: 64, vertical_vel: -84 },
+            jetpackIllVels: { horizontal_vel: 192, vertical_vel: -38 },
+            runVels: { horizontal_vel: 108, vertical_vel: 0 },
+            stopped: { horizontal_vel: 0, vertical_vel: 0 },
+            dontGetUp: { horizontal_vel: 0, vertical_vel: 0 },
+            shrunkVels: { horizontal_vel: 32, vertical_vel: 0 },
+        };
+
+
+    /* ─────────────────────────────────────────
+    *  AI CONFIGS
+    * ───────────────────────────────────────── */
+    protected readonly ais: TAi< | 'aiSeekEnemy' | 'aiSeekPlayer' | 'aiFleeing'
+        | 'aiFleeingBack' | 'aiDodge' | 'aiShooting'
+        | 'aiDucking' | 'aiJetpack' | 'aiShrunk'
+        | 'aiHide' | 'aiGrow'
+    > = {
+            aiSeekEnemy: {
+                action: this.actions.aWalking,
+                move: this.moves.walkVels,
+                flags: EMoveFlags.seekplayer,
+            },
+            aiSeekPlayer: {
+                action: this.actions.aWalking,
+                move: this.moves.walkVels,
+                flags: EMoveFlags.seekplayer,
+            },
+            aiFleeing: {
+                action: this.actions.aWalking,
+                move: this.moves.walkVels,
+                flags: EMoveFlags.fleeenemy,
+            },
+            aiFleeingBack: {
+                action: this.actions.aWalkingBack,
+                move: this.moves.walkVelsBack,
+                flags: EMoveFlags.faceplayer,
+            },
+            aiDodge: {
+                action: this.actions.aWalking,
+                move: this.moves.runVels,
+                flags: EMoveFlags.dodgebullet,
+            },
+            aiShooting: {
+                action: this.actions.aShoot,
+                move: this.moves.stopped,
+                flags: EMoveFlags.faceplayer,
+            },
+            aiDucking: {
+                action: this.actions.aDuck,
+                move: this.moves.stopped,
+                flags: EMoveFlags.faceplayer,
+            },
+            aiJetpack: {
+                action: this.actions.aJetpack,
+                move: this.moves.jetpackVels,
+                flags: EMoveFlags.seekplayer,
+            },
+            aiShrunk: {
+                action: this.actions.aWalking,
+                move: this.moves.shrunkVels,
+                flags: EMoveFlags.fleeenemy,
+            },
+            aiHide: {
+                action: this.actions.aAboutHide,
+                move: this.moves.stopped,
+                flags: EMoveFlags.faceplayer,
+            },
+            aiGrow: {
+                action: this.actions.aGrow,
+                move: this.moves.dontGetUp,
+                flags: EMoveFlags.faceplayerslow,
+            },
+        };
+
+
+    /**
+     * Assault Trooper constructor
+     * Extends CActor class and allows for proper definition of the actor
+     */
+    constructor() {
+        /**
+         * The first parameter is the actor's tile number
+         * The second parameter tells if its and enemy or not
+         * The third parameter is the actor's strength
+         * The fourth arguments makes the label declarations be kept in memory (Actions, AIs and Moves)
+         * The fifth parameter tells the compiler that the actor has hard-coded stuff (replaces 'useractor' to 'actor')
+         */
+        super(DN3D.ENames.LIZTROOP, true, 30, false, true);
+    }
+    // ... more code
+}
+                    </pre>
+                </div>
+            </details>
+
+            <details>
+                <summary><strong>test.ts</strong></summary>
+                <p>This file serves as a test case for various features of the TypeCON compiler, demonstrating its capabilities in handling modern programming concepts and translating them into the Build Engine's scripting language.</p>
+                <div class="code">
+                    <pre>
+import '../include/TCSet100/types';
+import { DN3D } from '../include/TCSet100/DN3D/game.ts';
+
+/**
+ * Type definitions for testing
+ */
+type wow = {
+    name: number,
+    ball: number
+}
+
+type test = {
+    name: number,
+    god: number,
+    low: wow[]
+}
+
+/**
+ * This will generated the DISPLAYREST event in CON
+ */
+class displayRest extends CEvent {
+    constructor() {
+        /**
+         * Here is where you define which event to generate.
+         * It does not matter what's the class name
+         */
+        super('DisplayRest');
+    }
+
+    public Append(): void {
+        /**
+         * RotateSprite is only available in DISPLAY events
+         */
+        this.RotateSprite(160, 100, 65536, 0, 0, 0, 0, 0, 0, 0, 1024, 768);
+
+        /**
+         * pos2 is a TypeCON native object
+         * It holds the xy position values, scale and angle.
+         * Good for screen drawing.
+         */
+        const p: pos2 = {
+            xy: {
+                x: 160,
+                y: 100
+            },
+            scale: 65536,
+            ang: 0
+        }
+
+        /**
+         * Here we are declaring variables that are initialized with some antive structures values
+         * Also, you can do const sector = sectors[0];
+         * Giving you the possibility to hold native structure pointers in local variables.
+         */
+        const t = sectors[0].ceiling.z
+        const a = sectors[sectors[0].extra].walls[0].pos.x
+        //console.log(t);
+        //console.log(a);
+
+        /**
+         * Object literal declaration using a type alias
+         */
+        const obj: test = {
+            name: 2,
+            god: 15,
+            /**
+             * The array here is kept inside the stack
+             */
+            low: Array(4)
+        }
+
+        obj.low[0].ball = 50;
+        obj.low[1].ball = 66;
+        obj.low[2].ball = 68;
+        obj.low[3].ball = 80;
+        const y = obj.low[1].ball;
+
+        /** 
+         * These commands print values to the console using addlog
+         */
+        PrintValue(obj.low[1].ball);
+        PrintValue(obj.low.length);
+
+        /**
+         * This will allocate a new array on the heap
+         */
+        const u: number[] = [];
+        /**
+         * Now it must realocate the array to fit another value
+         * (since it's on the heap and the size is less than one PAGE, nothing happens)
+         */
+        u.push(3);
+        PrintValue(u.length);
+        PrintValue(u[0]);
+
+        /**
+         * This commands prints the entire stack and heap usage to the console and breaks the game
+         * unless you're using a debug version of Eduke32
+         */
+        //PrintStackAndBreak();
+    }
+}
+                    </pre>
+                </div>
+            </details>
+        </div>
+
+        <div id="class-reference" class="section">
+            <h2>Class Reference</h2>
+            
+            <h3 id="CFile">CFile</h3>
+            <p>Class for file operations (code is optimized)</p>
+
+            <h4>Properties</h4>
+            <table>
+                <tr>
+                    <th>Property</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>seek</td>
+                    <td>number</td>
+                    <td>The current file seek position</td>
+                </tr>
+                <tr>
+                    <td>path</td>
+                    <td>string</td>
+                    <td>The current path of the file opened</td>
+                </tr>
+                <tr>
+                    <td>buffer</td>
+                    <td>number[]</td>
+                    <td>The buffer that holds the file contents</td>
+                </tr>
+                <tr>
+                    <td>length</td>
+                    <td>number</td>
+                    <td>The length of the file content</td>
+                </tr>
+                <tr>
+                    <td>loaded</td>
+                    <td>boolean</td>
+                    <td>If the file has been read or not</td>
+                </tr>
+                <tr>
+                    <td>type</td>
+                    <td>number</td>
+                    <td>Determines if it's a binary or text file</td>
+                </tr>
+            </table>
+
+            <h4>Methods</h4>
+            <table>
+                <tr>
+                    <th>Method</th>
+                    <th>Description</th>
+                    <th>Parameters</th>
+                    <th>Returns</th>
+                </tr>
+                <tr>
+                    <td>constructor(path: string)</td>
+                    <td>Open a file</td>
+                    <td>path: The path of the file</td>
+                    <td>A class object holding the file's content and method to operate it.</td>
+                </tr>
+                <tr>
+                    <td>Read(type: number, encoding: 8 | 16 | 32 = 8)</td>
+                    <td>Reads the file as a 4 byte binary or a encoded text</td>
+                    <td>type: Binary or text @see {@link FileReadType}<br>encoding: (optional) 8 by default. Only used if in text mode</td>
+                    <td>void</td>
+                </tr>
+                <tr>
+                    <td>Write(type: FileReadType, encoding: 8 | 16 | 32 = 8)</td>
+                    <td>Write the contents of buffer to the path</td>
+                    <td>type: binary or text<br>encoding: text enconding</td>
+                    <td>void</td>
+                </tr>
+                <tr>
+                    <td>GetValue()</td>
+                    <td>Gets the value of the current file by its seek position</td>
+                    <td>-</td>
+                    <td>The value from the file's seek position</td>
+                </tr>
+                <tr>
+                    <td>SetValue(value: number)</td>
+                    <td>Sets the a value using the current file's seek position</td>
+                    <td>value: The value to be set</td>
+                    <td>void</td>
+                </tr>
+                <tr>
+                    <td>CopyMemToFile(buffer: [], num_dwords: number)</td>
+                    <td>Copies a portion of a buffer's content to the file</td>
+                    <td>buffer: The source buffer<br>num_dwords: The size in DWORD (32-bits) to be copied</td>
+                    <td>void</td>
+                </tr>
+                <tr>
+                    <td>CopyFileToMem(buffer: [], num_dwords: number)</td>
+                    <td>Copies a portion of the file's content to a buffer</td>
+                    <td>buffer: The destination buffer<br>num_dwords: The size in DWORD (32-bits) to be copied</td>
+                    <td>void</td>
+                </tr>
+                <tr>
+                    <td>ReadString()</td>
+                    <td>Reads a string from the file</td>
+                    <td>-</td>
+                    <td>The string</td>
+                </tr>
+                <tr>
+                    <td>ReadLine()</td>
+                    <td>Reads a line from the file</td>
+                    <td>-</td>
+                    <td>The line string</td>
+                </tr>
+                <tr>
+                    <td>GetBuffer()</td>
+                    <td>Returns the buffer witht eh file content</td>
+                    <td>-</td>
+                    <td>an array or string</td>
+                </tr>
+                <tr>
+                    <td>SetBuffer(buffer: [])</td>
+                    <td>Sets the current buffer to the one provided</td>
+                    <td>buffer: the buffer that's gonna replace</td>
+                    <td>void</td>
+                </tr>
+            </table>
+            <h3 id="CActor">CActor</h3>
+<p>@class for actor declaration. Use this as extension to declare your custom actors.</p>
+<h4>Properties</h4>
+<table>
+<tr><th>Property</th><th>Type</th><th>Description</th></tr>
+<tr><td>defaultStrength</td><td>number</td><td></td></tr>
+<tr><td>defaultPicnum</td><td>number</td><td></td></tr>
+<tr><td>picnum</td><td>number</td><td>The current tile number of this actor</td></tr>
+<tr><td>isEnemy</td><td>boolean</td><td>Not accessible outside the constructor</td></tr>
+<tr><td>extra</td><td>number</td><td>The 'health' of this actor</td></tr>
+<tr><td>htExtra</td><td>number</td><td>How much damage it took</td></tr>
+<tr><td>damage</td><td>number</td><td>How much damage it took</td></tr>
+<tr><td>htPicnum</td><td>number</td><td>Which projectile damaged</td></tr>
+<tr><td>weaponHit</td><td>number</td><td>Which projectile damaged</td></tr>
+<tr><td>playerDist</td><td>number</td><td>The current distance from the nearest player</td></tr>
+<tr><td>curAction</td><td>number</td><td>The current action pointer</td></tr>
+<tr><td>curActionFrame</td><td>number</td><td>The current action frame</td></tr>
+<tr><td>curMove</td><td>number</td><td>The current move pointer</td></tr>
+<tr><td>vel</td><td>number</td><td>The current velocity</td></tr>
+<tr><td>ang</td><td>number</td><td>The current actor's angle</td></tr>
+<tr><td>pos</td><td>vec3</td><td>The current position</td></tr>
+<tr><td>curAI</td><td>number</td><td>The current AI pointer</td></tr>
+<tr><td>pal</td><td>number</td><td>The current palette used by the actor</td></tr>
+<tr><td>curSector</td><td>CSector</td><td>The current sector object</td></tr>
+<tr><td>curSectorID</td><td>number</td><td>The current sector ID</td></tr>
+<tr><td>flags</td><td>number</td><td>The special flags active for the sprite</td></tr>
+<tr><td>tags</td><td>tag</td><td>The Lotag and Hitag of the sprite</td></tr>
+</table>
+<h4>Methods</h4>
+<table>
+<tr><th>Method</th><th>Description</th><th>Parameters</th><th>Returns</th></tr>
+<tr><td>constructor(picnum: constant, isEnemy: boolean, extra: constant, no_labelobj?: boolean, actor_hardcode?: boolean)</td><td>You must call this to begin the actor's declaration</td><td>picnum: the current actor's tile number<br>isEnemy: if it's an enemy or not<br>extra: the health<br>no_labelobj: true by default. Use false if you don't want the complete label declaration in memory as objects<br>actor_hardcode: set to true if it's a hard coded actor</td><td></td></tr>
+<tr><td>PlayAction(action: IAction | null)</td><td>Play an action</td><td>action: the IAction object declared for this class</td><td>void</td></tr>
+<tr><td>Move(move: IMove | null, flags: number)</td><td>Move the actor</td><td>move: the IMove object declared for this class<br>flags: the movement flags</td><td>void</td></tr>
+<tr><td>StartAI(ai: IAi | null)</td><td>Start the AI configuration for this actor</td><td>ai: the IAi object declared for this class</td><td>void</td></tr>
+<tr><td>CStat(stats?: number)</td><td>Set or get the current stat for the actor</td><td>stats: The stats to be set or leave blank it to only return the current value</td><td>number</td></tr>
+<tr><td>CStatOR(stats: number)</td><td>OR the stat value to the actor's stat</td><td>stats: The stats to be set</td><td>void</td></tr>
+<tr><td>SizeAt(w: number, h: number)</td><td>Immediately set the size for this particular actor</td><td>w: the width (0 - 255)<br>h: the height(0 - 255)</td><td>void</td></tr>
+<tr><td>SizeTo(w: number, h: number, inc_x?: number, inc_y?: number)</td><td>Sets the size for this particular actor by incrementing the width and height by @param inc_x and @param inc_y each tick</td><td>w: the maximum width<br>h: the maximum height<br>inc_x: how much to increment the width each tick<br>inc_y: how much to increment the height each tick</td><td>void</td></tr>
+<tr><td>Count(value?: number)</td><td>Set or gets the native counter for this actor</td><td>value: Set the counter to this value. Leave blank to just retrieve the current counter value</td><td>number</td></tr>
+<tr><td>ActionCount(value?: number)</td><td>Set or gets the native action counter for this actor</td><td>value: Set the ation counter to this value. Leave blank to just retrieve the current action counter value</td><td>number</td></tr>
+<tr><td>CeilingDist()</td><td>Gets the current distance from the ceiling</td><td>-</td><td>number</td></tr>
+<tr><td>FloorDist()</td><td>Gets the current distance from the floor</td><td>-</td><td>number</td></tr>
+<tr><td>GapDist()</td><td>Gets the current gap distance from floor to ceiling</td><td>-</td><td>number</td></tr>
+<tr><td>Fall()</td><td>Enables 'physics' for this actor</td><td>-</td><td>void</td></tr>
+<tr><td>GetLastPal()</td><td>Returns the last pal value used before the current one</td><td>-</td><td>void</td></tr>
+<tr><td>KillIt()</td><td>Deletes the actor from the game world</td><td>-</td><td>void</td></tr>
+<tr><td>Stop()</td><td>Use this to stop the current actor's process</td><td>-</td><td>void</td></tr>
+<tr><td>ResetAction()</td><td>Reset's the action counter</td><td>-</td><td>void</td></tr>
+<tr><td>Spawn(picnum: number | CActor, initFn?: ((id: number) => void), queued?: boolean)</td><td>Spawn a actor</td><td>picnum: The tile number of the actor<br>initFn: (optional) a function to run after the actor has been spawned to initialize it<br>queued: (optional) Set this to true if you want it to become part of the queue system</td><td>number</td></tr>
+<tr><td>Shoot(picnum: number | CActor, initFn?: ((id: number) => void), use_zvel?: boolean, zvel?: number, additive_zvel?: boolean)</td><td>Shoots a projectile</td><td>picnum: The projectile's tile number<br>initFn: (optional) a function to run after the projectile has been shot to initialize it<br>use_zvel: (optional) Shoot with vertical veliocity<br>zvel: (optional) the vertical velocity - must set @param use_zvel to true<br>additive_zvel: (optional) Set this to true to add your vertical velocity to the actor's already set</td><td>number</td></tr>
+<tr><td>HitRadius(radius: number, furthestDmg: number, farDmg: number, closeDmg: number, closestDmg: number)</td><td>Damages all actors and sectors in a radius (divided into 4 ranges)</td><td>radius: The maximum radius<br>furthestDmg: The furthest range damage<br>farDmg: The far range damage<br>closeDmg: the close range damage<br>closestDmg: the closest range damage</td><td>void</td></tr>
+<tr><td>Flash()</td><td>Flashes for a brief second some visible sectors</td><td>-</td><td>void</td></tr>
+<tr><td>RespawnHitag()</td><td>Activates 9 or less respawn sprites with a lotag matching the current actor's hitag.</td><td>-</td><td>void</td></tr>
+<tr><td>Operate(flags: EOperateFlags, lotag?: number, player_id?: number, sector?: number, sprite?: number)</td><td>Causes the current actor to ope/activate a nearby door, activator, master switch, sector or sector effector.</td><td>flags: which entity to activate<br>lotag: (optional - depends on what flag is set) the lotag to activate activators or master switches<br>player_id: (optional) the player ID from whom should do the call<br>sector: (optional) the sector ID to be used<br>sprite: the sprite ID to be used</td><td>void</td></tr>
+<tr><td>Sound(sound_id: number, global?: boolean, once?: boolean)</td><td>Plays a sound</td><td>sound_id: the sound ID<br>global: play globally or not<br>once: (optional) - only play it again if the other instance has finished already</td><td>void</td></tr>
+<tr><td>StopSound(sound_id: number)</td><td>Stops playing a sound</td><td>sound_id: the sound ID</td><td>void</td></tr>
+<tr><td>IsAwayFromWall()</td><td>Returns if the actor is away from wall</td><td>-</td><td>boolean</td></tr>
+<tr><td>IsInWater()</td><td>Returns if the actor is in the water</td><td>-</td><td>boolean</td></tr>
+<tr><td>IsOnWater()</td><td>Returns if the actor is on the water</td><td>-</td><td>boolean</td></tr>
+<tr><td>IsOutside()</td><td>Checks if the current actor is in a sector with a parallaxed ceiling (sky).</td><td>-</td><td>boolean</td></tr>
+<tr><td>IsInSpace()</td><td>Checks if the actor is in space</td><td>-</td><td>boolean</td></tr>
+<tr><td>IsInOuterSpace()</td><td>Checks if the actor is in outer space</td><td>-</td><td>boolean</td></tr>
+<tr><td>IsRandom(value: number)</td><td>A function condition stating the probability of it 'doin somethin!' in this case.<br>A @param value greater or equal to 255 corresponds to a 100% probability that the first block is taken.<br>With a @param value of -1, the "else" block is taken every time.(A <value> of 0 means taking the "if" block once out of 256 on average).<br>This command must only be used in synchronised code or you will cause desyncs.<br>For display code use displayrand instead.</td><td>value: the value of chance (0 - 255)</td><td>boolean</td></tr>
+<tr><td>IsDead()</td><td>Checks if the current actor is dead (health is zero or below)</td><td>-</td><td>boolean</td></tr>
+<tr><td>Squished()</td><td>Checks if the actor has been suished by a sector</td><td>-</td><td>boolean</td></tr>
+<tr><td>IsItMoving()</td><td>Checks if the actor is moving</td><td>-</td><td>boolean</td></tr>
+<tr><td>BulletNear()</td><td>Returns 'true' if a projectile is near the actor.<br>In the case of hitscan projectiles (such as SHOTSPARK1),<br>it returns true if the point of impact is near the player.</td><td>-</td><td>boolean</td></tr>
+<tr><td>HitByWeapon()</td><td>Checks if the current actor was struck by a weapon.<br>Built-in damage processing occurs when using @method HitByWeapon, so it must be called frequently<br>in actor code in order for the actor to be affected by projectiles.</td><td>-</td><td>boolean</td></tr>
+<tr><td>CanSee()</td><td>If condition returning true if there is a line of sight between the current actor and the player.<br>The difference with @method CanSeeTarget is that @method CanSee actually verifies if the player<br>can see any actual part of the current actor tile (and basically would be hard to the player say<br>how an enemy looked alike while standing except if he use F7 view mode),<br>while @method CanSeeTarget verify if the current actor has "eye contact" with the player<br>(and in result the player is capable of viewing a arm or a litoral part of an enemy without<br>it targeting the player).</td><td>-</td><td>boolean</td></tr>
+<tr><td>CanSeeTarget()</td><td>If condition returning true if the current actor can see the player.</td><td>-</td><td>boolean</td></tr>
+<tr><td>CanShootTarget()</td><td>If condition returning true if the current actor can shoot the player.</td><td>-</td><td>boolean</td></tr>
+<tr><td>PlayerHitSpace()</td><td>Checks to see if the player has pressed the open button (space by default).</td><td>-</td><td>boolean</td></tr>
+<tr><td>WhichWeaponHit()</td><td>Goes with @method HitByWeapon. Returns which projectile hit the actor.</td><td>-</td><td>number</td></tr>
+<tr><td>AngleToTarget()</td><td>@todo no implemented yet<br>Calculates the angle necessary for the current sprite to face whatever target is<br>or was at the coordinates htlastvx and htlastvy.</td><td>-</td><td>number</td></tr>
+<tr><td>Debris(tile: constant, amount: constant)</td><td>Spawns the hard-coded debris. Scraps inherit the owner palette.</td><td>tile: the tile number of the debris can be SCRAP1 through SCRAP6 (see {@link Names}).<br>amount: the amount of debris to spawn</td><td>void</td></tr>
+<tr><td>Guts(tile: constant, amount: constant)</td><td>Spawns the hard-coded gore.</td><td>tile: the tile number of the gut, can be JIBS1 through JIBS6, HEADJIB, LEGJIB... (See {@link Names})<br>amount: the amount of guts to spawn</td><td>void</td></tr>
+<tr><td>Mail(amount: constant)</td><td>Causes the current actor to spawn @param amount envelopes.</td><td>amount: the amount of envelopes to spawn</td><td>void</td></tr>
+<tr><td>Money(amount: constant)</td><td>Attracts the ladies. Well, no, not really, at least not in the game.<br>Spawns @param amount of dollar bills.</td><td>amount: the amount of money to spawn</td><td>void</td></tr>
+<tr><td>Paper(amount: constant)</td><td>Spawns @param amount of pieces of paper to use the same type of movement of the money command.</td><td>amount: the amount of paper to spawn</td><td>void</td></tr>
+<tr><td>Glass(amount: constant)</td><td>Causes the current actor to spawn @param amount of broken glass pieces.<br>NOTE: If @method Pal is used right before this command, it will change the glass palette as well.</td><td>amount: the amount of glass to spawn</td><td>void</td></tr>
+<tr><td>Pal(color: number)</td><td>Changes the current actor's palette reference number to @param color.</td><td>color: the palette to change</td><td>void</td></tr>
+<tr><td>AddKills(amount: constant)</td><td>Add @param amount to the kill counter</td><td>amount: how many kills to add</td><td>void</td></tr>
+<tr><td>PlayerKick()</td><td>Makes the player kick</td><td>-</td><td>void</td></tr>
+<tr><td>LockPlayer(time: number)</td><td>Locks the player movement by @param time amount of time</td><td>time: the amount of time to lock the player</td><td>void</td></tr>
+<tr><td>ResetPlayer(flags: number)</td><td>Reload the map (if in Single Player) and the player loses his inventory. <br>Also if in Single Player mode, execution of subsequent code is halted in a fashion similar to return.</td><td>flags: set to 1 to don't ask the player if they want to load the most recent save (if applicable)</td><td>void</td></tr>
+</table>
+        </div>
+        
+            <h3 id="CEvent">CEvent</h3>
+            <p>@class for declaring events. Use this as extension.</p>
+            <h4>Methods</h4>
+            <table>
+                <tr><th>Method</th><th>Description</th><th>Parameters</th><th>Returns</th></tr>
+                <tr><td>constructor(event: TEvents)</td><td>Starts the event declaration</td><td>event: the event that will be defined. See {@link TEvents}</td><td></td></tr>
+                <tr><td>RotateSprite(x: number, y: number, scale: number, ang: number, picnum: number, shade: number, pal: number, orientation: number, x0: number, y0: number, x1: number, y1: number)</td><td>Displays a sprite onto the screen</td><td>x: the X position<br>y: the Y position<br>scale: the sprite scale (65536 is the sprite's normal size)<br>ang: angle<br>picnum: the tile number of the sprite<br>shade: shade value<br>pal: palette value<br>orientation: orientation flags<br>x0: the window x0 value<br>y0: the window y0 value<br>x1: the window x1 value. See {@link xDim}<br>y1: the window y1 value. See {@link yDim}</td><td>void</td></tr>
+                <tr><td>DrawSprite(pos: pos2, picnum: number, style: TStyle)</td><td>Displays a sprite onto the screen. An easier method to use.</td><td>pos: the object containg the position of the sprite. See {@link pos2}<br>picnum: the tile number of the sprite.<br>style: the styling of the sprite. See {@link TStyle}</td><td>void</td></tr>
+                <tr><td>ScreenSound(sound: number)</td><td>Plays a sound during display events</td><td>sound: the sound ID to be played</td><td>void</td></tr>
+                <tr><td>ScreenText(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number)</td><td></td><td>picnum: <br>x: <br>y: <br>scale: <br>block_ang: <br>character_ang: <br>quote: <br>shade: <br>pal: <br>orientation: <br>alpha: <br>xspace: <br>yline: <br>xbetween: <br>ybetween: <br>flags: <br>x0: <br>y0: <br>x1: <br>y1: </td><td>void</td></tr>
+                <tr><td>QuoteDimension(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number)</td><td></td><td>picnum: <br>x: <br>y: <br>scale: <br>block_ang: <br>character_ang: <br>quote: <br>shade: <br>pal: <br>orientation: <br>alpha: <br>xspace: <br>yline: <br>xbetween: <br>ybetween: <br>flags: <br>x0: <br>y0: <br>x1: <br>y1: </td><td>vec2</td></tr>
+                <tr><td>Append()</td><td>Use append if you want to append this event to the others of the same type</td><td>-</td><td>void | number</td></tr>
+                <tr><td>Prepend()</td><td>Use this if you want to prepend this event to the other of the same type.</td><td>-</td><td>void | number</td></tr>
+            </table>
+
+            <h3 id="CWall">CWall</h3>
+            <p></p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>pos</td><td>vec2</td><td></td></tr>
+                <tr><td>point2</td><td>number</td><td></td></tr>
+                <tr><td>blend</td><td>number</td><td></td></tr>
+                <tr><td>nextWall</td><td>number</td><td></td></tr>
+                <tr><td>nextSector</td><td>number</td><td></td></tr>
+                <tr><td>cstat</td><td>number</td><td></td></tr>
+                <tr><td>picnum</td><td>number</td><td></td></tr>
+                <tr><td>overpicnum</td><td>number</td><td></td></tr>
+                <tr><td>shade</td><td>number</td><td></td></tr>
+                <tr><td>pal</td><td>number</td><td></td></tr>
+                <tr><td>texRepeat</td><td>vec2</td><td></td></tr>
+                <tr><td>texPan</td><td>vec2</td><td></td></tr>
+                <tr><td>tags</td><td>tag</td><td></td></tr>
+                <tr><td>extra</td><td>number</td><td></td></tr>
+                <tr><td>ang</td><td>number</td><td></td></tr>
+                <tr><td>wallPoint2</td><td>CWall</td><td></td></tr>
+                <tr><td>next</td><td>{ wall: CWall, sector: CSector }</td><td></td></tr>
+            </table>
+
+            <h3 id="CSector">CSector</h3>
+            <p></p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>wallPtr</td><td>number</td><td></td></tr>
+                <tr><td>wallNum</td><td>number</td><td></td></tr>
+                <tr><td>ceiling</td><td>CSectorBase</td><td></td></tr>
+                <tr><td>floor</td><td>CSectorBase</td><td></td></tr>
+                <tr><td>visibility</td><td>number</td><td></td></tr>
+                <tr><td>fogPal</td><td>number</td><td></td></tr>
+                <tr><td>tags</td><td>tag</td><td></td></tr>
+                <tr><td>extra</td><td>number</td><td></td></tr>
+                <tr><td>firstWall</td><td>CWall</td><td></td></tr>
+                <tr><td>walls</td><td>CWall[]</td><td></td></tr>
+            </table>
+
+            <div id="interface-reference" class="section">
+            <h2>Interface Reference</h2>
+
+            <h3 id="IFont">IFont</h3>
+            <p>Interface for declaring fonts used in the game</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>tile</td><td>number</td><td>The starting tile of the font</td></tr>
+                <tr><td>xSpace</td><td>number</td><td>The width of the whitespace character</td></tr>
+                <tr><td>yLine</td><td>number</td><td>the height of an empty line</td></tr>
+                <tr><td>xBetween</td><td>number</td><td>The x distance between characters</td></tr>
+                <tr><td>yBetween</td><td>number</td><td>The y distance between lines</td></tr>
+                <tr><td>offset</td><td>vec2</td><td>The xy offset</td></tr>
+                <tr><td>maxSizeChar</td><td>vec2</td><td>The maximum width/height of the alphabet characters' (used for line ending calculations)</td></tr>
+                <tr><td>flags</td><td>ETextFlags</td><td>The font's flags</td></tr>
+            </table>
+
+            <h3 id="ISys">ISys</h3>
+            <p>Interface representing the TypeCON system framework</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>ra</td><td>CON_NATIVE_GAMEVAR<'ra', number></td><td>Accumulator register. Used for all kinds of operations. All results are stored in it.</td></tr>
+                <tr><td>rb</td><td>CON_NATIVE_GAMEVAR<'rb', number></td><td>Base register. Used for return values and sometimes as a helper in some operations.</td></tr>
+                <tr><td>rc</td><td>CON_NATIVE_GAMEVAR<'rc', number></td><td>Counter register. Used for loops.</td></tr>
+                <tr><td>rd</td><td>CON_NATIVE_GAMEVAR<'rd', number></td><td>Data registers. Used in if/binary expressions to hold the right side of the operation.</td></tr>
+                <tr><td>rf</td><td>CON_NATIVE_GAMEVAR<'rf', number></td><td>Flags register.</td></tr>
+                <tr><td>ri</td><td>CON_NATIVE_GAMEVAR<'ri', number></td><td>Index register. Holds the current index of the stack/heap memory during operations.</td></tr>
+                <tr><td>rsi</td><td>CON_NATIVE_GAMEVAR<'rsi', number></td><td>Source Index register. In operations envolving 2 memory pointers, it usually holds the "source".</td></tr>
+                <tr><td>rbp</td><td>CON_NATIVE_GAMEVAR<'rbp', number></td><td>Base pointer register. Holds the base of the current stack.</td></tr>
+                <tr><td>rsp</td><td>CON_NATIVE_GAMEVAR<'rsp', number></td><td>Stack pointer register. Holds the current stack value.</td></tr>
+                <tr><td>rssp</td><td>CON_NATIVE_GAMEVAR<'rssp', number></td><td>String Stack pointer register. Holds the current string stack value.</td></tr>
+                <tr><td>rbsp</td><td>CON_NATIVE_GAMEVAR<'rbsp', number></td><td>String Base pointer register. Hold the base of the current string stack.</td></tr>
+            </table>
+            <h4>Methods</h4>
+            <table>
+                <tr><th>Method</th><th>Description</th><th>Parameters</th><th>Returns</th></tr>
+                <tr><td>GetReference(register: number)</td><td>Returns a reference from the register's value</td><td>register: The register to get the reference</td><td>[] | string</td></tr>
+                <tr><td>BufferToIndex(buffer: any[], array: boolean)</td><td>Returns the reference from the buffer to ri register</td><td>buffer: The buffer reference<br>array: If true, it adds 1 to the ri (first slot is the length)</td><td>void</td></tr>
+                <tr><td>BufferToSourceIndex(buffer: any[], array: boolean)</td><td>Returns the reference from the buffer to rsi register</td><td>buffer: The buffer reference<br>array: If true, it adds 1 to the ri (first slot is the length)</td><td>void</td></tr>
+            </table>
+
+            <h3 id="IWeapon00">IWeapon00</h3>
+            <p>Interface for the Mighty Foot weapon (weapon 00).</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>flags</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_FLAGS', number></td><td>The flags for the weapon (does not control the projectile)</td></tr>
+                <tr><td>clip</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_CLIP', number></td><td>It's the amount of ammo that can be fired before there is a reloading animation and pause.</td></tr>
+                <tr><td>reload</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_RELOAD', number></td><td>Defines the number of frames displayed in the weapon's reload sequence</td></tr>
+                <tr><td>fireDelay</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_FIREDELAY', number></td><td>Defines what frame the weapon will fire its projectile on.</td></tr>
+                <tr><td>holdDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP0_HOLDDELAY', number></td><td>The number of animation frames between shooting and reloading.</td></tr>
+                <tr><td>totalTime</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_TOTALTIME', number></td><td>Defines the total number of frames a weapon uses in its firing sequence.</td></tr>
+                <tr><td>flashColor</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_FLASHCOLOR', number></td><td>The flash color of the weapon.</td></tr>
+                <tr><td>shoots</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_SHOOTS', number></td><td>This is the tilenum of the projectile.</td></tr>
+                <tr><td>shotsPerBurst</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_SHOTSPERBURST', number></td><td>Defines the amount of projectiles that will fire when the weapon reaches its firing frame.</td></tr>
+                <tr><td>spawn</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_SPAWN', number></td><td>This defines what the weapon spawns when the spawnTime is reached.</td></tr>
+                <tr><td>spawnTime</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_SPAWNTIME', number></td><td>Defines what frame the item specified by spawn will spawn on.</td></tr>
+                <tr><td>reloadSound1</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_RELOADSOUND1', number></td><td>If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.</td></tr>
+                <tr><td>reloadSound2</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_RELOADSOUND2', number></td><td>If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.</td></tr>
+                <tr><td>selectSound</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_SELECTSOUND', number></td><td>The sound played when a weapon is selected.</td></tr>
+                <tr><td>fireSound</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_FIRESOUND', number></td><td>Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.</td></tr>
+                <tr><td>initialSound</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_INITIALSOUND', number></td><td>Defines the sound that will play when the player starts to fire the weapon.</td></tr>
+                <tr><td>sound2Sound</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_SOUND2SOUND', number></td><td>This is the weapon's second sound.</td></tr>
+                <tr><td>sound2Time</td><td>CON_NATIVE_GAMEVAR<'WEAPON0_SOUND2TIME', number></td><td>If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.</td></tr>
+            </table>
+
+            <h3 id="IWeapon01">IWeapon01</h3>
+            <p>Interface for the Pistol weapon (weapon 01).</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>flags</td><td>CON_NATIVE_GAMEVAR<'WEAPON1_FLAGS', number></td><td>The flags for the weapon (does not control the projectile)</td></tr>
+                <tr><td>clip</td><td>CON_NATIVE_GAMEVAR<'WEAPON1_CLIP', number></td><td>It's the amount of ammo that can be fired before there is a reloading animation and pause.</td></tr>
+                <tr><td>reload</td><td>CON_NATIVE_GAMEVAR<'WEAPON1_RELOAD', number></td><td>Defines the number of frames displayed in the weapon's reload sequence</td></tr>
+                <tr><td>fireDelay</td><td>CON_NATIVE_GAMEVAR<'WEAPON1_FIREDELAY', number></td><td>Defines what frame the weapon will fire its projectile on.</td></tr>
+                <tr><td>holdDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP1_HOLDDELAY', number></td><td>The number of animation frames between shooting and reloading.</td></tr>
+                <tr><td>totalTime</td><td>CON_NATIVE_GAMEVAR<'WEAPON1_TOTALTIME', number></td><td>Defines the total number of frames a weapon uses in its firing sequence.</td></tr>
+                <tr><td>flashColor</td><td>CON_NATIVE_GAMEVAR<'WEAPON1_FLASHCOLOR', number></td><td>The flash color of the weapon.</td></tr>
+                <tr><td>shoots</td><td>CON_NATIVE_GAMEVAR<'WEAPON1_SHOOTS', number></td><td>This is the tilenum of the projectile.</td></tr>
+                <tr><td>shotsPerBurst</td><td>CON_NATIVE_GAMEVAR<'WEAP1_SHOTSPERBURST', number></td><td>Defines the amount of projectiles that will fire when the weapon reaches its firing frame.</td></tr>
+                <tr><td>spawn</td><td>CON_NATIVE_GAMEVAR<'WEAPON1_SPAWN', number></td><td>This defines what the weapon spawns when the spawnTime is reached.</td></tr>
+                <tr><td>spawnTime</td><td>CON_NATIVE_GAMEVAR<'WEAP1_SPAWNTIME', number></td><td>Defines what frame the item specified by spawn will spawn on.</td></tr>
+                <tr><td>reloadSound1</td><td>CON_NATIVE_GAMEVAR<'WEAPON1_RELOADSOUND1', number></td><td>If RELOAD_TIMING is enabled, this is the first sound to be played in the weapon's reload sequence.</td></tr>
+                <tr><td>reloadSound2</td><td>CON_NATIVE_GAMEVAR<'WEAP1_RELOADSOUND2', number></td><td>If RELOAD_TIMING is enabled, this is the second sound to be played in the weapon's reload sequence.</td></tr>
+                <tr><td>selectSound</td><td>CON_NATIVE_GAMEVAR<'WEAP1_SELECTSOUND', number></td><td>The sound played when a weapon is selected.</td></tr>
+                <tr><td>fireSound</td><td>CON_NATIVE_GAMEVAR<'WEAP1_FIRESOUND', number></td><td>Plays the corresponding sound when the weapon counter reaches the number specified by fireDelay.</td></tr>
+                <tr><td>initialSound</td><td>CON_NATIVE_GAMEVAR<'WEAP1_INITIALSOUND', number></td><td>Defines the sound that will play when the player starts to fire the weapon.</td></tr>
+                <tr><td>sound2Sound</td><td>CON_NATIVE_GAMEVAR<'WEAP1_SOUND2SOUND', number></td><td>This is the weapon's second sound.</td></tr>
+                <tr><td>sound2Time</td><td>CON_NATIVE_GAMEVAR<'WEAP1_SOUND2TIME', number></td><td>If the weapon has a second shooting sound defined, this is the frame number for the second sound to start.</td></tr>
+            </table>
+
+            <h3 id="IWeapon02">IWeapon02</h3>
+            <p>Interface for the Shotgun weapon (weapon 02).</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>flags</td><td>CON_NATIVE_GAMEVAR<'WEAPON2_FLAGS', number></td><td>Flags for the weapon (does not control the projectile)</td></tr>
+                <tr><td>clip</td><td>CON_NATIVE_GAMEVAR<'WEAPON2_CLIP', number></td><td></td></tr>
+                <tr><td>reload</td><td>CON_NATIVE_GAMEVAR<'WEAP2_RELOAD', number></td><td></td></tr>
+                <tr><td>fireDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP2_FIREDELAY', number></td><td></td></tr>
+                <tr><td>holdDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP2_HOLDDELAY', number></td><td></td></tr>
+                <tr><td>totalTime</td><td>CON_NATIVE_GAMEVAR<'WEAP2_TOTALTIME', number></td><td></td></tr>
+                <tr><td>flashColor</td><td>CON_NATIVE_GAMEVAR<'WEAP2_FLASHCOLOR', number></td><td></td></tr>
+                <tr><td>shoots</td><td>CON_NATIVE_GAMEVAR<'WEAP2_SHOOTS', number></td><td></td></tr>
+                <tr><td>shotsPerBurst</td><td>CON_NATIVE_GAMEVAR<'WEAP2_SHOTSPERBURST', number></td><td></td></tr>
+                <tr><td>spawn</td><td>CON_NATIVE_GAMEVAR<'WEAP2_SPAWN', number></td><td></td></tr>
+                <tr><td>spawnTime</td><td>CON_NATIVE_GAMEVAR<'WEAP2_SPAWNTIME', number></td><td></td></tr>
+                <tr><td>reloadSound1</td><td>CON_NATIVE_GAMEVAR<'WEAP2_RELOADSOUND1', number></td><td></td></tr>
+                <tr><td>reloadSound2</td><td>CON_NATIVE_GAMEVAR<'WEAP2_RELOADSOUND2', number></td><td></td></tr>
+                <tr><td>selectSound</td><td>CON_NATIVE_GAMEVAR<'WEAP2_SELECTSOUND', number></td><td></td></tr>
+                <tr><td>fireSound</td><td>CON_NATIVE_GAMEVAR<'WEAP2_FIRESOUND', number></td><td></td></tr>
+                <tr><td>initialSound</td><td>CON_NATIVE_GAMEVAR<'WEAP2_INITIALSOUND', number></td><td></td></tr>
+                <tr><td>sound2Sound</td><td>CON_NATIVE_GAMEVAR<'WEAP2_SOUND2SOUND', number></td><td></td></tr>
+                <tr><td>sound2Time</td><td>CON_NATIVE_GAMEVAR<'WEAP2_SOUND2TIME', number></td><td></td></tr>
+            </table>
+
+            <h3 id="IWeapon03">IWeapon03</h3>
+            <p>Interface for the Chaingun weapon (weapon 03).</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>flags</td><td>CON_NATIVE_GAMEVAR<'WEAPON3_FLAGS', number></td><td>Flags for the weapon (does not control the projectile)</td></tr>
+                <tr><td>clip</td><td>CON_NATIVE_GAMEVAR<'WEAP3_CLIP', number></td><td></td></tr>
+                <tr><td>reload</td><td>CON_NATIVE_GAMEVAR<'WEAP3_RELOAD', number></td><td></td></tr>
+                <tr><td>fireDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP3_FIREDELAY', number></td><td></td></tr>
+                <tr><td>holdDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP3_HOLDDELAY', number></td><td></td></tr>
+                <tr><td>totalTime</td><td>CON_NATIVE_GAMEVAR<'WEAP3_TOTALTIME', number></td><td></td></tr>
+                <tr><td>flashColor</td><td>CON_NATIVE_GAMEVAR<'WEAP3_FLASHCOLOR', number></td><td></td></tr>
+                <tr><td>shoots</td><td>CON_NATIVE_GAMEVAR<'WEAP3_SHOOTS', number></td><td></td></tr>
+                <tr><td>shotsPerBurst</td><td>CON_NATIVE_GAMEVAR<'WEAP3_SHOTSPERBURST', number></td><td></td></tr>
+                <tr><td>spawn</td><td>CON_NATIVE_GAMEVAR<'WEAP3_SPAWN', number></td><td></td></tr>
+                <tr><td>spawnTime</td><td>CON_NATIVE_GAMEVAR<'WEAP3_SPAWNTIME', number></td><td></td></tr>
+                <tr><td>reloadSound1</td><td>CON_NATIVE_GAMEVAR<'WEAP3_RELOADSOUND1', number></td><td></td></tr>
+                <tr><td>reloadSound2</td><td>CON_NATIVE_GAMEVAR<'WEAP3_RELOADSOUND2', number></td><td></td></tr>
+                <tr><td>selectSound</td><td>CON_NATIVE_GAMEVAR<'WEAP3_SELECTSOUND', number></td><td></td></tr>
+                <tr><td>fireSound</td><td>CON_NATIVE_GAMEVAR<'WEAP3_FIRESOUND', number></td><td></td></tr>
+                <tr><td>initialSound</td><td>CON_NATIVE_GAMEVAR<'WEAP3_INITIALSOUND', number></td><td></td></tr>
+                <tr><td>sound2Sound</td><td>CON_NATIVE_GAMEVAR<'WEAP3_SOUND2SOUND', number></td><td></td></tr>
+                <tr><td>sound2Time</td><td>CON_NATIVE_GAMEVAR<'WEAP3_SOUND2TIME', number></td><td></td></tr>
+            </table>
+
+            <h3 id="IWeapon04">IWeapon04</h3>
+            <p>Interface for the RPG weapon (weapon 04).</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>flags</td><td>CON_NATIVE_GAMEVAR<'WEAP4_FLAGS', number></td><td>Flags for the weapon (does not control the projectile)</td></tr>
+                <tr><td>clip</td><td>CON_NATIVE_GAMEVAR<'WEAP4_CLIP', number></td><td></td></tr>
+                <tr><td>reload</td><td>CON_NATIVE_GAMEVAR<'WEAP4_RELOAD', number></td><td></td></tr>
+                <tr><td>fireDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP4_FIREDELAY', number></td><td></td></tr>
+                <tr><td>holdDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP4_HOLDDELAY', number></td><td></td></tr>
+                <tr><td>totalTime</td><td>CON_NATIVE_GAMEVAR<'WEAP4_TOTALTIME', number></td><td></td></tr>
+                <tr><td>flashColor</td><td>CON_NATIVE_GAMEVAR<'WEAP4_FLASHCOLOR', number></td><td></td></tr>
+                <tr><td>shoots</td><td>CON_NATIVE_GAMEVAR<'WEAP4_SHOOTS', number></td><td></td></tr>
+                <tr><td>shotsPerBurst</td><td>CON_NATIVE_GAMEVAR<'WEAP4_SHOTSPERBURST', number></td><td></td></tr>
+                <tr><td>spawn</td><td>CON_NATIVE_GAMEVAR<'WEAP4_SPAWN', number></td><td></td></tr>
+                <tr><td>spawnTime</td><td>CON_NATIVE_GAMEVAR<'WEAP4_SPAWNTIME', number></td><td></td></tr>
+                <tr><td>reloadSound1</td><td>CON_NATIVE_GAMEVAR<'WEAP4_RELOADSOUND1', number></td><td></td></tr>
+                <tr><td>reloadSound2</td><td>CON_NATIVE_GAMEVAR<'WEAP4_RELOADSOUND2', number></td><td></td></tr>
+                <tr><td>selectSound</td><td>CON_NATIVE_GAMEVAR<'WEAP4_SELECTSOUND', number></td><td></td></tr>
+                <tr><td>fireSound</td><td>CON_NATIVE_GAMEVAR<'WEAP4_FIRESOUND', number></td><td></td></tr>
+                <tr><td>initialSound</td><td>CON_NATIVE_GAMEVAR<'WEAP4_INITIALSOUND', number></td><td></td></tr>
+                <tr><td>sound2Sound</td><td>CON_NATIVE_GAMEVAR<'WEAP4_SOUND2SOUND', number></td><td></td></tr>
+                <tr><td>sound2Time</td><td>CON_NATIVE_GAMEVAR<'WEAP4_SOUND2TIME', number></td><td></td></tr>
+            </table>
+
+            <h3 id="IWeapon05">IWeapon05</h3>
+            <p>Interface for the Pipebomb weapon (weapon 05).</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>flags</td><td>CON_NATIVE_GAMEVAR<'WEAP5_FLAGS', number></td><td>Flags for the weapon (does not control the projectile)</td></tr>
+                <tr><td>clip</td><td>CON_NATIVE_GAMEVAR<'WEAP5_CLIP', number></td><td></td></tr>
+                <tr><td>reload</td><td>CON_NATIVE_GAMEVAR<'WEAP5_RELOAD', number></td><td></td></tr>
+                <tr><td>fireDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP5_FIREDELAY', number></td><td></td></tr>
+                <tr><td>holdDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP5_HOLDDELAY', number></td><td></td></tr>
+                <tr><td>totalTime</td><td>CON_NATIVE_GAMEVAR<'WEAP5_TOTALTIME', number></td><td></td></tr>
+                <tr><td>flashColor</td><td>CON_NATIVE_GAMEVAR<'WEAP5_FLASHCOLOR', number></td><td></td></tr>
+                <tr><td>shoots</td><td>CON_NATIVE_GAMEVAR<'WEAP5_SHOOTS', number></td><td></td></tr>
+                <tr><td>shotsPerBurst</td><td>CON_NATIVE_GAMEVAR<'WEAP5_SHOTSPERBURST', number></td><td></td></tr>
+                <tr><td>spawn</td><td>CON_NATIVE_GAMEVAR<'WEAP5_SPAWN', number></td><td></td></tr>
+                <tr><td>spawnTime</td><td>CON_NATIVE_GAMEVAR<'WEAP5_SPAWNTIME', number></td><td></td></tr>
+                <tr><td>reloadSound1</td><td>CON_NATIVE_GAMEVAR<'WEAP5_RELOADSOUND1', number></td><td></td></tr>
+                <tr><td>reloadSound2</td><td>CON_NATIVE_GAMEVAR<'WEAP5_RELOADSOUND2', number></td><td></td></tr>
+                <tr><td>selectSound</td><td>CON_NATIVE_GAMEVAR<'WEAP5_SELECTSOUND', number></td><td></td></tr>
+                <tr><td>fireSound</td><td>CON_NATIVE_GAMEVAR<'WEAP5_FIRESOUND', number></td><td></td></tr>
+                <tr><td>initialSound</td><td>CON_NATIVE_GAMEVAR<'WEAP5_INITIALSOUND', number></td><td></td></tr>
+                <tr><td>sound2Sound</td><td>CON_NATIVE_GAMEVAR<'WEAP5_SOUND2SOUND', number></td><td></td></tr>
+                <tr><td>sound2Time</td><td>CON_NATIVE_GAMEVAR<'WEAP5_SOUND2TIME', number></td><td></td></tr>
+            </table>
+
+            <h3 id="IWeapon06">IWeapon06</h3>
+            <p>Interface for the Shrinker weapon (weapon 06).</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>flags</td><td>CON_NATIVE_GAMEVAR<'WEAP6_FLAGS', number></td><td>Flags for the weapon (does not control the projectile)</td></tr>
+                <tr><td>clip</td><td>CON_NATIVE_GAMEVAR<'WEAP6_CLIP', number></td><td></td></tr>
+                <tr><td>reload</td><td>CON_NATIVE_GAMEVAR<'WEAP6_RELOAD', number></td><td></td></tr>
+                <tr><td>fireDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP6_FIREDELAY', number></td><td></td></tr>
+                <tr><td>holdDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP6_HOLDDELAY', number></td><td></td></tr>
+                <tr><td>totalTime</td><td>CON_NATIVE_GAMEVAR<'WEAP6_TOTALTIME', number></td><td></td></tr>
+                <tr><td>flashColor</td><td>CON_NATIVE_GAMEVAR<'WEAP6_FLASHCOLOR', number></td><td></td></tr>
+                <tr><td>shoots</td><td>CON_NATIVE_GAMEVAR<'WEAP6_SHOOTS', number></td><td></td></tr>
+                <tr><td>shotsPerBurst</td><td>CON_NATIVE_GAMEVAR<'WEAP6_SHOTSPERBURST', number></td><td></td></tr>
+                <tr><td>spawn</td><td>CON_NATIVE_GAMEVAR<'WEAP6_SPAWN', number></td><td></td></tr>
+                <tr><td>spawnTime</td><td>CON_NATIVE_GAMEVAR<'WEAP6_SPAWNTIME', number></td><td></td></tr>
+                <tr><td>reloadSound1</td><td>CON_NATIVE_GAMEVAR<'WEAP6_RELOADSOUND1', number></td><td></td></tr>
+                <tr><td>reloadSound2</td><td>CON_NATIVE_GAMEVAR<'WEAP6_RELOADSOUND2', number></td><td></td></tr>
+                <tr><td>selectSound</td><td>CON_NATIVE_GAMEVAR<'WEAP6_SELECTSOUND', number></td><td></td></tr>
+                <tr><td>fireSound</td><td>CON_NATIVE_GAMEVAR<'WEAP6_FIRESOUND', number></td><td></td></tr>
+                <tr><td>initialSound</td><td>CON_NATIVE_GAMEVAR<'WEAP6_INITIALSOUND', number></td><td></td></tr>
+                <tr><td>sound2Sound</td><td>CON_NATIVE_GAMEVAR<'WEAP6_SOUND2SOUND', number></td><td></td></tr>
+                <tr><td>sound2Time</td><td>CON_NATIVE_GAMEVAR<'WEAP6_SOUND2TIME', number></td><td></td></tr>
+            </table>
+
+            <h3 id="IWeapon07">IWeapon07</h3>
+            <p>Interface for the Devastator weapon (weapon 07).</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>flags</td><td>CON_NATIVE_GAMEVAR<'WEAP7_FLAGS', number></td><td>Flags for the weapon (does not control the projectile)</td></tr>
+                <tr><td>clip</td><td>CON_NATIVE_GAMEVAR<'WEAP7_CLIP', number></td><td></td></tr>
+                <tr><td>reload</td><td>CON_NATIVE_GAMEVAR<'WEAP7_RELOAD', number></td><td></td></tr>
+                <tr><td>fireDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP7_FIREDELAY', number></td><td></td></tr>
+                <tr><td>holdDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP7_HOLDDELAY', number></td><td></td></tr>
+                <tr><td>totalTime</td><td>CON_NATIVE_GAMEVAR<'WEAP7_TOTALTIME', number></td><td></td></tr>
+                <tr><td>flashColor</td><td>CON_NATIVE_GAMEVAR<'WEAP7_FLASHCOLOR', number></td><td></td></tr>
+                <tr><td>shoots</td><td>CON_NATIVE_GAMEVAR<'WEAP7_SHOOTS', number></td><td></td></tr>
+                <tr><td>shotsPerBurst</td><td>CON_NATIVE_GAMEVAR<'WEAP7_SHOTSPERBURST', number></td><td></td></tr>
+                <tr><td>spawn</td><td>CON_NATIVE_GAMEVAR<'WEAP7_SPAWN', number></td><td></td></tr>
+                <tr><td>spawnTime</td><td>CON_NATIVE_GAMEVAR<'WEAP7_SPAWNTIME', number></td><td></td></tr>
+                <tr><td>reloadSound1</td><td>CON_NATIVE_GAMEVAR<'WEAP7_RELOADSOUND1', number></td><td></td></tr>
+                <tr><td>reloadSound2</td><td>CON_NATIVE_GAMEVAR<'WEAP7_RELOADSOUND2', number></td><td></td></tr>
+                <tr><td>selectSound</td><td>CON_NATIVE_GAMEVAR<'WEAP7_SELECTSOUND', number></td><td></td></tr>
+                <tr><td>fireSound</td><td>CON_NATIVE_GAMEVAR<'WEAP7_FIRESOUND', number></td><td></td></tr>
+                <tr><td>initialSound</td><td>CON_NATIVE_GAMEVAR<'WEAP7_INITIALSOUND', number></td><td></td></tr>
+                <tr><td>sound2Sound</td><td>CON_NATIVE_GAMEVAR<'WEAP7_SOUND2SOUND', number></td><td></td></tr>
+                <tr><td>sound2Time</td><td>CON_NATIVE_GAMEVAR<'WEAP7_SOUND2TIME', number></td><td></td></tr>
+            </table>
+
+            <h3 id="IWeapon08">IWeapon08</h3>
+            <p>Interface for the Tripbomb weapon (weapon 08).</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>flags</td><td>CON_NATIVE_GAMEVAR<'WEAP8_FLAGS', number></td><td>Flags for the weapon (does not control the projectile)</td></tr>
+                <tr><td>clip</td><td>CON_NATIVE_GAMEVAR<'WEAP8_CLIP', number></td><td></td></tr>
+                <tr><td>reload</td><td>CON_NATIVE_GAMEVAR<'WEAP8_RELOAD', number></td><td></td></tr>
+                <tr><td>fireDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP8_FIREDELAY', number></td><td></td></tr>
+                <tr><td>holdDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP8_HOLDDELAY', number></td><td></td></tr>
+                <tr><td>totalTime</td><td>CON_NATIVE_GAMEVAR<'WEAP8_TOTALTIME', number></td><td></td></tr>
+                <tr><td>flashColor</td><td>CON_NATIVE_GAMEVAR<'WEAP8_FLASHCOLOR', number></td><td></td></tr>
+                <tr><td>shoots</td><td>CON_NATIVE_GAMEVAR<'WEAP8_SHOOTS', number></td><td></td></tr>
+                <tr><td>shotsPerBurst</td><td>CON_NATIVE_GAMEVAR<'WEAP8_SHOTSPERBURST', number></td><td></td></tr>
+                <tr><td>spawn</td><td>CON_NATIVE_GAMEVAR<'WEAP8_SPAWN', number></td><td></td></tr>
+                <tr><td>spawnTime</td><td>CON_NATIVE_GAMEVAR<'WEAP8_SPAWNTIME', number></td><td></td></tr>
+                <tr><td>reloadSound1</td><td>CON_NATIVE_GAMEVAR<'WEAP8_RELOADSOUND1', number></td><td></td></tr>
+                <tr><td>reloadSound2</td><td>CON_NATIVE_GAMEVAR<'WEAP8_RELOADSOUND2', number></td><td></td></tr>
+                <tr><td>selectSound</td><td>CON_NATIVE_GAMEVAR<'WEAP8_SELECTSOUND', number></td><td></td></tr>
+                <tr><td>fireSound</td><td>CON_NATIVE_GAMEVAR<'WEAP8_FIRESOUND', number></td><td></td></tr>
+                <tr><td>initialSound</td><td>CON_NATIVE_GAMEVAR<'WEAP8_INITIALSOUND', number></td><td></td></tr>
+                <tr><td>sound2Sound</td><td>CON_NATIVE_GAMEVAR<'WEAP8_SOUND2SOUND', number></td><td></td></tr>
+                <tr><td>sound2Time</td><td>CON_NATIVE_GAMEVAR<'WEAP8_SOUND2TIME', number></td><td></td></tr>
+            </table>
+
+            <h3 id="IWeapon09">IWeapon09</h3>
+            <p>Interface for the Freezer weapon (weapon 09).</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>flags</td><td>CON_NATIVE_GAMEVAR<'WEAP9_FLAGS', number></td><td>Flags for the weapon (does not control the projectile)</td></tr>
+                <tr><td>clip</td><td>CON_NATIVE_GAMEVAR<'WEAP9_CLIP', number></td><td></td></tr>
+                <tr><td>reload</td><td>CON_NATIVE_GAMEVAR<'WEAP9_RELOAD', number></td><td></td></tr>
+                <tr><td>fireDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP9_FIREDELAY', number></td><td></td></tr>
+                <tr><td>holdDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP9_HOLDDELAY', number></td><td></td></tr>
+                <tr><td>totalTime</td><td>CON_NATIVE_GAMEVAR<'WEAP9_TOTALTIME', number></td><td></td></tr>
+                <tr><td>flashColor</td><td>CON_NATIVE_GAMEVAR<'WEAP9_FLASHCOLOR', number></td><td></td></tr>
+                <tr><td>shoots</td><td>CON_NATIVE_GAMEVAR<'WEAP9_SHOOTS', number></td><td></td></tr>
+                <tr><td>shotsPerBurst</td><td>CON_NATIVE_GAMEVAR<'WEAP9_SHOTSPERBURST', number></td><td></td></tr>
+                <tr><td>spawn</td><td>CON_NATIVE_GAMEVAR<'WEAP9_SPAWN', number></td><td></td></tr>
+                <tr><td>spawnTime</td><td>CON_NATIVE_GAMEVAR<'WEAP9_SPAWNTIME', number></td><td></td></tr>
+                <tr><td>reloadSound1</td><td>CON_NATIVE_GAMEVAR<'WEAP9_RELOADSOUND1', number></td><td></td></tr>
+                <tr><td>reloadSound2</td><td>CON_NATIVE_GAMEVAR<'WEAP9_RELOADSOUND2', number></td><td></td></tr>
+                <tr><td>selectSound</td><td>CON_NATIVE_GAMEVAR<'WEAP9_SELECTSOUND', number></td><td></td></tr>
+                <tr><td>fireSound</td><td>CON_NATIVE_GAMEVAR<'WEAP9_FIRESOUND', number></td><td></td></tr>
+                <tr><td>initialSound</td><td>CON_NATIVE_GAMEVAR<'WEAP9_INITIALSOUND', number></td><td></td></tr>
+                <tr><td>sound2Sound</td><td>CON_NATIVE_GAMEVAR<'WEAP9_SOUND2SOUND', number></td><td></td></tr>
+                <tr><td>sound2Time</td><td>CON_NATIVE_GAMEVAR<'WEAP9_SOUND2TIME', number></td><td></td></tr>
+            </table>
+
+            <h3 id="IWeapon10">IWeapon10</h3>
+            <p>Interface for the Hand Remot/Detonator weapon (weapon 10).</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>flags</td><td>CON_NATIVE_GAMEVAR<'WEAPON10_FLAGS', number></td><td>Flags for the weapon (does not control the projectile)</td></tr>
+                <tr><td>clip</td><td>CON_NATIVE_GAMEVAR<'WEAP10_CLIP', number></td><td></td></tr>
+                <tr><td>reload</td><td>CON_NATIVE_GAMEVAR<'WEAP10_RELOAD', number></td><td></td></tr>
+                <tr><td>fireDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP10_FIREDELAY', number></td><td></td></tr>
+                <tr><td>holdDelay</td><td>CON_NATIVE_GAMEVAR<'WEAP10_HOLDDELAY', number></td><td></td></tr>
+                <tr><td>totalTime</td><td>CON_NATIVE_GAMEVAR<'WEAP10_TOTALTIME', number></td><td></td></tr>
+                <tr><td>flashColor</td><td>CON_NATIVE_GAMEVAR<'WEAP10_FLASHCOLOR', number></td><td></td></tr>
+                <tr><td>shoots</td><td>CON_NATIVE_GAMEVAR<'WEAP10_SHOOTS', number></td><td></td></tr>
+                <tr><td>shotsPerBurst</td><td>CON_NATIVE_GAMEVAR<'WEAP10_SHOTSPERBURST', number></td><td></td></tr>
+                <tr><td>spawn</td><td>CON_NATIVE_GAMEVAR<'WEAP10_SPAWN', number></td><td></td></tr>
+                <tr><td>spawnTime</td><td>CON_NATIVE_GAMEVAR<'WEAP10_SPAWNTIME', number></td><td></td></tr>
+                <tr><td>reloadSound1</td><td>CON_NATIVE_GAMEVAR<'WEAP10_RELOADSOUND1', number></td><td></td></tr>
+                <tr><td>reloadSound2</td><td>CON_NATIVE_GAMEVAR<'WEAP10_RELOADSOUND2', number></td><td></td></tr>
+                <tr><td>selectSound</td><td>CON_NATIVE_GAMEVAR<'WEAP10_SELECTSOUND', number></td><td></td></tr>
+                <tr><td>fireSound</td><td>CON_NATIVE_GAMEVAR<'WEAP10_FIRESOUND', number></td><td></td></tr>
+                <tr><td>initialSound</td><td>CON_NATIVE_GAMEVAR<'WEAP10_INITIALSOUND', number></td><td></td></tr>
+                <tr><td>sound2Sound</td><td>CON_NATIVE_GAMEVAR<'WEAP10_SOUND2SOUND', number></td><td></td></tr>
+                <tr><td>sound2Time</td><td>CON_NATIVE_GAMEVAR<'WEAP10_SOUND2TIME', number></td><td></td></tr>
+            </table>
+        </div>
+
+        <div id="enum-reference" class="section">
+            <h2>Enum Reference</h2>
+            <h3 id="FileReadType">FileReadType</h3>
+            <table>
+                <tr>
+                    <th>Member</th>
+                    <th>Value</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>binary</td>
+                    <td>0</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>text</td>
+                    <td>1</td>
+                    <td>-</td>
+                </tr>
+            </table>
+            <h3 id="EOrientationFlags">EOrientationFlags</h3>
+<p>Bit-flags accepted by the Build-engine `rotatesprite*` family of functions.<br>Combine multiple flags with the bitwise OR (`|`) operator.</p>
+<table>
+<tr><th>Member</th><th>Value</th><th>Description</th></tr>
+<tr><td>TRANS1</td><td>1</td><td>Translucency level 1 (≈ 66 % opacity).</td></tr>
+<tr><td>AUTO</td><td>2</td><td>Enable 320 × 200 coordinate scaling (recommended for portability).</td></tr>
+<tr><td>YFLIP</td><td>4</td><td>Flip the sprite vertically; combine with angle = 1024 for X-flip.</td></tr>
+<tr><td>NOCLIP</td><td>8</td><td>Make sprite immune to screen-size changes (e.g. status bar).</td></tr>
+<tr><td>TOPLEFT</td><td>16</td><td>Treat the sprite’s top-left as its origin; ignore tile offsets.</td></tr>
+<tr><td>TRANS2</td><td>32</td><td>Translucency level 2 (≈ 33 % opacity). Requires `TRANS1`.</td></tr>
+<tr><td>NOMASK</td><td>64</td><td>Disable masking (and translucency).</td></tr>
+<tr><td>PERM</td><td>128</td><td>**Deprecated** “permanent” tile flag.</td></tr>
+<tr><td>ALIGN_L</td><td>256</td><td>Align sprite to the left edge on widescreen displays.</td></tr>
+<tr><td>ALIGN_R</td><td>512</td><td>Align sprite to the right edge on widescreen displays.</td></tr>
+<tr><td>STRETCH</td><td>1024</td><td>Stretch sprite to full resolution (pre-widescreen behaviour).</td></tr>
+<tr><td>ROTATESPRITE_FULL16</td><td>2048</td><td>Interpret coordinates as 16-bit-shifted “full-precision” values.</td></tr>
+<tr><td>LERP</td><td>4096</td><td>Interpolate position between calls (per `guniqhudid`).</td></tr>
+<tr><td>FORCELERP</td><td>8192</td><td>Force interpolation even when the tile number changes.</td></tr>
+</table>
+<h3 id="ETextFlags">ETextFlags</h3>
+<p>Bit-flags that control how EDuke32 renders on-screen strings.<br>Combine multiple flags with the bitwise OR (`|`) operator to build a render style.</p>
+<table>
+<tr><th>Member</th><th>Value</th><th>Description</th></tr>
+<tr><td>XRIGHT</td><td>1</td><td>Right-align text on the x axis.</td></tr>
+<tr><td>XCENTER</td><td>2</td><td>Center-align text on the x axis.</td></tr>
+<tr><td>YBOTTOM</td><td>4</td><td>Bottom-align text on the y axis.</td></tr>
+<tr><td>YCENTER</td><td>8</td><td>Center-align text on the y axis.</td></tr>
+<tr><td>INTERNALSPACE</td><td>16</td><td>Engine chooses `<xspace>`; your value is added.</td></tr>
+<tr><td>TILESPACE</td><td>32</td><td>`<xspace>` derived from the width of the tile after `'~'`.</td></tr>
+<tr><td>INTERNALLINE</td><td>64</td><td>Engine chooses `<yline>`; your value is added.</td></tr>
+<tr><td>TILELINE</td><td>128</td><td>`<yline>` derived from the height of the tile after `'~'`.</td></tr>
+<tr><td>XOFFSETZERO</td><td>256</td><td>Treat `<xbetween>` as a constant glyph width.</td></tr>
+<tr><td>XJUSTIFY</td><td>512</td><td>Justify text horizontally (compatible with `XRIGHT` and `XCENTER`).</td></tr>
+<tr><td>YOFFSETZERO</td><td>1024</td><td>Treat `<ybetween>` as a constant line height.</td></tr>
+<tr><td>YJUSTIFY</td><td>2048</td><td>Justify text vertically (compatible with `YBOTTOM` and `YCENTER`).</td></tr>
+<tr><td>RESERVED_4096</td><td>4096</td><td>*Reserved – do not use.*</td></tr>
+<tr><td>UPPERCASE</td><td>8192</td><td>Force all letters to uppercase.</td></tr>
+<tr><td>INVERTCASE</td><td>16384</td><td>Swap the case of each letter (combine with `UPPERCASE` for lowercase).</td></tr>
+<tr><td>IGNOREESCAPE</td><td>32768</td><td>Ignore palette escape sequences (`#`, `##`).</td></tr>
+<tr><td>LITERALESCAPE</td><td>65536</td><td>Render palette escape sequences literally.</td></tr>
+<tr><td>RESERVED_131072</td><td>131072</td><td>*Reserved – do not use.*</td></tr>
+<tr><td>CONSTWIDTHNUMS</td><td>262144</td><td>Render numerals with constant width.</td></tr>
+<tr><td>DIGITALNUMBER</td><td>524288</td><td>Tile order starts at `'0'`; for digital number tiles.</td></tr>
+<tr><td>BIGALPHANUM</td><td>1048576</td><td>Use the red main-menu font tile order.</td></tr>
+<tr><td>GRAYFONT</td><td>2097152</td><td>Use the gray-font tile order.</td></tr>
+<tr><td>NOLOCALE</td><td>4194304</td><td>Skip localization translation.</td></tr>
+<tr><td>VARHEIGHT</td><td>8388608</td><td>Shift by half a tile when `RS_TOPLEFT` is not set.</td></tr>
+<tr><td>CENTERCONSTWIDTH</td><td>16777216</td><td>Center glyphs and respect `<xbetween>` in constant-width mode.</td></tr>
+</table>
+<h3 id="ESpriteFlags">ESpriteFlags</h3>
+<p>**ESpriteFlags** – per-sprite runtime flags (the “SFLAG_” bits from EDuke 32).</p>
+<table>
+<tr><th>Member</th><th>Value</th><th>Description</th></tr>
+<tr><td>SHADOW</td><td>1</td><td>Generate a shadow (`spriteshadow`).</td></tr>
+<tr><td>NVG</td><td>2</td><td>Switch to palette 6 when night-vision goggles are active (`spritenvg`).</td></tr>
+<tr><td>NOSHADE</td><td>4</td><td>Ignore sector shade (`spritenoshade`).</td></tr>
+<tr><td>PROJECTILE</td><td>8</td><td>Was created with `defineprojectile`.</td></tr>
+<tr><td>DECAL</td><td>16</td><td>Prevents teleporting; not entered into the decal-deletion queue.</td></tr>
+<tr><td>BADGUY</td><td>32</td><td>Marks the sprite as an enemy (`useractor`).</td></tr>
+<tr><td>NOPAL</td><td>64</td><td>Immune to floor palette (`spritenopal`).</td></tr>
+<tr><td>NOEVENTS</td><td>128</td><td>Excluded from `EVENT_GAME` and `EVENT_PREGAME`.</td></tr>
+<tr><td>NOLIGHT</td><td>256</td><td>Suppress hard-coded Polymer lights.</td></tr>
+<tr><td>USEACTIVATOR</td><td>512</td><td>Reserved flag used by `useractor` (`activate`).</td></tr>
+<tr><td>NULL</td><td>1024</td><td>“Null sprite” placeholder in multiplayer (internal).</td></tr>
+<tr><td>NOCLIP</td><td>2048</td><td>Calls `clipmove()` with a 0 clipmask (no sprite collisions) – useful for particles.</td></tr>
+<tr><td>NOFLOORSHADOW</td><td>4096</td><td>Don’t draw a floor shadow.</td></tr>
+<tr><td>SMOOTHMOVE</td><td>8192</td><td>Enable client-side interpolation (smooth movement).</td></tr>
+<tr><td>NOTELEPORT</td><td>16384</td><td>Prevent teleportation.</td></tr>
+<tr><td>BADGUYSTAYPUT</td><td>32768</td><td>Enemy will not leave its original sector.</td></tr>
+<tr><td>CACHE</td><td>65536</td><td>Engine-side cache hint.</td></tr>
+<tr><td>ROTFIXED</td><td>131072</td><td>Rotation-fixed around a pivot to avoid round-off drift.</td></tr>
+<tr><td>HARDCODED_BADGUY</td><td>262144</td><td>Hard-coded enemy marker (internal).</td></tr>
+<tr><td>DIDNOSE7WATER</td><td>524288</td><td>Temporary internal flag.</td></tr>
+<tr><td>NODAMAGEPUSH</td><td>1048576</td><td>Actor isn’t pushed back by damage.</td></tr>
+<tr><td>NOWATERDIP</td><td>2097152</td><td>Actor won’t dip into water sectors (lotag 1).</td></tr>
+<tr><td>HURTSPAWNBLOOD</td><td>4194304</td><td>Spawn blood when hurt (as hard-coded enemies do).</td></tr>
+<tr><td>GREENSLIMEFOOD</td><td>8388608</td><td>Can be eaten by **GREENSLIME** (Protozoid Slimer).</td></tr>
+<tr><td>REALCLIPDIST</td><td>16777216</td><td>Always use its explicit `clipdist`.</td></tr>
+<tr><td>WAKEUPBADGUYS</td><td>33554432</td><td>Wakes up nearby enemies when activated.</td></tr>
+<tr><td>DAMAGEEVENT</td><td>67108864</td><td>Fires `EVENT_(POST)DAMAGESPRITE` when damaged.</td></tr>
+<tr><td>NOWATERSECTOR</td><td>134217728</td><td>Cannot move into water sectors.</td></tr>
+<tr><td>QUEUEDFORDELETE</td><td>268435456</td><td>Marked for deletion by the engine.</td></tr>
+</table>
+<h3 id="EPlayerStates">EPlayerStates</h3>
+<p>Represents the valid player states.<br>This enum is used to determine the current state of the player.<br>Only one state should be set at a time.</p>
+<table>
+<tr><th>Member</th><th>Value</th><th>Description</th></tr>
+<tr><td>standing</td><td>1</td><td>The player is standing.</td></tr>
+<tr><td>walking</td><td>2</td><td>The player is walking.</td></tr>
+<tr><td>running</td><td>4</td><td>The player is running.</td></tr>
+<tr><td>ducking</td><td>8</td><td>The player is ducking.</td></tr>
+<tr><td>falling</td><td>16</td><td>The player is falling.</td></tr>
+<tr><td>jumping</td><td>32</td><td>The player is jumping.</td></tr>
+<tr><td>higher</td><td>64</td><td>The player is in a higher state (e.g., during a jump).</td></tr>
+<tr><td>walkingback</td><td>128</td><td>The player is walking backwards.</td></tr>
+<tr><td>runningback</td><td>256</td><td>The player is running backwards.</td></tr>
+<tr><td>kicking</td><td>512</td><td>The player is kicking.</td></tr>
+<tr><td>shrunk</td><td>1024</td><td>The player is shrunk.</td></tr>
+<tr><td>jetpack</td><td>2048</td><td>The player is using a jetpack.</td></tr>
+<tr><td>onsteroids</td><td>4096</td><td>The player is on steroids.</td></tr>
+<tr><td>onground</td><td>8192</td><td>The player is on the ground.</td></tr>
+<tr><td>alive</td><td>16384</td><td>The player is alive.</td></tr>
+<tr><td>dead</td><td>32768</td><td>The player is dead.</td></tr>
+<tr><td>facing</td><td>65536</td><td>The player is facing (direction indicated).</td></tr>
+</table>
+<h3 id="EStats">EStats</h3>
+<p>SpriteCStat flags control how a sprite is rendered and interacts in the world.</p>
+<table>
+<tr><th>Member</th><th>Value</th><th>Description</th></tr>
+<tr><td>BLOCK</td><td>1</td><td>Make sprite blockable</td></tr>
+<tr><td>TRANSLUCENT</td><td>2</td><td>Make sprite transparent (first level)</td></tr>
+<tr><td>XFLIP</td><td>4</td><td>Flip sprite around X-axis</td></tr>
+<tr><td>YFLIP</td><td>8</td><td>Flip sprite around Y-axis</td></tr>
+<tr><td>WALL</td><td>16</td><td>Draw sprite as vertically flat (wall-aligned)</td></tr>
+<tr><td>FLOOR</td><td>32</td><td>Draw sprite as horizontally flat (floor-aligned)</td></tr>
+<tr><td>ONE_SIDE</td><td>64</td><td>Make sprite one-sided</td></tr>
+<tr><td>YCENTER</td><td>128</td><td>Half-submerged (Y-centered)</td></tr>
+<tr><td>BLOCK_HITSCAN</td><td>256</td><td>Make sprite hittable by hitscan weapons</td></tr>
+<tr><td>TRANS_FLIP</td><td>512</td><td>Second transparency level (combine with TRANSLUCENT)</td></tr>
+<tr><td>DRAW_PRIORITY</td><td>1024</td><td>Draw in front of other sprites (high priority)</td></tr>
+<tr><td>NOSHADE</td><td>2048</td><td>Ignore sector shading</td></tr>
+<tr><td>NO_POLYMER_SHADOW</td><td>8192</td><td>Do not cast a Polymer shadow</td></tr>
+<tr><td>INVISIBLE_SHADOW</td><td>16384</td><td>Invisible but still casts Polymer shadow</td></tr>
+<tr><td>INVISIBLE</td><td>32768</td><td>Completely invisible (skip rendering & events)</td></tr>
+</table>
+<h3 id="EMoveFlags">EMoveFlags</h3>
+<p>Flags for movement.</p>
+<table>
+<tr><th>Member</th><th>Value</th><th>Description</th></tr>
+<tr><td>faceplayer</td><td>1</td><td>Actor faces the player.</td></tr>
+<tr><td>geth</td><td>2</td><td>Use horizontal velocity.</td></tr>
+<tr><td>getv</td><td>4</td><td>Use vertical velocity.</td></tr>
+<tr><td>randomangle</td><td>8</td><td>Actor will face random direction.</td></tr>
+<tr><td>faceplayerslow</td><td>16</td><td>Same as faceplayer, but done gradually.</td></tr>
+<tr><td>spin</td><td>32</td><td>Spin in a clockwise circle.</td></tr>
+<tr><td>faceplayersmart</td><td>64</td><td>Same as faceplayer, but with a slight "lead" on position.</td></tr>
+<tr><td>fleeenemy</td><td>128</td><td>Actor faces away from the player.</td></tr>
+<tr><td>jumptoplayer</td><td>257</td><td>Actor will move vertically and then fall as if jumping.</td></tr>
+<tr><td>seekplayer</td><td>512</td><td>Actor will try to find the best path to the nearest player.</td></tr>
+<tr><td>furthestdir</td><td>1024</td><td>Actor faces the furthest distance from the closest player.</td></tr>
+<tr><td>dodgebullet</td><td>4096</td><td>Actor attempts to avoid all shots directed at him. The actor will not avoid GROWSPARK.</td></tr>
+</table>
+<h3 id="EOperateFlags">EOperateFlags</h3>
+<p>Enumeration for Operate function flags.<br>Determines how the Operate function works by activating a specific element:<br>doors, activators, master switches, respawns, sectors, or all activators within a sector.<br>Only one flag should be set at a time.</p>
+<table>
+<tr><th>Member</th><th>Value</th><th>Description</th></tr>
+<tr><td>doors</td><td>1</td><td>Activates doors.</td></tr>
+<tr><td>activators</td><td>2</td><td>Activates activators.</td></tr>
+<tr><td>master_switches</td><td>4</td><td>Activates master switches.</td></tr>
+<tr><td>respawns</td><td>8</td><td>Activates respawns.</td></tr>
+<tr><td>sectors</td><td>16</td><td>Activates sectors.</td></tr>
+<tr><td>all_activators_in_a_sector</td><td>32</td><td>Activates all activators within a sector.</td></tr>
+</table>
+
+        </div>
+    </div>
+</body>
+</html>

@@ -21,7 +21,7 @@ The compiler is a command-line tool with customizable parameters:
 ### Banner
 
 ```
-TypeCON Compiler BETA Version 0.5.0 
+TypeCON Compiler BETA Version 0.6.0 
 By ItsMarcos - Use '--help or -?' to get the list of commands 
 ```
 
@@ -56,18 +56,24 @@ Usage:
 
 **Compile options**
 
-- **`--input or -i`**: For the file path to be compiled.
-- **`--input_list or -il`**: For a list of files to be compiled.
-- **`--output or -o`**: For the output file name.
-- **`--output_folder or -of`**: For the output folder path.
-- **`--detail_lines or -dl`**: To write the TS lines inside the CON code.
-- **`--stack_size or -ss`**: To define the stack size.
-- **`--headerless or -hl`**: Don't insert the header code (init code and states) inside the output CON.
-- **`--header or -h`**: Create the header file.
-- **`--link or -l`**: Create the header and the init files with the following list of CON files (separated by "").
-- **`--one_file or -1f`**: Compiles all files into one (must be used with -o)
-- **`--default_inclusion or -di`**: Default inclusion (GAME.CON).
-- **`-eduke_init or -ei`**: Init file is EDUKE.CON.
+- **`-i, --input`**: for the file path to be compiled
+- **`-if, --input_folder`**: for the path folder to be compiled (compiles all files inside)
+- **`-il, --input_list`**: for a list of files to be compiled
+- **`-o, --output`**: for the output file name
+- **`-of, --output_folder`**: for the output folder path
+- **`-lp, --line_print`**: to write the TS lines inside the CON code
+- **`-sp, --symbol_print`**: to write the symbols inside the CON code
+- **`-ss, --stack_size`**: to define the stack size
+- **`-hs, --heap_size`**: to define the heap's size
+- **`-ps, --page_size`**: to define the heap page's minimum size
+- **`-pn, --page_number`**: to define the default number of heap pages
+- **`-hl, --headerless`**: Don't insert the header code (init code and states) inside the output CON
+- **`-h, --header`**: Create the header file
+- **`-np, --no_precompiled`**: Don't link pre-compiled modules
+- **`-l, --link`**: Create the header and the init files with the following list of CON files (separated by "")
+- **`-1f, --one_file`**: Compile all the code into one file (must be used with -o)
+- **`-di, --default_inclusion`**: Default inclusion (GAME.CON)
+- **`-ei, --eduke_init`**: Init file is EDUKE.CON
 
 ---
 
