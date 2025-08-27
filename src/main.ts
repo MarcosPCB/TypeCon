@@ -221,7 +221,7 @@ async function Setup() {
         const prjFolder = `${process.cwd()}/include`;
         if (!fs.existsSync(prjFolder))
             fs.mkdirSync(prjFolder);
-        const incFolder = path.join(process.execPath, '..', 'include');
+        const incFolder = path.join(__dirname, '..', 'include');
         await fsExtra.copy(incFolder, prjFolder, { overwrite: true });
     } catch (err) {
         console.log(`ERROR: unable to copy files to ${path.join(process.cwd(), 'include')}`, err);
@@ -293,7 +293,7 @@ async function Setup() {
 
         case 'Basic':
             try {
-                const templatesFolder = path.join(process.execPath, '../templates');
+                const templatesFolder = path.join(__dirname, '../templates');
                 const prjTemplatesFolder = path.join(process.cwd(), folder);
 
                 await fsExtra.copy(templatesFolder, prjTemplatesFolder, { overwrite: true });
