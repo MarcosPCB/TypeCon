@@ -149,6 +149,12 @@ Contributions are welcome! If you encounter bugs or have suggestions for improve
 
 ---
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a list of changes.
+
+---
+
 ## License
 
 This project is licensed under the GNU General Public License v3. See the LICENSE file for details.
