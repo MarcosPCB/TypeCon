@@ -1,6 +1,6 @@
 {
   "name": "typecon",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Compiles Typescript code into CON",
   "repository": "https://github.com/MarcosPCB/TypeCon",
   "main": "./dist/main.js",
