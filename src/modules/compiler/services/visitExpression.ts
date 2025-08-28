@@ -1,4 +1,4 @@
-import { Expression, SyntaxKind, BinaryExpression, CallExpression, ObjectLiteralExpression, PropertyAccessExpression, NumericLiteral, PrefixUnaryExpression, ParenthesizedExpression, ArrowFunction } from "ts-morph";
+import { Expression, SyntaxKind, BinaryExpression, CallExpression, ObjectLiteralExpression, PropertyAccessExpression, NumericLiteral, PrefixUnaryExpression, ParenthesizedExpression, ArrowFunction, FunctionExpression } from "ts-morph";
 import { CompilerContext, ESymbolType } from "../Compiler";
 import { evaluateLiteralExpression } from "../helper/helpers";
 import { visitBinaryExpression } from "./visitBinaryExpression";
@@ -9,6 +9,7 @@ import { visitObjectLiteral } from "./visitObjectLiteral";
 import { visitLeafOrLiteral } from "./visitLeafOrLiteral";
 import { visitParenthesizedExpression } from "./visitParenthesizedExpression";
 import { visitUnaryExpression } from "./visitUnaryExpression";
+import { subFunctionInit } from "./subFunctionInit";
 
 /******************************************************************************
    * Expression
@@ -45,7 +46,12 @@ export function visitExpression(expr: Expression, context: CompilerContext, reg 
         return code + visitParenthesizedExpression(expr as ParenthesizedExpression, context, reg);
 
       case SyntaxKind.ArrowFunction:
-        return code + visitArrowFunctionExpression(expr as ArrowFunction, context);
+        subFunctionInit(expr as ArrowFunction, context);
+        return code + `state pushsi\nset rsi ${context.subFunction.index * 100 + 0x10000}\nstate _subFunctions_${context.subFunction.hash}\nstate popsi\n`;
+
+      case SyntaxKind.FunctionExpression:
+        subFunctionInit(expr as FunctionExpression, context);
+        return code + `state pushsi\nset rsi ${context.subFunction.index * 100 + 0x10000}\nstate _subFunctions_${context.subFunction.hash}\nstate popsi\n`;
 
       default:
         return code + visitLeafOrLiteral(expr, context, undefined, reg);

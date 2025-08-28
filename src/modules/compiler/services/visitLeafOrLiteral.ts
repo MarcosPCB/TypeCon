@@ -68,6 +68,9 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
         if (off.type & ESymbolType.array)
           context.curExpr |= ESymbolType.array;
 
+        if(off.type & ESymbolType.sub_function)
+          context.curExpr |= ESymbolType.sub_function | ESymbolType.function;
+
         if (off.heap)
           code += `set rf 1\n`;
 

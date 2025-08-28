@@ -12,6 +12,7 @@ import { visitFunctionDeclaration } from './services/visitFunctionDeclaration';
 import { visitClassDeclaration } from './services/visitClassDeclaration';
 import { visitStatement } from './services/visitStatement';
 import { colorText } from '../../main';
+import { indent } from './helper/indent';
 
 export type DiagnosticSeverity = "error" | "warning";
 
@@ -68,6 +69,7 @@ export enum ESymbolType {
   enum = 4096,
   constant = 8192,
   not_compiled = 65536,
+  sub_function = 131072 // Function or arrow function saved as reference/pointer
 }
 
 /**
@@ -98,10 +100,11 @@ export interface SymbolDefinition {
   //This is only used IF we do something like 'const s = sprites[2]', 
   //otherwise, the compiler treats like a pointer to the complete array structure: 'const s = sprites'
   native_pointer_index?: boolean,
-  children?: { [key: string]: SymbolDefinition | EnumDefinition }; // For nested objects.
+
+  children?: { [key: string]: SymbolDefinition | EnumDefinition }; // For nested objects or enums.
   CON_code?: string,
   returns?: Exclude<ESymbolType, ESymbolType.enum> | null;
-  literal?: string | number | null;
+  literal?: string | number | null; //Can hold the sub function address
   parent?: SymbolDefinition;
 }
 
@@ -117,6 +120,12 @@ export interface EnumDefinition {
   name: string,
   type: ESymbolType.enum,
   children: Record<string, number>
+}
+
+export interface ISubFunction {
+  code: string
+  hash: string
+  index: number
 }
 
 /** 
@@ -180,6 +189,9 @@ export interface CompilerContext {
 
   initCode: string;
 
+  subFunction: ISubFunction; //Sub-functions are per file
+  isInSubFunction: boolean;
+
   inSwitch: boolean;
   hasLocalVars: boolean;
   usingRD: boolean;
@@ -239,6 +251,15 @@ export class TsToConCompiler {
       overwrite: true
     });
 
+    if(prvContext) {
+      if(prvContext.subFunction)
+        prvContext.subFunction = {
+          code: '',
+          hash: '',
+          index: 0,
+      }
+    }
+
     const context: CompilerContext = prvContext ? prvContext : {
       localVarOffset: {},
       localVarCount: 0,
@@ -272,6 +293,13 @@ export class TsToConCompiler {
       curSymRet: null,
       isInLoop: false,
       mainBFunc: false,
+
+      subFunction: {
+        code: '',
+        hash: '',
+        index: 0
+      },
+      isInSubFunction: false,
 
       initCode: '',
       inSwitch: false,
@@ -331,8 +359,6 @@ export class TsToConCompiler {
 
     const modules = sf.getModules();
 
-    const options = context.options
-
     if (modules.length > 0) {
       if (modules.findIndex(e => e.getName() == 'noread') != -1) {
         context.currentFile.options = ECompileOptions.no_read;
@@ -364,6 +390,18 @@ export class TsToConCompiler {
         outputLines.push(visitStatement(st, context));
       }
     });
+
+    if(context.subFunction.code != '') {
+      //Finish the sub-functions routine
+      context.subFunction.code += indent(`endswitch\n`, 2)
+        + indent('} else {\n', 1)
+        + indent(`set rd 1\ngetcurraddress ra\nife rd 1\n{\n`, 2)
+        + indent(`state push\njump rb\n`, 3)
+        + indent('}\n', 2)
+        + indent('}\nstate popd\n', 1)
+        + 'ends\n';
+      outputLines.unshift(context.subFunction.code);
+    }
 
     if (modules.length > 0) {
       if (modules.findIndex(e => e.getName() == 'nocompile') != -1)

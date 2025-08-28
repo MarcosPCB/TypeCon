@@ -93,11 +93,20 @@ class displayRest extends CEvent {
         PrintValue(u.length);
         PrintValue(u[0]);
 
+        const test = () => {
+            const op = 5;
+            PrintValue(1);
+            PrintValue(op);
+        }
+
+        const ty = test;
+        ty();
+
         /**
          * This commands prints the entire stack and heap usage to the console and breaks the game
          * unless you're using a debug version of Eduke32
          */
-        //PrintStackAndBreak();
+        PrintStackAndBreak();
     }
 }
 

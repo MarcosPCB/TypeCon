@@ -497,6 +497,16 @@ defstate popi
     sub rsp 1
 ends
 
+defstate pushsi
+    add rsp 1
+    setarray flat[rsp] rsi
+ends
+
+defstate popsi
+    set rsi flat[rsp]
+    sub rsp 1
+ends
+
 defstate _GetFreePages
     set _HEAPi 0 //Page index
     set _HEAPj ${stackSize} //Current address

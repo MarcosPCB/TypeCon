@@ -1,10 +1,14 @@
-import { VariableDeclaration, SyntaxKind, ObjectLiteralExpression, Expression } from "ts-morph";
+import { VariableDeclaration, SyntaxKind, ObjectLiteralExpression, Expression, ArrowFunction, FunctionExpression } from "ts-morph";
 import { CompilerContext, ESymbolType } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
 import { ECompileOptions } from "../framework";
 import { getObjectTypeLayout } from "./getObjectLayout";
 import { visitObjectLiteral } from "./visitObjectLiteral";
 import { visitExpression } from "./visitExpression";
+import { indent } from "../helper/indent";
+import { visitArrowFunctionExpression } from "./visitArrowFunctionExpression";
+import { createHash } from "crypto";
+import { subFunctionInit } from "./subFunctionInit";
 
 export function visitVariableDeclaration(decl: VariableDeclaration, context: CompilerContext): string {
     const varName = decl.getName();
@@ -64,10 +68,20 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
     } else {
       if (context.currentFile.options & ECompileOptions.no_compile)
         return code;
+
       // Process non-object initializers as before.
       //const localVars = context.localVarCount;
-      if (init)
-        code += visitExpression(init as Expression, context);
+      if (init) {
+        if(init.isKind(SyntaxKind.ArrowFunction) || init.isKind(SyntaxKind.FunctionExpression)) {
+          //This is what we called a "sub-function".
+          //The generated code gets saved inside the _subFunction state and receives and address
+
+          subFunctionInit(init as ArrowFunction | FunctionExpression, context);
+
+          code += `set ra ${context.subFunction.index * 100 + 0x10000}\n`;
+          context.curExpr = ESymbolType.sub_function | ESymbolType.function;
+        } else code += visitExpression(init as Expression, context);
+      }
       //if(!context.stringExpr || (context.stringExpr && context.arrayExpr))
       code += `add rsp 1\nsetarray flat[rsp] ra\n`;
       context.symbolTable.set(varName, {
@@ -75,7 +89,7 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
         offset: context.localVarCount, size: 1,
         native_pointer: context.localVarNativePointer,
         native_pointer_index: context.localVarNativePointerIndexed,
-        children: context.curSymRet ? context.curSymRet.children : undefined
+        children: context.curSymRet ? context.curSymRet.children : undefined,
       });
 
       code += context.options.symbolPrint ? `/*Symbol ${JSON.stringify(context.symbolTable.get(varName), undefined, 2)}*/\n` : '';

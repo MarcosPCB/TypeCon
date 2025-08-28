@@ -389,7 +389,10 @@ set rb ra
       if (isClass)
         code += `set ri rbp\nadd ri ${func.offset}\nset r${totalArgs - 1} flat[ri]\n`;
 
-      code += `state ${isClass ? func.children[fnName].name : (func.CON_code ? func.CON_code : func.name)}\n${(reg != 'rb' && func.returns) ? `set ${reg} rb\n` :  ''}`;
+      if(func.type & ESymbolType.sub_function) {
+        code += `state pushsi\nset rsi rbp\nadd rsi ${func.offset}\nset rsi flat[rsi]\n`;
+        code += `state _subFunctions_${context.subFunction.hash}\nstate popsi\n${(reg != 'rb' && func.returns) ? `set ${reg} rb\n` :  ''}`;
+      } else code += `state ${isClass ? func.children[fnName].name : (func.CON_code ? func.CON_code : func.name)}\n${(reg != 'rb' && func.returns) ? `set ${reg} rb\n` :  ''}`;
       if (totalArgs > 0) {
         code += `state popr${totalArgs > 12 ? 'all' : totalArgs}\n`;
         context.localVarCount -= totalArgs;

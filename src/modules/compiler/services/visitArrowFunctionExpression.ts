@@ -9,12 +9,19 @@ import { visitStatement } from './visitStatement';
    * VISIT ARROW FUNCTION EXPRESSION
    * => state <functionName> { ... }
    ****************************************************************************/
+
+/*
+Arrow function expression and Function expressions will be the same. (if they are kept as references for variables)
+They will be saved inside a state routine within a switch. The case clause will hold an address.
+So everytime this function gets called, the state _subFunction gets called with RSI holding the address.
+*/
 export function visitArrowFunctionExpression(af: ArrowFunction, context: CompilerContext): string {
     // new local context
     const localCtx: CompilerContext = {
       ...context,
       localVarOffset: {},
       localVarCount: 0,
+      isInSubFunction: true,
       paramMap: {},
       isInLoop: false,
       mainBFunc: false,

@@ -27,6 +27,7 @@ let initFunc = false;
 let precompiled_modules = true;
 let heap_page_size = 4;
 let heap_page_number = 128;
+let eduke_init = false;
 
 export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
     switch (color) {
@@ -129,12 +130,12 @@ function GetAllFilesFromPath(iPath: string) {
 function DetectPackageManager(projectRoot: string): 'yarn' | 'npm' {
     return fs.existsSync(path.join(projectRoot, 'yarn.lock'))
         ? 'yarn'
-        : fs.existsSync(path.join(projectRoot, 'package.json')) ?'npm' : null;
+        : fs.existsSync(path.join(projectRoot, 'package.json')) ? 'npm' : null;
 }
 
 async function InstallTypescriptPlugin(projectRoot: string, pluginName: string) {
     let manager = DetectPackageManager(projectRoot);
-    if(!manager) {
+    if (!manager) {
         console.log(colorText(`No package manager found in ${projectRoot}`, 'yellow'));
         let answer = await inquirer.prompt({
             type: 'list',
@@ -144,25 +145,25 @@ async function InstallTypescriptPlugin(projectRoot: string, pluginName: string) 
             default: 'yarn'
         });
 
-        if(answer.choice === 'cancel') {
+        if (answer.choice === 'cancel') {
             console.log(colorText('Aborting...', 'magenta'));
             process.exit(1);
         }
-        
-        if(answer.choice === 'yarn') {
+
+        if (answer.choice === 'yarn') {
             console.log(colorText('Initializing yarn project...', 'magenta'));
             const result = await spawnSync('yarn', ['init', '-y'], { stdio: 'inherit', cwd: projectRoot, shell: true });
 
-            if(result.status !== 0) {
+            if (result.status !== 0) {
                 console.log(colorText('An error occurred during yarn initialization', 'red'));
                 process.exit(1);
             }
 
             manager = 'yarn';
-        } else if(answer.choice === 'npm') {
+        } else if (answer.choice === 'npm') {
             console.log(colorText('Initializing npm project...', 'magenta'));
             const result = await spawnSync('npm', ['init', '-y'], { stdio: 'inherit', cwd: projectRoot, shell: true });
-            if(result.status !== 0) {
+            if (result.status !== 0) {
                 console.log(colorText('An error occurred during yarn initialization', 'red'));
                 process.exit(1);
             }
@@ -184,10 +185,10 @@ async function InstallTypescriptPlugin(projectRoot: string, pluginName: string) 
 
     if (result.error)
         throw result.error;
-    
+
     if (result.status !== 0)
         throw new Error(`${manager} install failed with exit code ${result.status}`);
-    
+
 
     console.log(`\n✅ Installed ${pluginName} successfully.`);
 }
@@ -337,229 +338,240 @@ By ItsMarcos\x1b[0m - Use \x1b[95m'--help or -?'\x1b[0m to get the list of comma
 
 async function Main() {
     if (!fs.existsSync(process.cwd() + '/compiled'))
-    fs.mkdirSync(process.cwd() + '/compiled');
+        fs.mkdirSync(process.cwd() + '/compiled');
 
-for (let i = 0; i < process.argv.length; i++) {
-    const a = process.argv[i];
+    for (let i = 0; i < process.argv.length; i++) {
+        const a = process.argv[i];
 
-    if(a == '--version') {
-        console.log('Current version: ' + colorText('ALPHA', 'red') + ' ' + colorText(packConfig.version, 'green'));
-        process.exit(0);
+        if (a == '--version') {
+            console.log('Current version: ' + colorText('ALPHA', 'red') + ' ' + colorText(packConfig.version, 'green'));
+            process.exit(0);
+        }
+
+        if (a == '--input' || a == '-i') {
+            fileName = process.argv[i + 1];
+
+            if (input_folder != '') {
+                console.log(`Input folder already defined`);
+                process.exit(1);
+            }
+
+            if (!fs.existsSync(fileName)) {
+                console.log(`File: ${fileName} not found!`);
+                process.exit(1);
+            }
+        }
+
+        if (a == '--input_folder' || a == '-if') {
+            input_folder = process.argv[i + 1];
+
+            if (fileName != '') {
+                console.log(`Input file already defined`);
+                process.exit(1);
+            }
+
+            if (!fs.existsSync(input_folder) || !fs.readdirSync(input_folder)) {
+                console.log(`Path: ${input_folder} is not a folder or does not exist.`);
+                process.exit(1);
+            }
+
+            GetAllFilesFromPath(input_folder);
+        }
+
+        if (a == '--line_print' || a == '-lp')
+            line_print = true;
+
+        if (a == '--symbol_print' || a == '-sp')
+            symbol_print = true;
+
+        if (a == '--stack_size' || a == '-ss')
+            stack_size = Number(process.argv[i + 1]);
+
+        if (a == '--page_size' || a == '-ps')
+            heap_page_size = Number(process.argv[i + 1]);
+
+        if (a == '--page_number' || a == '-pn')
+            heap_page_number = Number(process.argv[i + 1]);
+
+        if (a == '--output_folder' || a == '-of')
+            output_folder = process.argv[i + 1];
+
+        if (a == '--output' || a == '-o')
+            output_file = process.argv[i + 1];
+
+        if (a == '--headerless' || a == '-hl')
+            compile_options |= 1;
+
+        if (a == '--header' || a == '-h') {
+            if (compile_options & 2) {
+                console.log(`ERROR: you can't use -h with -nh parameters together`);
+                process.exit(1);
+            }
+            compile_options |= 4 + 1;
+        }
+
+        if (a == '--no_precompiled' || a == '-np')
+            precompiled_modules = false;
+
+        if (a == '--one_file' || a == '-1f') {
+            if (compile_options & 4) {
+                console.log(`ERROR: you can't use -1f with -h parameter`)
+                process.exit(1);
+            }
+
+            compile_options |= 8;
+        }
+
+        if (a == '--link' || a == '-l') {
+            link = true;
+            for (let j = i + 1; j < process.argv.length; j++) {
+                const arg = process.argv[j];
+                if (arg.charAt(0) == '"' && arg.charAt(-1) == '"')
+                    linkList.push(arg);
+                else break;
+            }
+        }
+
+        if (a == '--input_list' || a == '-il') {
+            link = true;
+            for (let j = i + 1; j < process.argv.length; j++) {
+                const arg = process.argv[j];
+                if (arg.charAt(0) == '"' && arg.charAt(-1) == '"')
+                    files.push(arg);
+                else break;
+            }
+        }
+
+        if (a == '--default_inclusion' || a == '-di')
+            default_inclusion = true;
+
+        if (a == '--eduke_init' || a == '-ei') {
+            init_file = 'EDUKE.CON';
+            eduke_init = true;
+        }
+
+        if (a == 'setup') {
+            initFunc = true;
+            Setup();
+        }
+
+        if (a == '--help' || a == '-?') {
+            console.log(helpText)
+            process.exit(0);
+        }
     }
 
-    if (a == '--input' || a == '-i') {
-        fileName = process.argv[i + 1];
-
-        if (input_folder != '') {
-            console.log(`Input folder already defined`);
-            process.exit(1);
-        }
-
-        if (!fs.existsSync(fileName)) {
-            console.log(`File: ${fileName} not found!`);
-            process.exit(1);
-        }
-    }
-
-    if (a == '--input_folder' || a == '-if') {
-        input_folder = process.argv[i + 1];
-
-        if (fileName != '') {
-            console.log(`Input file already defined`);
-            process.exit(1);
-        }
-
-        if (!fs.existsSync(input_folder) || !fs.readdirSync(input_folder)) {
-            console.log(`Path: ${input_folder} is not a folder or does not exist.`);
-            process.exit(1);
-        }
-
-        GetAllFilesFromPath(input_folder);
-    }
-
-    if (a == '--line_print' || a == '-lp')
-        line_print = true;
-
-    if (a == '--symbol_print' || a == '-sp')
-        symbol_print = true;
-
-    if (a == '--stack_size' || a == '-ss')
-        stack_size = Number(process.argv[i + 1]);
-
-    if (a == '--page_size' || a == '-ps')
-        heap_page_size = Number(process.argv[i + 1]);
-
-    if (a == '--page_number' || a == '-pn')
-        heap_page_number = Number(process.argv[i + 1]);
-
-    if (a == '--output_folder' || a == '-of')
-        output_folder = process.argv[i + 1];
-
-    if (a == '--output' || a == '-o')
-        output_file = process.argv[i + 1];
-
-    if (a == '--headerless' || a == '-hl')
-        compile_options |= 1;
-
-    if (a == '--header' || a == '-h') {
-        if (compile_options & 2) {
-            console.log(`ERROR: you can't use -h with -nh parameters together`);
-            process.exit(1);
-        }
-        compile_options |= 4 + 1;
-    }
-
-    if (a == '--no_precompiled' || a == '-np')
-        precompiled_modules = false;
-
-    if (a == '--one_file' || a == '-1f') {
-        if (compile_options & 4) {
-            console.log(`ERROR: you can't use -1f with -h parameter`)
-            process.exit(1);
-        }
-
-        if (!output_file.length) {
+    if (!initFunc) {
+        if (compile_options & 8 && !(!output_file.length || !eduke_init)) {
             console.log(`ERROR: you must provide a name for the output file when using -1f`)
             process.exit(1);
         }
 
-        compile_options |= 8;
-    }
+        if (stack_size < 1024)
+            console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
-    if (a == '--link' || a == '-l') {
-        link = true;
-        for (let j = i + 1; j < process.argv.length; j++) {
-            const arg = process.argv[j];
-            if (arg.charAt(0) == '"' && arg.charAt(-1) == '"')
-                linkList.push(arg);
-            else break;
-        }
-    }
+        const compiler = new TsToConCompiler({ lineDetail: line_print, symbolPrint: symbol_print });
 
-    if (a == '--input_list' || a == '-il') {
-        link = true;
-        for (let j = i + 1; j < process.argv.length; j++) {
-            const arg = process.argv[j];
-            if (arg.charAt(0) == '"' && arg.charAt(-1) == '"')
-                files.push(arg);
-            else break;
-        }
-    }
+        let code = '';
 
-    if (a == '--default_inclusion' || a == '-di')
-        default_inclusion = true;
+        const initSys = new CONInit(stack_size, heap_page_size, heap_page_number, precompiled_modules);
 
-    if (a == '--eduke_init' || a == '-ei')
-        init_file = 'EDUKE.CON';
+        if (fileName != '') {
+            const file = fs.readFileSync(fileName);
 
-    if (a == 'setup') {
-        initFunc = true;
-        Setup();
-    }
+            const result = compiler.compile(file.toString(), fileName);
 
-    if (a == '--help' || a == '-?') {
-        console.log(helpText)
-        process.exit(0);
-    }
-}
-
-if (!initFunc) {
-    if (stack_size < 1024)
-        console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
-
-    const compiler = new TsToConCompiler({ lineDetail: line_print, symbolPrint: symbol_print });
-
-    let code = '';
-
-    const initSys = new CONInit(stack_size, heap_page_size, heap_page_number, precompiled_modules);
-
-    if (fileName != '') {
-        const file = fs.readFileSync(fileName);
-
-        const result = compiler.compile(file.toString(), fileName);
-
-        for (let i = compiledFiles.size - 1; i >= 0; i--) {
-            const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
-            code += f.code;
-        }
-
-        fileName = GetOutputName(fileName);
-
-        console.log(' ');
-
-        if (compile_options & 4) {
-            CreateInit([`${fileName}${fileName.endsWith('.con') ? '' : '.con'}`]);
-            console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
-            fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
-
-            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.endsWith('.con') ? '' : '.con'}`);
-            fs.writeFileSync(`${output_folder}/${fileName}${fileName.endsWith('.con') ? '' : '.con'}`, code);
-        } else {
-            if (default_inclusion)
-                code = `include GAME.CON\n\n` + initSys.BuildFullCodeFile(code);
-            else {
-                if (!(compile_options & 1))
-                    code = initSys.BuildFullCodeFile(code);
-            }
-
-            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.endsWith('.con') ? '' : '.con'}`);
-            fs.writeFileSync(`${output_folder}/${fileName}${fileName.endsWith('.con') ? '' : '.con'}`, code);
-        }
-    }
-
-    if (files.length > 0) {
-        let result: CompileResult;
-        for (const f of files) {
-            const file = fs.readFileSync(f);
-
-            result = compiler.compile(file.toString(), f, result ? result.context : undefined);
-        }
-
-        if (compile_options & 8) {
-            console.log(colorText(`Compiling into one file...`, 'magenta'));
             for (let i = compiledFiles.size - 1; i >= 0; i--) {
                 const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
                 code += f.code;
             }
 
-            if (!(compile_options & 1))
-                code = initSys.BuildFullCodeFile(code);
+            fileName = GetOutputName(fileName);
 
-            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${output_file}${output_file.endsWith('.con') ? '' : '.con'}`);
-            fs.writeFileSync(`${output_folder}/${output_file}${output_file.endsWith('.con') ? '' : '.con'}`, code);
-        } else {
-            compiledFiles.forEach(c => {
-                if (c.options != 0)
-                    return;
-                const name = GetOutputName(c.path);
-                console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`);
-                fs.writeFileSync(`${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`, c.code);
+            console.log(' ');
+
+            if (compile_options & 4) {
+                CreateInit([`${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`]);
+                console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
+                fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
+
+                console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`);
+                fs.writeFileSync(`${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`, code);
+            } else {
+                if (default_inclusion)
+                    code = `include GAME.CON\n\n` + initSys.BuildFullCodeFile(code);
+                else {
+                    if (!(compile_options & 1))
+                        code = initSys.BuildFullCodeFile(code);
+                }
+
+                if(eduke_init)
+                    fileName = 'EDUKE.CON';
+
+                console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`);
+                fs.writeFileSync(`${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`, code);
+            }
+        }
+
+        if (files.length > 0) {
+            let result: CompileResult;
+            for (const f of files) {
+                const file = fs.readFileSync(f);
+
+                result = compiler.compile(file.toString(), f, result ? result.context : undefined);
+            }
+
+            if (compile_options & 8) {
+                console.log(colorText(`Compiling into one file...`, 'magenta'));
+                for (let i = compiledFiles.size - 1; i >= 0; i--) {
+                    const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
+                    code += f.code;
+                }
+
+                if (!(compile_options & 1)) {
+                    code = initSys.BuildFullCodeFile(code);
+                    if (default_inclusion)
+                        code = `include GAME.CON\n\n` + code;
+                }
+
+                if (eduke_init)
+                    output_file = 'EDUKE.CON';
+
+                console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${output_file}${output_file.toLowerCase().endsWith('.con') ? '' : '.con'}`);
+                fs.writeFileSync(`${output_folder}/${output_file}${output_file.toLowerCase().endsWith('.con') ? '' : '.con'}`, code);
+            } else {
+                compiledFiles.forEach(c => {
+                    if (c.options != 0)
+                        return;
+                    const name = GetOutputName(c.path);
+                    console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`);
+                    fs.writeFileSync(`${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`, c.code);
+
+                    if (compile_options & 4)
+                        linkList.push(`${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`);
+                });
 
                 if (compile_options & 4)
-                    linkList.push(`${output_folder}/${name}${name.endsWith('.con') ? '' : '.con'}`);
-            });
-
-            if (compile_options & 4)
-                link = true;
+                    link = true;
+            }
         }
+
+        if (link) {
+            console.log(colorText(`Linking...`, 'blue'));
+            CreateInit(linkList);
+            console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
+            fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
+        }
+
+        if (fileName == '' && files.length == 0 && !link)
+            console.log(`Nothing to do!\n${helpText}`);
+        else
+            console.log(colorText(`Compilation finished!`, 'green'));
+
+        checkForUpdates();
+
+        process.exit(0);
     }
-
-    if (link) {
-        console.log(colorText(`Linking...`, 'blue'));
-        CreateInit(linkList);
-        console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
-        fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
-    }
-
-    if (fileName == '' && files.length == 0 && !link)
-        console.log(`Nothing to do!\n${helpText}`);
-    else
-        console.log(colorText(`Compilation finished!`, 'green'));
-
-    checkForUpdates();
-
-    process.exit(0);
-}
 }
 
 function CreateInit(outputFiles: string[]) {
@@ -568,9 +580,9 @@ function CreateInit(outputFiles: string[]) {
     console.log(`${colorText('Writing:', 'green')} init file: ${init_file}`);
 
     if (default_inclusion)
-        code = `include GAME.CON\n\n`;
+        code += `include GAME.CON\n\n`;
 
-    code = `include header.con\n`;
+    code += `include header.con\n`;
 
     for (const o of outputFiles) {
         code += `include ${o}\n`
