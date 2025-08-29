@@ -64,7 +64,7 @@ Usage:
     Compile options:
     \x1b[31m-i or --input\x1b[0m:  for the file path to be compiled
     \x1b[37m-if or --input_folder\x1b[0m:  for the path folder to be compiled (compiles all files inside)
-    \x1b[32m-il or --input_list\x1b[0m: for a list of files to be compiled
+    \x1b[32m-il or --input_list\x1b[0m: for a list of files to be compiled - paths must be inside ''
     \x1b[33m-o or --output\x1b[0m:  for the output file name
     \x1b[34m-of or --output_folder\x1b[0m: for the output folder path 
     \x1b[35m-dl or --detail_lines\x1b[0m: to write the TS lines inside the CON code 
@@ -75,7 +75,7 @@ Usage:
     \x1b[91m-hl or --headerless\x1b[0m: Don't insert the header code (init code and states) inside the output CON 
     \x1b[92m-h or --header\x1b[0m: Create the header file 
     \x1b[96m-np or --no_precompiled\x1b[0m: Don't link pre-compiled modules
-    \x1b[93m-l or --link\x1b[0m: Create the header and the init files with the following list of CON files (separated by "")
+    \x1b[93m-l or --link\x1b[0m: Create the header and the init files with the following list of CON files (separated by '')
     \x1b[96m-1f or --one_file\x1b[0m: Compile all the code into one file (must be used with -o)
     \x1b[94m-di or --default_inclusion\x1b[0m: Default inclusion (GAME.CON) 
     \x1b[95m-ei or --eduke_init\x1b[0m: Init file is EDUKE.CON`
@@ -426,9 +426,10 @@ async function Main() {
             link = true;
             for (let j = i + 1; j < process.argv.length; j++) {
                 const arg = process.argv[j];
-                if (arg.charAt(0) == '"' && arg.charAt(-1) == '"')
+                if (arg.charAt(0) == "'" && arg.charAt(arg.length - 1) == "'") {
                     linkList.push(arg);
-                else break;
+                    console.log(colorText(`Link file: ${arg}`, 'cyan'));
+                } else break;
             }
         }
 
@@ -436,9 +437,10 @@ async function Main() {
             link = true;
             for (let j = i + 1; j < process.argv.length; j++) {
                 const arg = process.argv[j];
-                if (arg.charAt(0) == '"' && arg.charAt(-1) == '"')
-                    files.push(arg);
-                else break;
+                if (arg.charAt(0) == "'" && arg.charAt(arg.length - 1) == "'") {
+                    files.push(arg.slice(1, arg.length - 1));
+                    console.log(colorText(`Input file: ${arg}`, 'yellow'));
+                } else break;
             }
         }
 
@@ -539,6 +541,7 @@ async function Main() {
 
                 console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${output_file}${output_file.toLowerCase().endsWith('.con') ? '' : '.con'}`);
                 fs.writeFileSync(`${output_folder}/${output_file}${output_file.toLowerCase().endsWith('.con') ? '' : '.con'}`, code);
+                link = false;
             } else {
                 compiledFiles.forEach(c => {
                     if (c.options != 0)

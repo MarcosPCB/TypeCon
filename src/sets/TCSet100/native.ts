@@ -326,6 +326,34 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
         arguments: []
     },
     {
+        name: 'EndOfGame',
+        code: 'endofgame ',
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.CONSTANT
+        ]
+    },
+    {
+        name: 'PalFrom',
+        code: (args: boolean) => {
+            return `
+setp[].pals 0 r0
+setp[].pals 1 r1
+setp[].pals 2 r2
+setp[].pals_time r3
+`
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+    },
+    {
         name: 'GetLastPal',
         code: 'getlastpal ',
         returns: false,
@@ -542,6 +570,16 @@ set RETURN rd`;
     {
         name: 'Guts',
         code: `guts`,
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.CONSTANT,
+            CON_NATIVE_FLAGS.CONSTANT
+        ],
+    },
+    {
+        name: 'Debris',
+        code: `debris`,
         returns: false,
         return_type: null,
         arguments: [

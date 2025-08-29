@@ -991,6 +991,21 @@ declare global {
      */
     export function IsRespawnActive(): CON_NATIVE<boolean>;
 
+    /**
+     * Ends the game
+     * @param delay - the delay before the game ends
+     */
+    export function EndOfGame(delay: constant): CON_NATIVE<void>;
+
+    /**
+     * This is used to flash the screen a given color.
+     * @param r the red value (0 - 63)
+     * @param g the green value (0 - 63)
+     * @param b the blue value (0 - 63)
+     * @param time the amount of time to flash (0 - 63)
+     */
+    export function PalFrom(r: number, g: number, b: number, time: number): CON_NATIVE<void>;
+
     /** @class for actor declaration. Use this as extension to declare your custom actors. */
     export class CActor {
         public defaultStrength: CON_NATIVE<number>;

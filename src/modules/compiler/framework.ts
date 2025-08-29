@@ -978,7 +978,7 @@ defstate _PlayAction
 ends
 
 defstate _Move
-    seta[].hitag flat[r1]
+    seta[].hitag r1
     seta[].htg_t 1 flat[flat[r0]]
     seta[].htg_t 0 0
 ends

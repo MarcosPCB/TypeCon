@@ -20,16 +20,13 @@ export function visitUnaryExpression(expr: Expression, context: CompilerContext,
           break;
         case SyntaxKind.ExclamationToken:
           //addDiagnostic(expr, context, "error", `"!" not allowed in normal expressions (only if patterns)`);
-          if(reg != 'rb')
-            code += `set rb ${reg}\n`;
-
-          code += `clamp rb 0 1\n`
+          code += `ifge ${reg} 1\n  set ${reg} 0\nelse ifle ${reg} 0\n  set ${reg} 1\n`
           break;
         default:
           addDiagnostic(expr, context, "error", `Unhandled prefix op`);
           code += `set ra 0\n`;
       }
-      code += `setarray flat[ri] ${reg}\n`;
+      //code += `setarray flat[ri] ${reg}\n`;
       return code;
     } else if (expr.isKind(SyntaxKind.PostfixUnaryExpression)) {
       const post = expr as PostfixUnaryExpression;
@@ -45,7 +42,7 @@ export function visitUnaryExpression(expr: Expression, context: CompilerContext,
           addDiagnostic(expr, context, "error", `Unhandled postfix op`);
           code += `set ra 0\n`;
       }
-      code += `setarray flat[ri] ${reg}\n`;
+      //code += `setarray flat[ri] ${reg}\n`;
       return code;
     }
     return code;

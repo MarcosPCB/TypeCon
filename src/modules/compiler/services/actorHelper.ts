@@ -1,8 +1,38 @@
 import { PropertyDeclaration, ObjectLiteralExpression, SyntaxKind, CallExpression, Expression } from "ts-morph";
-import { CompilerContext, SymbolDefinition, ESymbolType, SegmentProperty } from "../Compiler";
+import { CompilerContext, SymbolDefinition, ESymbolType, SegmentProperty, MemberSegment, EnumDefinition } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
 import { evaluateLiteralExpression } from "../helper/helpers";
 import { unrollMemberExpression } from "./unrollMemberExpression";
+
+export function FindLabel(segments: MemberSegment[], ctx: CompilerContext) {
+  if(segments[0].kind != 'identifier' && segments[0].kind != 'this')
+    return;
+
+  if(segments[0].kind == 'this')
+    segments.shift();
+
+  let sym: SymbolDefinition | EnumDefinition = ctx.symbolTable.get(segments[0].name);
+
+  for (let i = 1; i < segments.length; i++) {
+    if(sym.type == ESymbolType.enum || typeof sym == 'number')
+      return;
+
+    const seg = segments[i] as SegmentProperty;
+    sym = sym.children[seg.name];
+
+    if (!sym)
+      return;
+  }
+  
+  if(sym.type != ESymbolType.object && (
+    sym.name.startsWith('A_') ||
+    sym.name.startsWith('M_') ||
+    sym.name.startsWith('AI_')
+  ))
+    return;
+
+  return sym as SymbolDefinition;
+}
 
 /* ------------------------------------------------------------------
  * 1.  Top-level router that recognises both the old and new shapes
@@ -12,6 +42,7 @@ export function parseVarForActionsMovesAi(
     ctx: CompilerContext,
     className: string
   ) {
+    
     const typeNode = decl.getTypeNode();
     if (!typeNode) return;
 
@@ -75,7 +106,7 @@ export function parseVarForActionsMovesAi(
         const sym = handleObj(init as ObjectLiteralExpression, decl.getName());
         sym.global = true;
         ctx.symbolTable.set(decl.getName(), sym);
-        ctx.currentActorLabels[decl.getName()] = sym;
+        ctx.currentActorLabels[sym.name] = sym;
         sym.offset = ctx.globalVarCount;
         let code = `set ri ${ctx.globalVarCount + 1}\nsetarray flat[${ctx.globalVarCount}] ri\nsetarray flat[ri] 0\n`;
         ctx.globalVarCount += 2;
@@ -122,7 +153,7 @@ export function parseVarForActionsMovesAi(
       const value = prop.getInitializer();
       if (value && value.isKind(SyntaxKind.ObjectLiteralExpression)) {
         const sym = handleObj(value as ObjectLiteralExpression, propName);
-        ctx.currentActorLabels[propName] = sym;
+        ctx.currentActorLabels[sym.name] = sym;
         obj.children[propName] = sym;
         obj.num_elements++;
         obj.size += sym.size;
@@ -242,9 +273,11 @@ export function parseVarForActionsMovesAi(
       const valNode = p.getInitializerOrThrow();
       const segments = unrollMemberExpression(valNode);
       const seg: SegmentProperty = segments[segments.length - 1] as SegmentProperty;
+      const label = FindLabel(segments, ctx);
+      if(!label && key !== 'flags') return;
       switch (key) {
-        case "action": action = ctx.currentActorLabels[seg.name]; break;
-        case "move": move = ctx.currentActorLabels[seg.name]; break;
+        case "action": action = label; break;
+        case "move": move = label; break;
         case "flags": flags = Number(evaluateLiteralExpression(valNode, ctx)); break;
       }
     });

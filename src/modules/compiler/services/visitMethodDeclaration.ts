@@ -6,6 +6,7 @@ import { unrollMemberExpression } from "./unrollMemberExpression";
 import { visitStatement } from "./visitStatement";
 import { getTypeBase } from "./getTypeBase";
 import { getObjectTypeLayout } from "./getObjectLayout";
+import { FindLabel } from "./actorHelper";
 
   /******************************************************************************
    * visitMethodDeclaration => if main() => useractor ...
@@ -51,7 +52,7 @@ export function visitMethodDeclaration(
 
             const seg = segments.at(-1) as SegmentProperty;
 
-            const label = localCtx.currentActorLabels[seg.name];
+            const label = FindLabel(segments, localCtx);
 
             if(!label) {
               addDiagnostic(p, localCtx, 'warning', `Undefined first action ${init.getText()} in Main from ${className}`);

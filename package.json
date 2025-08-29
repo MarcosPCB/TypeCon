@@ -13,6 +13,7 @@
     "dev": "IS_DEV=true ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts",
     "dev-mac": "IS_DEV=true ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts -c \"test/data/test.ts\" -of \"test/eduke32/Eduke32.app/Contents/Resources\" -ld",
     "dev-win": "ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts",
+    "dev-win-debug": "ts-node-dev --inspect-brk --transpile-only --ignore-watch node_modules src/main.ts",
     "dev-debug": "ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts -debug eduke32.exe",
     "parse": "IS_DEV=true ts-node-dev --inspect --transpile-only --ignore-watch node_modules src/main.ts -c \"test/data/test.ts\" -p",
     "debug": "IS_DEV=true ts-node-dev --inspect-brk --transpile-only --ignore-watch node_modules src/main.ts",

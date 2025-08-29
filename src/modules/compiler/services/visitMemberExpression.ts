@@ -5,6 +5,7 @@ import { CON_NATIVE_VAR, CON_NATIVE_FLAGS, CON_NATIVE_TYPE, nativeVars_Players }
 import { nativeVars_Sprites, nativeVars_Sectors, nativeVars_Walls } from "../../../sets/TCSet100/native";
 import { unrollMemberExpression } from "./unrollMemberExpression";
 import { visitExpression } from "./visitExpression";
+import { FindLabel } from "./actorHelper";
 
 export function visitMemberExpression(expr: Expression, context: CompilerContext, assignment?: boolean, direct?: boolean, reg = 'ra'): string {
     let code = context.options.lineDetail ? `/* ${expr.getText()} */\n` : '';
@@ -263,8 +264,11 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
               //Check if it's an action, move or ai
               let lastSeg = segments.at(-1);
               if(lastSeg.kind == 'property') {
-                //@ts-ignore
-                const pointer = context.currentActorLabels[lastSeg.name];
+                let segments2 = [...segments];
+                if(['loc', 'start', 'length', 'viewType', 'incValue', 'delay', 'horizontal_vel', 'vertical_vel', 'action', 'move', 'flags'].includes(lastSeg.name))
+                  segments2.pop();
+                
+                const pointer = FindLabel(segments2, context);
 
                 if(pointer && !(pointer.type & ESymbolType.enum) && (pointer.type & ESymbolType.object)) {
                   if(direct)
