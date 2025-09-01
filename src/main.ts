@@ -28,6 +28,7 @@ let precompiled_modules = true;
 let heap_page_size = 4;
 let heap_page_number = 128;
 let eduke_init = false;
+let share_context = false;
 
 export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
     switch (color) {
@@ -443,6 +444,9 @@ async function Main() {
                 } else break;
             }
         }
+
+        if(a == 'share_context' || a == '-sc')
+            share_context = true;
 
         if (a == '--default_inclusion' || a == '-di')
             default_inclusion = true;

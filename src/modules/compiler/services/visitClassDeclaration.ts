@@ -391,5 +391,7 @@ ${Object.values(localCtx.currentActorLabels).map(e => {
 endevent
 ` : '') + code;
 
+    context.globalVarCount = localCtx.globalVarCount + 2;
+
     return code;
   }
