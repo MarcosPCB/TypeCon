@@ -15,6 +15,8 @@ type test = {
     low: wow[]
 }
 
+let gTestVar = 0;
+
 /**
  * This will generated the DISPLAYREST event in CON
  */
@@ -28,6 +30,7 @@ class displayRest extends CEvent {
     }
 
     public Append(): void {
+        gTestVar = 1;
         /**
          * RotateSprite is only available in DISPLAY events
          */
@@ -115,7 +118,7 @@ class Player extends CPlayer {
     constructor() {
         super(1405, DN3D.ENames.AMMO);
     }
-    
+
     Main() {
         this.weaponSystem.ammoAmount[1] = 72;
         this.actor.extra = 100;

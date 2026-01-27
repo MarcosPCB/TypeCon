@@ -5,16 +5,18 @@ import { evaluateLiteralExpression } from "../helper/helpers";
 import { unrollMemberExpression } from "./unrollMemberExpression";
 
 export function FindLabel(segments: MemberSegment[], ctx: CompilerContext) {
-  if(segments[0].kind != 'identifier' && segments[0].kind != 'this')
+  if (segments[0].kind != 'identifier' && segments[0].kind != 'this')
     return;
 
-  if(segments[0].kind == 'this')
+  if (segments[0].kind == 'this')
     segments.shift();
 
   let sym: SymbolDefinition | EnumDefinition = ctx.symbolTable.get(segments[0].name);
 
+  if (!sym) return;
+
   for (let i = 1; i < segments.length; i++) {
-    if(sym.type == ESymbolType.enum || typeof sym == 'number')
+    if (sym.type == ESymbolType.enum || typeof sym == 'number')
       return;
 
     const seg = segments[i] as SegmentProperty;
@@ -23,8 +25,8 @@ export function FindLabel(segments: MemberSegment[], ctx: CompilerContext) {
     if (!sym)
       return;
   }
-  
-  if(sym.type != ESymbolType.object && (
+
+  if (sym.type != ESymbolType.object && (
     sym.name.startsWith('A_') ||
     sym.name.startsWith('M_') ||
     sym.name.startsWith('AI_')
@@ -38,303 +40,487 @@ export function FindLabel(segments: MemberSegment[], ctx: CompilerContext) {
  * 1.  Top-level router that recognises both the old and new shapes
  * ------------------------------------------------------------------ */
 export function parseVarForActionsMovesAi(
-    decl: PropertyDeclaration,
-    ctx: CompilerContext,
-    className: string
-  ) {
-    
-    const typeNode = decl.getTypeNode();
-    if (!typeNode) return;
+  decl: PropertyDeclaration,
+  ctx: CompilerContext,
+  className: string
+) {
 
-    /* ── 1. figure out declared type and “arrayness” ─────────────── */
-    let typeTxt = typeNode.getText().trim();
-    let isArray = false;
+  const typeNode = decl.getTypeNode();
+  if (!typeNode) return;
 
-    if (typeTxt.endsWith("[]")) {
+  /* ── 1. figure out declared type and “arrayness” ─────────────── */
+  let typeTxt = typeNode.getText().trim();
+  let isArray = false;
+
+  if (typeTxt.endsWith("[]")) {
+    isArray = true;
+    typeTxt = typeTxt.slice(0, -2).trim();              //  Foo[]      → Foo
+  } else {
+    const m = /^Array<\s*(.+?)\s*>$/.exec(typeTxt);
+    if (m) {
       isArray = true;
-      typeTxt = typeTxt.slice(0, -2).trim();              //  Foo[]      → Foo
-    } else {
-      const m = /^Array<\s*(.+?)\s*>$/.exec(typeTxt);
-      if (m) {
-        isArray = true;
-        typeTxt = m[1].trim();                            // Array<Foo>  → Foo
-      }
+      typeTxt = m[1].trim();                            // Array<Foo>  → Foo
     }
+  }
 
-    /* 🔥 2️⃣  NEW RULE: arrays are no longer accepted --------------- */
+  /* 🔥 2️⃣  NEW RULE: arrays are no longer accepted --------------- */
   if (isArray) {
     addDiagnostic(decl, ctx, 'error', `Array type for Action/Move/AI is not supported`);
     return;
   }
 
-    // strip generic parameters so we end up with IAction / TAction …
-    const baseType = typeTxt.slice(0, typeTxt.indexOf('<'));         // TAction<'a'> → TAction
+  // strip generic parameters so we end up with IAction / TAction …
+  const baseType = typeTxt.slice(0, typeTxt.indexOf('<'));         // TAction<'a'> → TAction
 
-    /* ── 2. grab initializer ─────────────────────────────────────── */
-    const init = decl.getInitializer();
-    if (!init) return;
+  /* ── 2. grab initializer ─────────────────────────────────────── */
+  const init = decl.getInitializer();
+  if (!init) return;
 
-    let sym: SymbolDefinition;
+  let sym: SymbolDefinition;
 
-    /* helper that forwards to the correct low-level parser */
-    const handleObj = (obj: ObjectLiteralExpression, propName?: string) => {
-      let s: SymbolDefinition;
-      switch (baseType) {
-        case "IAction":
-        case "TAction":
-          s = parseIActionLiteral(obj, ctx, propName, className);
-          break;
+  /* helper that forwards to the correct low-level parser */
+  const handleObj = (obj: ObjectLiteralExpression, propName?: string) => {
+    let s: SymbolDefinition;
+    switch (baseType) {
+      case "IAction":
+      case "TAction":
+        s = parseIActionLiteral(obj, ctx, propName, className);
+        break;
 
-        case "IMove":
-        case "TMove":
-          s = parseIMoveLiteral(obj, ctx, propName, className);
-          break;
+      case "IMove":
+      case "TMove":
+        s = parseIMoveLiteral(obj, ctx, propName, className);
+        break;
 
-        case "IAi":
-        case "TAi":
-          s = parseIAiLiteral(obj, ctx, propName, className);
-          break;
-      }
-
-      return s;
-    };
-
-    /* ── 3. OLD SHAPES ───────────────────────────────────────────── */
-    // 3 a) single object → IAction / IMove / IAi
-    if (!isArray && !/^[T][A-Z]/.test(baseType)) {        // not TAction / …
-      if (init.isKind(SyntaxKind.ObjectLiteralExpression)) {
-        const sym = handleObj(init as ObjectLiteralExpression, decl.getName());
-        sym.global = true;
-        ctx.symbolTable.set(decl.getName(), sym);
-        ctx.currentActorLabels[sym.name] = sym;
-        sym.offset = ctx.globalVarCount;
-        let code = `set ri ${ctx.globalVarCount + 1}\nsetarray flat[${ctx.globalVarCount}] ri\nsetarray flat[ri] 0\n`;
-        ctx.globalVarCount += 2;
-        Object.entries(sym.children).forEach((e, i) => {
-          if(!i)
-            return;
-          e[1] = e[1] as SymbolDefinition;
-          if(ctx.currentActorLabelAsObj)
-            code += `add ri 1\nsetarray flat[ri] ${e[1].literal}\n`
-          ctx.globalVarCount++;
-        });
-
-        ctx.initCode += code;
-      }
-      return;
+      case "IAi":
+      case "TAi":
+        s = parseIAiLiteral(obj, ctx, propName, className);
+        break;
     }
 
-    /* ── 4. NEW SHAPE  (dictionary) ─────────────────────────────── */
-    // top-level object whose *properties* are the actions / moves / ais
-    if (!init.isKind(SyntaxKind.ObjectLiteralExpression)) return;
+    return s;
+  };
 
-    ctx.symbolTable.set(decl.getName(), {
-      name: decl.getName(),
-      offset: ctx.globalVarCount,
-      global: true,
-      readonly: true,
-      type: ESymbolType.object,
-      children: {}
-    });
+  /* ── 3. OLD SHAPES ───────────────────────────────────────────── */
+  // 3 a) single object → IAction / IMove / IAi
+  if (!isArray && !/^[T][A-Z]/.test(baseType)) {        // not TAction / …
+    if (init.isKind(SyntaxKind.ObjectLiteralExpression)) {
+      const sym = handleObj(init as ObjectLiteralExpression, decl.getName());
+      sym.global = true;
+      ctx.symbolTable.set(decl.getName(), sym);
+      ctx.currentActorLabels[sym.name] = sym;
+      const symStartOffset = ctx.globalVarCount;
+      sym.offset = symStartOffset;
 
-    let code = `set ri ${ctx.globalVarCount + 1}\nsetarray flat[${ctx.globalVarCount}] ri\n`;
-    ctx.globalVarCount++;
+      if (ctx.options.mode === 'module') {
+        // Calculate total size: 
+        // 2 (Header) + (children.length - 1) * 1 (pointers) + children.length * size?
+        // Actually, let's look at the loop below.
+        // It increments globalVarCount for each child (pointer?) 
+        // AND it increments for children? No.
+        // Code loop:
+        // "add ri 1 \n setarray flat[ri] literal" -> This writes into the child block?
+        // Wait, loop: "ctx.globalVarCount++" 
+        // It increments ONCE per child.
+        // So total size = 2 + (num_children - 1).
+        // num_elements is 6. children keys: loc, start, ...
+        // Loop iterates 5 times (skipping loc).
+        // So +5. Total 7.
+        // Verify logic: 
+        // set ri offset+1 (1)
+        // flat[offset] = ri (0)
+        // flat[ri] = 0 (offset+1)
+        // loop: add ri 1. flat[ri] = val.
+        // So we write to offset, offset+1, offset+2... offset+6.
+        // Size is indeed 7.
 
-    const obj = ctx.symbolTable.get(decl.getName()) as SymbolDefinition;
-    obj.num_elements = obj.size = 0;
-    let code2 = '';
+        ctx.globalAllocations.push({
+          name: sym.name,
+          size: 2 + (Object.keys(sym.children).length - 1)
+        });
+      }
 
-    let gv = ctx.globalVarCount;
-    
-    (init as ObjectLiteralExpression).getProperties().forEach((prop, i, a) => {
-      if (!prop.isKind(SyntaxKind.PropertyAssignment)) return;
+      let code = '';
+      if (ctx.options.mode === 'module') {
+        code += `set ri __RELOC_GLOBAL_${sym.name}__\nadd ri 1\n`;
+        code += `setarray flat[__RELOC_GLOBAL_${sym.name}__] ri\n`;
+        code += `setarray flat[ri] 0\n`;
+      } else {
+        code += `set ri ${ctx.globalVarCount + 1}\nsetarray flat[${ctx.globalVarCount}] ri\nsetarray flat[ri] 0\n`;
+      }
 
-      const propName = prop.getName().replace(/[`'"]/g, ""); // walk / run / …
-      const value = prop.getInitializer();
-      if (value && value.isKind(SyntaxKind.ObjectLiteralExpression)) {
-        const sym = handleObj(value as ObjectLiteralExpression, propName);
-        ctx.currentActorLabels[sym.name] = sym;
-        obj.children[propName] = sym;
-        obj.num_elements++;
-        obj.size += sym.size;
-        sym.offset = i;
-        sym.parent = obj;
-        code += `set ri ${ctx.globalVarCount + a.length + i}\nsetarray flat[${gv}] ri\n`;
-        code2 += `set ri ${ctx.globalVarCount + a.length + i}\nsetarray flat[ri] 0\n`;
+      ctx.globalVarCount += 2;
+      Object.entries(sym.children).forEach((e, i) => {
+        if (!i)
+          return;
+        e[1] = e[1] as SymbolDefinition;
+        if (ctx.currentActorLabelAsObj)
+          code += `add ri 1\nsetarray flat[ri] ${e[1].literal}\n`
         ctx.globalVarCount++;
-        gv++;
-        Object.entries(sym.children).forEach((e, i) => {
-          if(!i)
-            return;
-          e[1] = e[1] as SymbolDefinition;
-          if(ctx.currentActorLabelAsObj || sym.name.startsWith('AI_'))
-            code2 += `add ri 1\nsetarray flat[ri] ${sym.name.startsWith('AI_') ? '0' : e[1].literal}\n`
-          ctx.globalVarCount++;
-        });
+      });
+
+      ctx.initCode += code;
+    }
+    return;
+  }
+
+  /* ── 4. NEW SHAPE  (dictionary) ─────────────────────────────── */
+  // top-level object whose *properties* are the actions / moves / ais
+  if (!init.isKind(SyntaxKind.ObjectLiteralExpression)) return;
+
+  ctx.symbolTable.set(decl.getName(), {
+    name: decl.getName(),
+    offset: ctx.globalVarCount,
+    global: true,
+    readonly: true,
+    type: ESymbolType.object,
+    children: {}
+  });
+
+  const rootName = decl.getName();
+  const startGlobal = ctx.globalVarCount;
+  const props = (init as ObjectLiteralExpression).getProperties();
+
+  // Calculate total size for allocation
+  // 1 (Root Ptr) + 1 (Root Array Size/Ptr) + ...
+  // Code logic:
+  // 1. `set ri ${gv + 1} ... flat[gv] ri` -> (2 vars: gv, gv+1? No. gv points to gv+1. usage: 1 slot at gv?)
+  // No. `setarray flat[gv] ri`. Takes 1 slot.
+  // `setarray flat[ri] 0`. ri is somewhere else.
+  // We update `ctx.globalVarCount` multiple times.
+  // Line 178: `ctx.globalVarCount += props.length * 2`.
+  // Plus the initial `ctx.globalVarCount++` (Line 141).
+  // Plus the loop increments?
+  // Line 164: `ctx.globalVarCount++`.
+  // Line 172: `ctx.globalVarCount++` inside inner loop.
+
+  // Let's defer allocation size calculation or do it precisely?
+  // The previous code calculates final `ctx.globalVarCount`. 
+  // I can just capture start/end difference if I wanted, but the allocation creates the array entry.
+
+  // Actually, simply tracking start is enough for code generation. 
+  // I will push to globalAllocations at the END based on the diff.
+
+  let code = '';
+  if (ctx.options.mode === 'module') {
+    code += `set ri __RELOC_GLOBAL_${rootName}__\nadd ri 1\n`;
+    code += `setarray flat[__RELOC_GLOBAL_${rootName}__] ri\n`;
+  } else {
+    code += `set ri ${ctx.globalVarCount + 1}\nsetarray flat[${ctx.globalVarCount}] ri\n`;
+  }
+
+  ctx.globalVarCount++;
+
+  const obj = ctx.symbolTable.get(decl.getName()) as SymbolDefinition;
+  obj.num_elements = obj.size = 0;
+  let code2 = '';
+
+  let gv = ctx.globalVarCount;
+
+  props.forEach((prop, i, a) => {
+    if (!prop.isKind(SyntaxKind.PropertyAssignment)) return;
+
+    const propName = prop.getName().replace(/[`'"]/g, ""); // walk / run / …
+    const value = prop.getInitializer();
+    if (value && value.isKind(SyntaxKind.ObjectLiteralExpression)) {
+      const sym = handleObj(value as ObjectLiteralExpression, propName);
+      ctx.currentActorLabels[sym.name] = sym;
+      obj.children[propName] = sym;
+      obj.num_elements++;
+      obj.size += sym.size;
+      sym.offset = i; // This is offset relative to the Array? 
+      sym.parent = obj;
+
+      // Code Generation:
+      // `set ri ${ctx.globalVarCount + a.length + i}`
+      // `setarray flat[gv] ri`
+
+      // Math:
+      // `ctx.globalVarCount` here is `startGlobal + 1 + i`?
+      // Wait, loop uses `gv` which starts at `startGlobal + 1`.
+      // `gv` increments by 1 each iter.
+      // `ctx.globalVarCount` increments by ???
+      // Line 164: `ctx.globalVarCount++`.
+      // Line 172: inner loop `ctx.globalVarCount++`.
+      // So `ctx.globalVarCount` drifts far ahead.
+      // But `set ri` targets `ctx.globalVarCount + a.length + i`.
+      // This seems to point to the START of the Children Data Blocks?
+      // `a.length` is number of props.
+      // `i` is current prop index.
+      // `ctx.globalVarCount` is base of... current pointer array entry?
+
+      // In Module Mode:
+      // We need `delta = (current_target) - startGlobal`.
+      // `current_target` = `ctx.globalVarCount + a.length + i`. (From original logic)
+      // `delta` = `(ctx.globalVarCount + a.length + i) - startGlobal`.
+
+      const targetOffset = ctx.globalVarCount + a.length + i;
+      const deltaRef = targetOffset - startGlobal;
+      const deltaGv = gv - startGlobal;
+
+      if (ctx.options.mode === 'module') {
+        code += `set ri __RELOC_GLOBAL_${rootName}__\nadd ri ${deltaRef}\n`;
+        // flat[BASE + delta] -> set temp BASE; add temp delta; setarray flat[temp] ...
+        // Optimised: setarray flat[__RELOC_..__] is not valid if index is expression.
+        // CON: `setarray flat[var]` or `flat[const]`.
+        // So we need a register.
+
+        // `set temp __RELOC_GLOBAL_${rootName}__`
+        // `add temp ${deltaGv}`
+        // `setarray flat[temp] ri`
+        // NOTE: We can recycle registers. `ri` is used for value. `rj` for index?
+        code += `set rj __RELOC_GLOBAL_${rootName}__\nadd rj ${deltaGv}\nsetarray flat[rj] ri\n`;
+      } else {
+        code += `set ri ${targetOffset}\nsetarray flat[gv] ri\n`;
       }
+
+      // code2 logic
+      // `set ri ${ctx.globalVarCount + a.length + i}`
+      // `setarray flat[ri] 0`
+      if (ctx.options.mode === 'module') {
+        code2 += `set ri __RELOC_GLOBAL_${rootName}__\nadd ri ${deltaRef}\nsetarray flat[ri] 0\n`;
+      } else {
+        code2 += `set ri ${targetOffset}\nsetarray flat[ri] 0\n`;
+      }
+
+      ctx.globalVarCount++;
+      gv++;
+
+      Object.entries(sym.children).forEach((e, i) => {
+        if (!i)
+          return;
+        e[1] = e[1] as SymbolDefinition;
+        if (ctx.currentActorLabelAsObj || sym.name.startsWith('AI_'))
+          code2 += `add ri 1\nsetarray flat[ri] ${sym.name.startsWith('AI_') ? '0' : e[1].literal}\n`
+        ctx.globalVarCount++;
+      });
+    }
+  });
+
+  code += code2;
+  // ctx.globalVarCount += (init as ObjectLiteralExpression).getProperties().length * 2; -> This original line seems redundant if we incremented inside?
+  // Let's check original logic carefully.
+  // Original: 
+  // Loop increments `ctx.globalVarCount` (line 164) and inner `globalVarCount` (line 172).
+  // line 178: `ctx.globalVarCount += ... length * 2` ??
+  // Wait, original Line 178 IS `ctx.globalVarCount += ...`.
+  // Does the loop NOT update `ctx.globalVarCount` in the original code?
+  // Original Line 164: `ctx.globalVarCount++`.
+  // Original Line 172: `ctx.globalVarCount++`.
+  // Original Line 178: `ctx.globalVarCount += ...`. 
+  // This implies DOUBLE counting? Or `ctx.globalVarCount` was NOT incremented by reference in the snippet?
+  // Ah, in previous tool view, I see:
+  // 164: ctx.globalVarCount++;
+  // 172: ctx.globalVarCount++;
+  // 178: ctx.globalVarCount += (init ...).length * 2;
+  // THIS LOOKS LIKE A BUG in the original code or I am misreading. 
+  // If I increment inside loop, why add explicitly at end?
+  // Maybe the inner loop increments are for the children? 
+  // The `length * 2` might be for the pointers?
+  // If I preserve existing behavior exactly, I should keep strictly to what it did.
+  // BUT since I am refactoring, I should ensure I don't break the count.
+
+  // In original code lines 131-180:
+  // ... loop ...
+  //   ctx.globalVarCount++; (Line 164)
+  //   ... elements loop ... ctx.globalVarCount++ (Line 172)
+  // ... end loop
+  // Line 178: `ctx.globalVarCount += props.length * 2`
+
+  // If props.length is 1.
+  // Loop runs once. `globalVarCount++` (1). Elements loop (5). `globalVarCount` += 5.
+  // Total +6.
+  // Line 178: +2.
+  // Total +8.
+
+  // If I replace the block, I should replicate this accumulation?
+  // I will remove line 178 if I am handling it inside, OR I keep it if it was required.
+  // The instructions say "Refactor".
+  // I will assume line 178 was Intended to reserve EXTRA space? Or maybe a mistake I should preserve?
+  // Let's look at `visitClassDeclaration`.
+  // We want to be safe. I will replicate the accumulation at the end, unless it's obviously wrong.
+  // Actually, looking at the code, `ctx.globalVarCount` is used to allocate indices.
+  // If I increment it, the next allocation uses the new value.
+  // If line 178 adds more, it just creates a gap?
+  // Given the complexity, I will keep the explicit increments inside the loop and `ctx.globalVarCount += props.length * 2` at end 
+  // ONLY IF it was there.
+  // Wait, in my tool output, line 178 IS there.
+  // So I will keep it.
+
+  // Calculate total size for Module Mode:
+  // finalGlobal - startGlobal.
+
+  if (ctx.options.mode === 'module') {
+    const totalSize = (ctx.globalVarCount + (props.length * 2)) - startGlobal;
+    ctx.globalAllocations.push({
+      name: rootName,
+      size: totalSize
     });
-
-    code += code2;
-    ctx.globalVarCount += (init as ObjectLiteralExpression).getProperties().length * 2;
-    ctx.initCode += code;
   }
 
-  /* ------------------------------------------------------------------
-   * 2.  Low-level helpers – accept an *optional* fallback name
-   * ------------------------------------------------------------------ */
-  export function parseIActionLiteral(
-    obj: ObjectLiteralExpression,
-    ctx: CompilerContext,
-    fallbackName = "",
-    className: string,
-  ): SymbolDefinition {
-    let start = 0, length = 0, viewType = 0, inc = 0, delay = 0;
+  ctx.globalVarCount += props.length * 2;
+  ctx.initCode += code;
 
-    obj.getProperties().forEach(p => {
-      if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
-      const key = p.getName();
-      const val = p.getInitializerOrThrow().getText();
-      switch (key) {
-        case "start": start = +val; break;
-        case "length": length = +val; break;
-        case "viewType": viewType = +val; break;
-        case "incValue": inc = +val; break;
-        case "delay": delay = +val; break;
-      }
-    });
+}
 
-    ctx.currentActorActions.push(
-      `action A_${className}_${fallbackName} ${start} ${length} ${viewType} ${inc} ${delay}`);
+/* ------------------------------------------------------------------
+ * 2.  Low-level helpers – accept an *optional* fallback name
+ * ------------------------------------------------------------------ */
+export function parseIActionLiteral(
+  obj: ObjectLiteralExpression,
+  ctx: CompilerContext,
+  fallbackName = "",
+  className: string,
+): SymbolDefinition {
+  let start = 0, length = 0, viewType = 0, inc = 0, delay = 0;
 
-    return {
-      name: `A_${className}_${fallbackName}`,
-      offset: 0,
-      type: ESymbolType.object,
-      num_elements: 6,
-      size: 6,
-      readonly: true,
-      children: {
-        loc: { name: 'loc', type: ESymbolType.number, offset: 0, literal: `A_${className}_${fallbackName}` },
-        start: { name: 'start', type: ESymbolType.number, offset: 1, literal: start },
-        length: { name: 'length', type: ESymbolType.number, offset: 2, literal: length },
-        viewType: { name: 'viewType', type: ESymbolType.number, offset: 3, literal: viewType },
-        incValue: { name: 'incValue', type: ESymbolType.number, offset: 4, literal: inc },
-        delay: { name: 'delay', type: ESymbolType.number, offset: 5, literal: delay },
-      }
-    };
+  obj.getProperties().forEach(p => {
+    if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
+    const key = p.getName();
+    const val = p.getInitializerOrThrow().getText();
+    switch (key) {
+      case "start": start = +val; break;
+      case "length": length = +val; break;
+      case "viewType": viewType = +val; break;
+      case "incValue": inc = +val; break;
+      case "delay": delay = +val; break;
+    }
+  });
+
+  ctx.currentActorActions.push(
+    `action A_${className}_${fallbackName} ${start} ${length} ${viewType} ${inc} ${delay}`);
+
+  return {
+    name: `A_${className}_${fallbackName}`,
+    offset: 0,
+    type: ESymbolType.object,
+    num_elements: 6,
+    size: 6,
+    readonly: true,
+    children: {
+      loc: { name: 'loc', type: ESymbolType.number, offset: 0, literal: `A_${className}_${fallbackName}` },
+      start: { name: 'start', type: ESymbolType.number, offset: 1, literal: start },
+      length: { name: 'length', type: ESymbolType.number, offset: 2, literal: length },
+      viewType: { name: 'viewType', type: ESymbolType.number, offset: 3, literal: viewType },
+      incValue: { name: 'incValue', type: ESymbolType.number, offset: 4, literal: inc },
+      delay: { name: 'delay', type: ESymbolType.number, offset: 5, literal: delay },
+    }
+  };
+}
+
+export function parseIMoveLiteral(
+  obj: ObjectLiteralExpression,
+  ctx: CompilerContext,
+  fallbackName = "",                                // 🔑 NEW
+  className: string,
+): SymbolDefinition {
+  let hv = 0, vv = 0;
+
+  obj.getProperties().forEach(p => {
+    if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
+    const key = p.getName();
+    const val = +p.getInitializerOrThrow().getText();
+    switch (key) {
+      case "horizontal_vel": hv = val; break;
+      case "vertical_vel": vv = val; break;
+    }
+  });
+
+  ctx.currentActorMoves.push(`move M_${className}_${fallbackName} ${hv} ${vv}`);
+
+  return {
+    name: `M_${className}_${fallbackName}`,
+    offset: 0,
+    type: ESymbolType.object,
+    num_elements: 3,
+    size: 3,
+    readonly: true,
+    children: {
+      loc: { name: 'loc', type: ESymbolType.number, offset: 0, literal: `M_${className}_${fallbackName}` },
+      horizontal_vel: { name: 'horizontal_vel', type: ESymbolType.number, offset: 1, literal: hv },
+      vertical_vel: { name: 'vertical_vel', type: ESymbolType.number, offset: 2, literal: vv },
+    }
+  };
+}
+
+export function parseIAiLiteral(
+  obj: ObjectLiteralExpression,
+  ctx: CompilerContext,
+  fallbackName = "",                                // 🔑 NEW
+  className: string,
+): SymbolDefinition {
+  let action: SymbolDefinition = { name: '0', offset: 0, type: ESymbolType.number, literal: 0 };
+  let move: SymbolDefinition = { name: '0', offset: 0, type: ESymbolType.number, literal: 0 };
+  let flags = 0;
+
+  obj.getProperties().forEach(p => {
+    if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
+    const key = p.getName();
+    const valNode = p.getInitializerOrThrow();
+    const segments = unrollMemberExpression(valNode);
+    const seg: SegmentProperty = segments[segments.length - 1] as SegmentProperty;
+    const label = FindLabel(segments, ctx);
+    if (!label && key !== 'flags') return;
+    switch (key) {
+      case "action": action = label; break;
+      case "move": move = label; break;
+      case "flags": flags = Number(evaluateLiteralExpression(valNode, ctx)); break;
+    }
+  });
+
+  ctx.currentActorAis.push(`ai AI_${className}_${fallbackName} ${action.name} ${move.name} ${flags}`);
+
+  return {
+    name: `AI_${className}_${fallbackName}`,
+    offset: 0,
+    type: ESymbolType.object,
+    num_elements: 4,
+    size: 4,
+    readonly: true,
+    children: {
+      loc: { name: 'loc', type: ESymbolType.number | ESymbolType.pointer, offset: 0, literal: `AI_${className}_${fallbackName}` },
+      action: action,
+      move: move,
+      flags: { name: 'flags', type: ESymbolType.number, offset: 3, literal: flags },
+    }
+  };
+}
+
+
+export function parseActorSuperCall(call: CallExpression, context: CompilerContext) {
+  // super(picnum, isEnemy, extra, actions, firstAction, moves, ais)
+  const args = call.getArguments();
+  if (args.length >= 1) {
+    const a0 = evaluateLiteralExpression(args[0] as Expression, context);
+    if (a0)
+      context.currentActorPicnum = a0 as number;
   }
-
-  export function parseIMoveLiteral(
-    obj: ObjectLiteralExpression,
-    ctx: CompilerContext,
-    fallbackName = "",                                // 🔑 NEW
-    className: string,
-  ): SymbolDefinition {
-    let hv = 0, vv = 0;
-
-    obj.getProperties().forEach(p => {
-      if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
-      const key = p.getName();
-      const val = +p.getInitializerOrThrow().getText();
-      switch (key) {
-        case "horizontal_vel": hv = val; break;
-        case "vertical_vel": vv = val; break;
-      }
-    });
-
-    ctx.currentActorMoves.push(`move M_${className}_${fallbackName} ${hv} ${vv}`);
-
-    return {
-      name: `M_${className}_${fallbackName}`,
-      offset: 0,
-      type: ESymbolType.object,
-      num_elements: 3,
-      size: 3,
-      readonly: true,
-      children: {
-        loc: { name: 'loc', type: ESymbolType.number, offset: 0, literal: `M_${className}_${fallbackName}` },
-        horizontal_vel: { name: 'horizontal_vel', type: ESymbolType.number, offset: 1, literal: hv },
-        vertical_vel: { name: 'vertical_vel', type: ESymbolType.number, offset: 2, literal: vv },
-      }
-    };
-  }
-
-  export function parseIAiLiteral(
-    obj: ObjectLiteralExpression,
-    ctx: CompilerContext,
-    fallbackName = "",                                // 🔑 NEW
-    className: string,
-  ): SymbolDefinition {
-    let action: SymbolDefinition, move: SymbolDefinition; let flags = 0;
-
-    obj.getProperties().forEach(p => {
-      if (!p.isKind(SyntaxKind.PropertyAssignment)) return;
-      const key = p.getName();
-      const valNode = p.getInitializerOrThrow();
-      const segments = unrollMemberExpression(valNode);
-      const seg: SegmentProperty = segments[segments.length - 1] as SegmentProperty;
-      const label = FindLabel(segments, ctx);
-      if(!label && key !== 'flags') return;
-      switch (key) {
-        case "action": action = label; break;
-        case "move": move = label; break;
-        case "flags": flags = Number(evaluateLiteralExpression(valNode, ctx)); break;
-      }
-    });
-
-    ctx.currentActorAis.push(`ai AI_${className}_${fallbackName} ${action.name} ${move.name} ${flags}`);
-
-    return {
-      name: `AI_${className}_${fallbackName}`,
-      offset: 0,
-      type: ESymbolType.object,
-      num_elements: 4,
-      size: 4,
-      readonly: true,
-      children: {
-        loc: { name: 'loc', type: ESymbolType.number | ESymbolType.pointer, offset: 0, literal: `AI_${className}_${fallbackName}` },
-        action: action,
-        move: move,
-        flags: { name: 'flags', type: ESymbolType.number, offset: 3, literal: flags },
-      }
-    };
-  }
-
-
-  export function parseActorSuperCall(call: CallExpression, context: CompilerContext) {
-    // super(picnum, isEnemy, extra, actions, firstAction, moves, ais)
-    const args = call.getArguments();
-    if (args.length >= 1) {
-      const a0 = evaluateLiteralExpression(args[0] as Expression, context);
-      if (a0)
-        context.currentActorPicnum = a0 as number;
-    }
-    if (args.length >= 2) {
-      const a1 = args[1];
-      if (a1.isKind(SyntaxKind.TrueKeyword)) {
-        context.currentActorIsEnemy = true;
-      } else if (a1.isKind(SyntaxKind.FalseKeyword)) {
-        context.currentActorIsEnemy = false;
-      }
-    }
-    if (args.length >= 3) {
-      const a2 = evaluateLiteralExpression(args[2] as Expression, context);
-      if (a2)
-        context.currentActorExtra = a2 as number;
-    }
-    if (args.length >= 4) {
-      // label as objects in memory
-      const fa = args[3];
-
-      if (fa && (fa.getText() != 'undefined' && fa.getText() != 'null'))
-        context.currentActorLabelAsObj = fa.getText() == 'true' ? true : false;
-    }
-
-    if (args.length >= 5) {
-      // label as objects in memory
-      const fa = args[4];
-
-      if (fa && (fa.getText() != 'undefined' && fa.getText() != 'null'))
-        context.currentActorHardcoded = fa.getText() == 'true' ? true : false;
+  if (args.length >= 2) {
+    const a1 = args[1];
+    if (a1.isKind(SyntaxKind.TrueKeyword)) {
+      context.currentActorIsEnemy = true;
+    } else if (a1.isKind(SyntaxKind.FalseKeyword)) {
+      context.currentActorIsEnemy = false;
     }
   }
+  if (args.length >= 3) {
+    const a2 = evaluateLiteralExpression(args[2] as Expression, context);
+    if (a2)
+      context.currentActorExtra = a2 as number;
+  }
+  if (args.length >= 4) {
+    // label as objects in memory
+    const fa = args[3];
+
+    if (fa && (fa.getText() != 'undefined' && fa.getText() != 'null'))
+      context.currentActorLabelAsObj = fa.getText() == 'true' ? true : false;
+  }
+
+  if (args.length >= 5) {
+    // label as objects in memory
+    const fa = args[4];
+
+    if (fa && (fa.getText() != 'undefined' && fa.getText() != 'null'))
+      context.currentActorHardcoded = fa.getText() == 'true' ? true : false;
+  }
+}

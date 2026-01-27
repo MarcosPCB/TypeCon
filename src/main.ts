@@ -4,6 +4,7 @@ import fs, { Dirent } from 'fs';
 import path = require('path');
 import { compiledFiles, CONInit } from './modules/compiler/framework';
 import { CompileResult, TsToConCompiler } from './modules/compiler/Compiler';
+import { Linker } from './modules/linker/Linker';
 import inquirer from 'inquirer';
 const fsExtra = require("fs-extra");
 import { spawnSync } from 'child_process';
@@ -19,8 +20,11 @@ let stack_size = 1024;
 let output_folder = 'compiled';
 let output_file = '';
 let linkList: string[] = [];
+let linkerList: string[] = [];
 let files: string[] = [];
-let link = false;
+let separate = false;
+let createInit = false;
+let runLinker = false;
 let default_inclusion = false;
 let init_file = 'init.con';
 let initFunc = false;
@@ -29,6 +33,10 @@ let heap_page_size = 4;
 let heap_page_number = 128;
 let eduke_init = false;
 let share_context = false;
+let compile_only = false;
+let headerWritten = false;
+let accept_con_modules = false;
+let con_module = false;
 
 export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
     switch (color) {
@@ -63,9 +71,10 @@ Usage:
     \x1b[31msetup\x1b[0m: Creates the project's basic setup including folders, include files, templates and the basic TypeScript configuration
 
     Compile options:
+    \x1b[31m-c or --compile\x1b[0m:  Compile input files to .tco (Intermediate) format for separate linking.
     \x1b[31m-i or --input\x1b[0m:  for the file path to be compiled
     \x1b[37m-if or --input_folder\x1b[0m:  for the path folder to be compiled (compiles all files inside)
-    \x1b[32m-il or --input_list\x1b[0m: for a list of files to be compiled - paths must be inside ''
+    \x1b[32m-il or --input_list\x1b[0m: for a list of files to be compiled/linked
     \x1b[33m-o or --output\x1b[0m:  for the output file name
     \x1b[34m-of or --output_folder\x1b[0m: for the output folder path 
     \x1b[35m-dl or --detail_lines\x1b[0m: to write the TS lines inside the CON code 
@@ -76,9 +85,10 @@ Usage:
     \x1b[91m-hl or --headerless\x1b[0m: Don't insert the header code (init code and states) inside the output CON 
     \x1b[92m-h or --header\x1b[0m: Create the header file 
     \x1b[96m-np or --no_precompiled\x1b[0m: Don't link pre-compiled modules
-    \x1b[93m-l or --link\x1b[0m: Create the header and the init files with the following list of CON files (separated by '')
-    \x1b[96m-1f or --one_file\x1b[0m: Compile all the code into one file (must be used with -o)
-    \x1b[94m-di or --default_inclusion\x1b[0m: Default inclusion (GAME.CON) 
+    \x1b[93m-ci or --create_init\x1b[0m: (Old -l) Create header and init files with list of CON files provided via -il
+    \x1b[95m-L or --linker\x1b[0m: Link multiple .tco intermediate files into a single .con file
+    \x1b[96m-sep or --separate\x1b[0m: (Used with -L) Output linked modules as separate CON files instead of one big file
+    \x1b[94m-di or --default_inclusion\x1b[0m: Default inclusion (GAME.CON)  
     \x1b[95m-ei or --eduke_init\x1b[0m: Init file is EDUKE.CON`
 
 
@@ -349,6 +359,9 @@ async function Main() {
             process.exit(0);
         }
 
+        if (a == '--compile' || a == '-c')
+            compile_only = true;
+
         if (a == '--input' || a == '-i') {
             fileName = process.argv[i + 1];
 
@@ -379,7 +392,7 @@ async function Main() {
             GetAllFilesFromPath(input_folder);
         }
 
-        if (a == '--line_print' || a == '-lp')
+        if (a == '--line_print' || a == '-lp' || a == '--detail_lines' || a == '-dl')
             line_print = true;
 
         if (a == '--symbol_print' || a == '-sp')
@@ -414,39 +427,39 @@ async function Main() {
         if (a == '--no_precompiled' || a == '-np')
             precompiled_modules = false;
 
-        if (a == '--one_file' || a == '-1f') {
-            if (compile_options & 4) {
-                console.log(`ERROR: you can't use -1f with -h parameter`)
-                process.exit(1);
-            }
 
-            compile_options |= 8;
+
+        if (a == '--create_init' || a == '-ci' || a == '--link' || a == '-l') {
+            createInit = true;
         }
 
-        if (a == '--link' || a == '-l') {
-            link = true;
-            for (let j = i + 1; j < process.argv.length; j++) {
-                const arg = process.argv[j];
-                if (arg.charAt(0) == "'" && arg.charAt(arg.length - 1) == "'") {
-                    linkList.push(arg);
-                    console.log(colorText(`Link file: ${arg}`, 'cyan'));
-                } else break;
-            }
+        if (a == '--linker' || a == '-L') {
+            runLinker = true;
         }
 
         if (a == '--input_list' || a == '-il') {
-            link = true;
-            for (let j = i + 1; j < process.argv.length; j++) {
+            createInit = true;
+            let j = i + 1;
+            for (; j < process.argv.length; j++) {
                 const arg = process.argv[j];
-                if (arg.charAt(0) == "'" && arg.charAt(arg.length - 1) == "'") {
-                    files.push(arg.slice(1, arg.length - 1));
-                    console.log(colorText(`Input file: ${arg}`, 'yellow'));
-                } else break;
+                if (arg.startsWith('-')) break;
+
+                if (!fs.existsSync(arg)) {
+                    console.log(colorText(`Error: File ${arg} not found!`, 'red'));
+                    process.exit(1);
+                }
+
+                files.push(arg);
+                console.log(colorText(`Input file: ${arg}`, 'yellow'));
             }
+            i = j - 1;
         }
 
-        if(a == 'share_context' || a == '-sc')
+        if (a == '--share_context' || a == '-sc')
             share_context = true;
+
+        if (a == '--separate' || a == '-sep')
+            separate = true;
 
         if (a == '--default_inclusion' || a == '-di')
             default_inclusion = true;
@@ -455,6 +468,12 @@ async function Main() {
             init_file = 'EDUKE.CON';
             eduke_init = true;
         }
+
+        if (a == '--accept-CON-modules' || a == '-aCm')
+            accept_con_modules = true;
+
+        if (a == '--CON-module' || a == '-Cm')
+            con_module = true;
 
         if (a == 'setup') {
             initFunc = true;
@@ -467,118 +486,225 @@ async function Main() {
         }
     }
 
-    if (!initFunc) {
-        if (compile_options & 8 && !(!output_file.length || !eduke_init)) {
-            console.log(`ERROR: you must provide a name for the output file when using -1f`)
+    if (stack_size < 1024)
+        console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
+
+    // Create the Linker context? No, just compiler first.
+    const compiler = new TsToConCompiler({ lineDetail: line_print, symbolPrint: symbol_print });
+
+    let code = '';
+
+    const initSys = new CONInit(stack_size, heap_page_size, heap_page_number, precompiled_modules, heap_page_size * heap_page_number, 0, accept_con_modules);
+
+    // --- LINK MODE (Explicit Linker call) ---
+    if (runLinker) {
+        // Collect input files from -i and -il
+        const inputFiles: string[] = [];
+        if (fileName) inputFiles.push(fileName);
+        if (files.length > 0) inputFiles.push(...files);
+        if (linkerList.length > 0) inputFiles.push(...linkerList);
+
+        if (inputFiles.length === 0) {
+            console.log(colorText('Error: No input files provided for linker. Use -i or -il.', 'red'));
             process.exit(1);
         }
 
-        if (stack_size < 1024)
-            console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
+        const linker = new Linker(output_folder, initSys, con_module);
+        for (const tco of inputFiles) {
+            const cleanPath = tco.replace(/'/g, '');
+            linker.loadModule(cleanPath);
+        }
 
-        const compiler = new TsToConCompiler({ lineDetail: line_print, symbolPrint: symbol_print });
+        if (separate) {
+            const { header, modules } = linker.linkSeparate();
 
-        let code = '';
+            console.log(`${colorText('Writing Header:', 'cyan')} ${output_folder}/header.con`);
+            fs.writeFileSync(`${output_folder}/header.con`, header);
+            headerWritten = true;
 
-        const initSys = new CONInit(stack_size, heap_page_size, heap_page_number, precompiled_modules);
+            for (const mod of modules) {
+                console.log(`${colorText('Writing Module:', 'cyan')} ${output_folder}/${mod.name}.con`);
+                fs.writeFileSync(`${output_folder}/${mod.name}.con`, mod.code);
+                linkList.push(`${output_folder}/${mod.name}.con`);
+            }
+        } else {
+            const linkedCode = linker.link();
+            // Default output name based on first input file
+            let outName = output_file;
+            if (!outName) {
+                const firstFile = path.basename(inputFiles[0], '.tco');
+                outName = firstFile + '.con';
+            }
+            console.log(`${colorText('Writing Linked CON:', 'cyan')} ${output_folder}/${outName}`);
+            fs.writeFileSync(`${output_folder}/${outName}`, linkedCode);
+        }
+        process.exit(0);
+    }
 
+
+    // --- COMPILE ONLY MODE ---
+    if (compile_only) {
+        // Process fileName if set
         if (fileName != '') {
-            const file = fs.readFileSync(fileName);
-
-            const result = compiler.compile(file.toString(), fileName);
-
-            for (let i = compiledFiles.size - 1; i >= 0; i--) {
-                const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
-                code += f.code;
-            }
-
-            fileName = GetOutputName(fileName);
-
-            console.log(' ');
-
-            if (compile_options & 4) {
-                CreateInit([`${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`]);
-                console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
-                fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
-
-                console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`);
-                fs.writeFileSync(`${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`, code);
-            } else {
-                if (default_inclusion)
-                    code = `include GAME.CON\n\n` + initSys.BuildFullCodeFile(code);
-                else {
-                    if (!(compile_options & 1))
-                        code = initSys.BuildFullCodeFile(code);
-                }
-
-                if(eduke_init)
-                    fileName = 'EDUKE.CON';
-
-                console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`);
-                fs.writeFileSync(`${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`, code);
-            }
+            files.push(fileName);
         }
 
-        if (files.length > 0) {
-            let result: CompileResult;
-            for (const f of files) {
-                const file = fs.readFileSync(f);
+        if (files.length === 0) {
+            console.log(colorText('Error: No input files provided for compilation.', 'red'));
+            process.exit(1);
+        }
 
-                result = compiler.compile(file.toString(), f, result ? result.context : undefined);
+        console.log(colorText('Compiling modules to .tco...', 'cyan'));
+        let sharedContext: any;
+        for (const f of files) {
+            const fContent = fs.readFileSync(f, 'utf8');
+            const result = compiler.compileModule(fContent.toString(), f, sharedContext);
+            if (result && result.module) {
+                sharedContext = result.context;
+                const outPath = path.join(output_folder, path.basename(f, '.ts') + '.tco');
+                console.log(`Writing ${outPath}`);
+                fs.writeFileSync(outPath, JSON.stringify(result.module, (k, v) => k === 'parent' ? undefined : v, 2));
+            } else {
+                console.log(colorText(`Failed to compile module ${f}`, 'red'));
             }
+        }
+        process.exit(0);
+    }
 
-            if (compile_options & 8) {
-                console.log(colorText(`Compiling into one file...`, 'magenta'));
-                for (let i = compiledFiles.size - 1; i >= 0; i--) {
-                    const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
-                    code += f.code;
-                }
+    // --- ORIGINAL SINGLE PASS MODE ---
 
-                if (!(compile_options & 1)) {
+    if (fileName != '') {
+        const file = fs.readFileSync(fileName);
+
+        const result = compiler.compile(file.toString(), fileName);
+
+        for (let i = compiledFiles.size - 1; i >= 0; i--) {
+            const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
+            code += f.code;
+        }
+
+        fileName = GetOutputName(fileName);
+
+        console.log(' ');
+
+        if (compile_options & 4) {
+            CreateInit([`${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`]);
+            console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
+            fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
+
+            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`);
+            fs.writeFileSync(`${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`, code);
+        } else {
+            if (default_inclusion)
+                code = `include GAME.CON\n\n` + initSys.BuildFullCodeFile(code);
+            else {
+                if (!(compile_options & 1))
                     code = initSys.BuildFullCodeFile(code);
-                    if (default_inclusion)
-                        code = `include GAME.CON\n\n` + code;
-                }
-
-                if (eduke_init)
-                    output_file = 'EDUKE.CON';
-
-                console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${output_file}${output_file.toLowerCase().endsWith('.con') ? '' : '.con'}`);
-                fs.writeFileSync(`${output_folder}/${output_file}${output_file.toLowerCase().endsWith('.con') ? '' : '.con'}`, code);
-                link = false;
-            } else {
-                compiledFiles.forEach(c => {
-                    if (c.options != 0)
-                        return;
-                    const name = GetOutputName(c.path);
-                    console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`);
-                    fs.writeFileSync(`${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`, c.code);
-
-                    if (compile_options & 4)
-                        linkList.push(`${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`);
-                });
-
-                if (compile_options & 4)
-                    link = true;
             }
+
+            if (eduke_init)
+                fileName = 'EDUKE.CON';
+
+            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`);
+            fs.writeFileSync(`${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`, code);
+        }
+    }
+
+    if (files.length > 0) {
+        let result: CompileResult;
+        for (const f of files) {
+            const file = fs.readFileSync(f);
+
+            result = compiler.compile(file.toString(), f, result ? result.context : undefined);
         }
 
-        if (link) {
-            console.log(colorText(`Linking...`, 'blue'));
-            CreateInit(linkList);
+        // Sort compiled files by dependency
+        const sortedFiles: any[] = [];
+        const visited = new Set<string>();
+        const visiting = new Set<string>();
+        const fileMap = new Map<string, any>(); // basename -> ICompiledFile
+
+        // Build helper map
+        compiledFiles.forEach(f => {
+            const name = path.basename(f.path, '.ts');
+            fileMap.set(name, f);
+        });
+
+        const visit = (f: any) => {
+            const name = path.basename(f.path, '.ts');
+            if (visited.has(name)) return;
+            if (visiting.has(name)) {
+                console.log(colorText(`Warning: Circular dependency detected involving '${name}'`, 'yellow'));
+                return;
+            }
+            visiting.add(name);
+
+            if (f.dependency) {
+                for (const dep of f.dependency) {
+                    const depFile = fileMap.get(dep);
+                    if (depFile) {
+                        visit(depFile);
+                    }
+                }
+            }
+
+            visiting.delete(name);
+            visited.add(name);
+            sortedFiles.push(f);
+        };
+
+        compiledFiles.forEach(f => visit(f));
+
+        sortedFiles.forEach(c => {
+            if (c.options != 0)
+                return;
+            const name = GetOutputName(c.path);
+            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`);
+            fs.writeFileSync(`${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`, c.code);
+
+            // Always push to linkList if we are creating init? 
+            // Currently only if compile_options & 4 (header).
+            // Wait, user said "if using with create_init".
+            // So I should populate it.
+            if (createInit) // Previously used compile_options & 4 check?
+                // Original code: if (compile_options & 4) linkList.push...
+                // But createInit IS the flag for it now.
+                // Wait, compile_options & 4 was "create header file".
+                // logic: "if (a == '--header' || a == '-h') compile_options |= 4 + 1;"
+                // And "if (createInit) CreateInit(linkList)"
+                // But wait, linkList logic was inside `else` block of `-1f`.
+                // User wants keys (files) to be added to inclusion list.
+                // If -ci is used, we generally want inputs to be in correct order.
+                // If I JUST compile, createInit is false?
+                // But user might use `-ci`.
+                // If `-ci` is set, I should populate linkList with these files.
+                // Previously line 617 checked `compile_options & 4`.
+                // But `-l` sets `link=true` (now `createInit=true`).
+                // The logic at 620 set `link=true` if `compile_options & 4`.
+                // So if header is requested, we also link?
+                // Let's preserve `createInit` logic.
+                // If `createInit` is true, we should add to `linkList`.
+                linkList.push(`${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`);
+        });
+    }
+
+    if (createInit) {
+        console.log(colorText(`Creating Init Files...`, 'blue'));
+        CreateInit(linkList);
+        if (!headerWritten) {
             console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
             fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
         }
-
-        if (fileName == '' && files.length == 0 && !link)
-            console.log(`Nothing to do!\n${helpText}`);
-        else
-            console.log(colorText(`Compilation finished!`, 'green'));
-
-        checkForUpdates();
-
-        process.exit(0);
     }
+
+    if (fileName == '' && files.length == 0 && !createInit && !runLinker)
+        console.log(`Nothing to do!\n${helpText}`);
+    else
+        console.log(colorText(`Compilation finished!`, 'green'));
+
+    checkForUpdates();
+
+    process.exit(0);
 }
 
 function CreateInit(outputFiles: string[]) {

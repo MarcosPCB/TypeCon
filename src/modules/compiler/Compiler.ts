@@ -8,6 +8,7 @@ import {
   ClassDeclaration,
 } from "ts-morph";
 import { compiledFiles, ECompileOptions, ICompiledFile, pageSize } from "./framework";
+import { CompiledModule } from "./Intermediate";
 import { visitFunctionDeclaration } from './services/visitFunctionDeclaration';
 import { visitClassDeclaration } from './services/visitClassDeclaration';
 import { visitStatement } from './services/visitStatement';
@@ -43,6 +44,7 @@ export interface CompilerOptions {
   debug?: boolean;
   lineDetail?: boolean;
   symbolPrint?: boolean;
+  mode?: 'single' | 'module';
 }
 
 export enum EHeapType {
@@ -187,6 +189,11 @@ export interface CompilerContext {
   isInLoop: boolean;
   mainBFunc: boolean;
 
+  // Tracking for Module Compilation
+  globalAllocations: Array<{ name: string, size: number }>;
+  // We will likely generate relocations by scanning tokens in the final string, 
+  // but we can store metadata here if needed.
+
   initCode: string;
 
   subFunction: ISubFunction; //Sub-functions are per file
@@ -217,47 +224,48 @@ export class TsToConCompiler {
   }
 
   private resolveImport(baseFile: string, importPath: string): string | null {
-  // 1) If it's a relative/absolute import, do your existing logic
-  if (
-    importPath.startsWith("./") ||
-    importPath.startsWith("../") ||
-    importPath.startsWith("/")
-  ) {
-    // e.g. baseFile = "/path/to/currentFile.ts"
-    // get directory
-    const dir = path.dirname(baseFile);
-    let fullPath = path.resolve(dir, importPath);
+    // 1) If it's a relative/absolute import, do your existing logic
+    if (
+      importPath.startsWith("./") ||
+      importPath.startsWith("../") ||
+      importPath.startsWith("/")
+    ) {
+      // e.g. baseFile = "/path/to/currentFile.ts"
+      // get directory
+      const dir = path.dirname(baseFile);
+      let fullPath = path.resolve(dir, importPath);
 
-    // If no extension, try ".ts"
-    if (!path.extname(fullPath)) {
-      fullPath += ".ts";
+      // If no extension, try ".ts"
+      if (!path.extname(fullPath)) {
+        fullPath += ".ts";
+      }
+      return fullPath;
     }
-    return fullPath;
+
+    // 2) Otherwise, try Node's module resolution for "some-package"
+    try {
+      return require.resolve(importPath, {
+        paths: [path.dirname(baseFile)]
+      });
+    } catch (err) {
+      console.error(`${colorText('Could not resolve', 'red')} '${importPath}' from '${baseFile}'`);
+      return null;
+    }
   }
 
-  // 2) Otherwise, try Node's module resolution for "some-package"
-  try {
-    return require.resolve(importPath, {
-      paths: [path.dirname(baseFile)]
-    });
-  } catch (err) {
-    console.error(`${colorText('Could not resolve', 'red')} '${importPath}' from '${baseFile}'`);
-    return null;
-  }
-}
 
   public compile(sourceCode: string, file: string, prvContext?: CompilerContext): CompileResult {
     const sf = this.project.createSourceFile(`temp_${Buffer.from(file).toString('base64url')}.ts`, sourceCode, {
       overwrite: true
     });
 
-    if(prvContext) {
-      if(prvContext.subFunction)
+    if (prvContext) {
+      if (prvContext.subFunction)
         prvContext.subFunction = {
           code: '',
           hash: '',
           index: 0,
-      }
+        }
     }
 
     const context: CompilerContext = prvContext ? prvContext : {
@@ -305,20 +313,31 @@ export class TsToConCompiler {
       inSwitch: false,
       hasLocalVars: false,
       usingRD: false,
-      project: this.project
+      project: this.project,
+
+      globalAllocations: []
     };
 
     const outputLines: string[] = [];
 
-    if (compiledFiles.get(Buffer.from(file).toString('base64url')))
+    if (compiledFiles.get(Buffer.from(file).toString('base64url'))) {
+      const cached = compiledFiles.get(Buffer.from(file).toString('base64url'));
+      if (context) {
+        for (const [name, sym] of cached.context.symbolTable) {
+          if (!context.symbolTable.has(name))
+            context.symbolTable.set(name, sym);
+        }
+      }
       return null;
+    }
 
     compiledFiles.set(Buffer.from(file).toString('base64url'), {
       path: file,
       code: '',
       declaration: false,
       context,
-      options: ECompileOptions.none
+      options: ECompileOptions.none,
+      dependency: []
     })
 
     context.currentFile = compiledFiles.get(Buffer.from(file).toString('base64url'));
@@ -341,7 +360,8 @@ export class TsToConCompiler {
           continue;
 
         try {
-          //context.currentFile.dependency.push(Buffer.from(resolved).toString('base64url'));
+          const modName = path.basename(resolved, '.ts'); // Use basename for now as identifier
+          context.currentFile.dependency.push(modName);
           const prvFile = context.currentFile;
           const sCode = fs.readFileSync(resolved);
           this.compile(sCode.toString(), resolved, context);
@@ -381,17 +401,34 @@ export class TsToConCompiler {
       }
     } else console.log(`\n${colorText('Compiling', 'yellow')}' ${file}...`);
 
+    const keysBefore = new Set(context.symbolTable.keys());
+
     sf.getStatements().forEach(st => {
       if (st.isKind(SyntaxKind.FunctionDeclaration)) {
         outputLines.push(visitFunctionDeclaration(st as FunctionDeclaration, context));
       } else if (st.isKind(SyntaxKind.ClassDeclaration) && !(context.currentFile.options & ECompileOptions.no_compile)) {
         outputLines.push(visitClassDeclaration(st as ClassDeclaration, context));
       } else {
-        outputLines.push(visitStatement(st, context));
+        const stmtCode = visitStatement(st, context);
+        if (stmtCode.trim() !== '') {
+          // If we are at the top level of the file/module, redirect code to initCode
+          // which will be wrapped in EVENT_NEWGAME
+          if (!context.curFunc && !context.curClass) {
+            context.initCode += stmtCode;
+          } else {
+            outputLines.push(stmtCode);
+          }
+        }
       }
     });
 
-    if(context.subFunction.code != '') {
+    const definedSymbols: string[] = [];
+    context.symbolTable.forEach((v, k) => {
+      if (!keysBefore.has(k)) definedSymbols.push(k);
+    });
+    context.currentFile.definedSymbols = definedSymbols;
+
+    if (context.subFunction.code != '') {
       //Finish the sub-functions routine
       context.subFunction.code += indent(`endswitch\n`, 2)
         + indent('} else {\n', 1)
@@ -401,6 +438,11 @@ export class TsToConCompiler {
         + indent('}\nstate popd\n', 1)
         + 'ends\n';
       outputLines.unshift(context.subFunction.code);
+    }
+
+    if (context.initCode !== '') {
+      outputLines.push(`\nappendevent EVENT_NEWGAME\n${indent(context.initCode, 1)}endevent\n`);
+      context.initCode = '';
     }
 
     if (modules.length > 0) {
@@ -424,6 +466,43 @@ export class TsToConCompiler {
       conOutput: outputLines.join("\n"),
       diagnostics: context.diagnostics,
       context
+    };
+  }
+
+  public compileModule(sourceCode: string, file: string, prvContext?: CompilerContext): { module: CompiledModule, context: CompilerContext } | null {
+    // Force module mode
+    this.options.mode = 'module';
+    const result = this.compile(sourceCode, file, prvContext);
+
+    if (!result) return null;
+
+    // We no longer scan for relocations or build a table.
+    // The markers (e.g. _G_ADDR_xxx) are embedded in the code string.
+    // The linker will parse the code and context to resolve them.
+
+    const finalDeps = (result.context.currentFile.dependency || []).filter(depName => {
+      // Look for the compiled file in the global cache to check its options
+      for (const cf of compiledFiles.values()) {
+        if (path.basename(cf.path, '.ts') === depName) {
+          // If it's a "system" module that doesn't produce code, it's not a linker dependency
+          if (cf.options & (ECompileOptions.no_compile | ECompileOptions.state_decl | ECompileOptions.no_read)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+
+    return {
+      module: {
+        name: path.basename(file, '.ts'),
+        version: '1.0',
+        context: Object.fromEntries(result.context.symbolTable),
+        globalAllocations: result.context.globalAllocations,
+        code: result.conOutput,
+        dependencies: finalDeps
+      },
+      context: result.context
     };
   }
 }

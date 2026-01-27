@@ -17,7 +17,8 @@ export interface ICompiledFile {
     context: CompilerContext,
     options: ECompileOptions,
     dependents?: string[],
-    dependency?: string[]
+    dependency?: string[],
+    definedSymbols?: string[]
 }
 
 export const compiledFiles: Map<string, ICompiledFile> = new Map();
@@ -25,22 +26,24 @@ export const compiledFiles: Map<string, ICompiledFile> = new Map();
 export let pageSize = 8;
 
 export class CONInit {
-    private initCode: string;
-    private initStates: string;
+    public readonly initCode: string;
+    public readonly initStates: string;
 
     constructor(public readonly stackSize = 1024,
         public readonly heapPageSize = 4,
         public readonly heapNumPages = 128,
         public readonly precompiled = true,
-        public readonly heapSize = 4 * 128
+        public readonly heapSize = 4 * 128,
+        public readonly globalStaticSize = 0,
+        public readonly acceptConModules = false,
     ) {
-            pageSize = heapPageSize;
+        pageSize = heapPageSize;
 
-            let quoteInit = '';
-            for(let i = 1023; i < stackSize + 1023; i++)
-                quoteInit += `string ${i} reserved\n`; 
+        let quoteInit = '';
+        for (let i = 1023; i < stackSize + 1023; i++)
+            quoteInit += `string ${i} reserved\n`;
 
-            this.initCode = `
+        this.initCode = (acceptConModules ? `define ACCEPT_CON_MODULES 1\n` : '') + `
 //Used mainly for function parameters
 define REG_FLAGS 132096
 var r0 0 REG_FLAGS
@@ -107,7 +110,7 @@ var rswe 0 REG_FLAGS
 var rf 0 REG_FLAGS
 
 //Segmentation register
-var rds ${stackSize} REG_FLAGS //determines the start of the heap memory
+var rds ${stackSize + globalStaticSize} REG_FLAGS //determines the start of the heap memory
 
 //Base pointer and Stack pointer
 var rbp 0 REG_FLAGS
@@ -258,10 +261,10 @@ var heapsize ${this.heapSize} REG_FLAGS
 //For pushing the r0-12 registers
 array rstack 24 0
 
-//TypeCON flat memory (stack + heap)
-array flat ${stackSize + this.heapSize}
+//TypeCON flat memory (stack + global + heap)
+array flat ${stackSize + globalStaticSize + this.heapSize}
 `;
-            this.initStates = `
+        this.initStates = `
 var _HEAPi 0 REG_FLAGS
 var _HEAPj 0 REG_FLAGS
 var _HEAPk 0 REG_FLAGS
@@ -1038,7 +1041,7 @@ defstate _GapDist
 ends
 
 `
-        }
+    }
 
     GetPrecompiledCode() {
         let dir: Dirent[];
@@ -1046,7 +1049,7 @@ ends
             dir = readdirSync(`./include/TCSet100/precompile/generated`, {
                 withFileTypes: true
             });
-        } catch(err) {
+        } catch (err) {
             console.log(`Include folder or pre-compiled folder not set yet`);
             console.log(`Rebuild the folder so the compilation can proceed`);
             return null
@@ -1054,12 +1057,12 @@ ends
 
         let code = '';
 
-        for(const f of dir) {
-            if(f.isFile() && f.name.endsWith('.con')) {
+        for (const f of dir) {
+            if (f.isFile() && f.name.endsWith('.con')) {
                 try {
                     const module = readFileSync(path.join(f.parentPath, f.name));
                     code += module.toString();
-                } catch(err) {
+                } catch (err) {
                     console.log(`Unable to read/open pre-compiled module ${path.join(f.parentPath, f.name)}`);
                     return null;
                 }
@@ -1071,23 +1074,23 @@ ends
 
     BuildFullCodeFile(code: string) {
         let preCompCode: string | null;
-        if(this.precompiled)  {
+        if (this.precompiled) {
             preCompCode = this.GetPrecompiledCode();
 
-            if(!preCompCode) {
+            if (!preCompCode) {
                 console.log(`Failed to link pre-compiled code. Stopping...`);
                 process.exit(1);
             }
         }
-        return this.initCode + this.initStates + (this.precompiled ? preCompCode : '')  + code;
+        return this.initCode + this.initStates + (this.precompiled ? preCompCode : '') + code;
     }
 
     BuildInitFile() {
         let preCompCode: string | null;
-        if(this.precompiled)  {
+        if (this.precompiled) {
             preCompCode = this.GetPrecompiledCode();
 
-            if(!preCompCode) {
+            if (!preCompCode) {
                 console.log(`Failed to link pre-compiled code. Stopping...`);
                 process.exit(1);
             }
