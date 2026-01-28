@@ -101,6 +101,18 @@ export class Linker {
         const { sortedModules, finalInit, globalSize } = this.prepareLinking();
 
         let output = '';
+
+        // Collect all unique marker defines from all modules
+        const allMarkers = new Set<string>();
+        for (const mod of this.modules.values()) {
+            if (mod.markerDefines) {
+                for (const m of mod.markerDefines) allMarkers.add(m);
+            }
+        }
+        if (allMarkers.size > 0) {
+            output += `// Language Set Markers\n${Array.from(allMarkers).join('\n')}\n\n`;
+        }
+
         let globalArrayName = '';
 
         if (this.isConModule) {
@@ -113,12 +125,41 @@ export class Linker {
             output += `array ${globalArrayName} ${globalSize}\n\n`;
 
             output += `appendevent EVENT_INIT\n`;
-            output += `  ifndef ACCEPT_CON_MODULES\n`;
+            output += `  ife ACCEPT_CON_MODULES 0\n`;
             output += `    {\n`;
             output += `      qputs 1024 ERROR: Game does not accept CON modules. Required by ${firstModName}.\n`;
             output += `      echo 1024\n`;
             output += `      nullop // or game_quit\n`;
             output += `    }\n`;
+
+            // Data format check
+            let modLangSet: string | null = null;
+            let modLangVersion: number | null = null;
+            if (sortedModules[0]?.markerDefines) {
+                for (const def of sortedModules[0].markerDefines) {
+                    const setMatch = def.match(/define LANGUAGE_SET (0x[0-9A-F]+)/);
+                    if (setMatch) modLangSet = setMatch[1];
+                    const verMatch = def.match(/define LANGUAGE_SET_VERSION (\d+)/);
+                    if (verMatch) modLangVersion = parseInt(verMatch[1]);
+                }
+            }
+
+            if (modLangSet) {
+                output += `  ifn LANGUAGE_SET ${modLangSet}\n`;
+                output += `    {\n`;
+                output += `      qputs 1024 ERROR: Language set mismatch. Required by ${firstModName}: ${modLangSet}.\n`;
+                output += `      echo 1024\n`;
+                output += `    }\n`;
+            }
+
+            if (modLangVersion !== null) {
+                output += `  ifg LANGUAGE_SET_VERSION ${modLangVersion}\n`;
+                output += `    {\n`;
+                output += `      qputs 1024 ERROR: Language set version is too new for this game. Required by ${firstModName}: <= ${modLangVersion}.\n`;
+                output += `      echo 1024\n`;
+                output += `    }\n`;
+            }
+
             output += `endevent\n\n`;
 
             output += `appendevent EVENT_NEWGAME\n`;
@@ -143,7 +184,7 @@ export class Linker {
             }
             output += `endevent\n\n`;
         } else {
-            output = finalInit.initCode + '\n' + finalInit.initStates + '\n';
+            output += finalInit.initCode + '\n' + finalInit.initStates + '\n';
             output += `// Global Static Storage Start: ${finalInit.stackSize}\n`;
             output += `// Global Static Storage Size: ${globalSize}\n\n`;
         }

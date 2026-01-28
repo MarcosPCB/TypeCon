@@ -1,6 +1,8 @@
 import { CON_CONSTANT, CON_NATIVE, CON_NATIVE_GAMEVAR, CON_NATIVE_OBJECT, CON_NATIVE_POINTER, CON_NATIVE_STATE } from "./native"
 
 //@typecon
+//@langSet=tscon
+//@setVersion=100
 
 namespace nocompile { }
 
@@ -1122,12 +1124,12 @@ declare global {
          * @returns - the current counter value
          */
         public Count(value?: number): CON_NATIVE<number>
-         /**
-         * Set or gets the native action counter for this actor
-         * @param value - Set the ation counter to this value. Leave blank to just retrieve the current action counter value
-         * @returns - the current action counter value
-         */
-         public ActionCount(value?: number): CON_NATIVE<number>
+        /**
+        * Set or gets the native action counter for this actor
+        * @param value - Set the ation counter to this value. Leave blank to just retrieve the current action counter value
+        * @returns - the current action counter value
+        */
+        public ActionCount(value?: number): CON_NATIVE<number>
         /**
          * Gets the current distance from the ceiling
          * @returns - the distance right shifted to 8
@@ -1565,22 +1567,22 @@ declare global {
      */
     export enum EWeaponFlags {
         HOLSTER_CLEARS_CLIP = 1,
-        GLOWS               = 2,
-        AUTOMATIC           = 4,
-        FIREEVERYOTHER      = 8,
-        FIREEVERYTHIRD      = 16,
-        RANDOMRESTART       = 32,
-        AMMOPERSHOT         = 64,
-        BOMB_TRIGGER        = 128,
-        NOVISIBLE           = 256,
-        THROWIT             = 512,
-        CHECKATRELOAD       = 1024,
-        STANDSTILL          = 2048,
-        SPAWNTYPE2          = 4096,
-        SPAWNTYPE3          = 8192,
-        SEMIAUTO            = 16384,
-        RELOAD_TIMING       = 32768,
-        RESET               = 65536,
+        GLOWS = 2,
+        AUTOMATIC = 4,
+        FIREEVERYOTHER = 8,
+        FIREEVERYTHIRD = 16,
+        RANDOMRESTART = 32,
+        AMMOPERSHOT = 64,
+        BOMB_TRIGGER = 128,
+        NOVISIBLE = 256,
+        THROWIT = 512,
+        CHECKATRELOAD = 1024,
+        STANDSTILL = 2048,
+        SPAWNTYPE2 = 4096,
+        SPAWNTYPE3 = 8192,
+        SEMIAUTO = 16384,
+        RELOAD_TIMING = 32768,
+        RESET = 65536,
     }
 
     /**
@@ -2395,10 +2397,10 @@ declare global {
 
         public bobCounter: CON_NATIVE<number>;
         public bobPos: CON_NATIVE<vec2>;
-        
+
         public crackTime: CON_NATIVE<number>;
         public fistIncs: CON_NATIVE<number>;
-        
+
         public kneeIncs: CON_NATIVE<number>;
         public knuckleIncs: CON_NATIVE<number>;
 
@@ -2411,7 +2413,7 @@ declare global {
         public quickKick: CON_NATIVE<number>;
         public randomClubFrame: CON_NATIVE<number>;
         public rapidFireHold: CON_NATIVE<number>;
-        
+
         public showEmptyWeapon: CON_NATIVE<number>;
 
         public weaponSystem: CON_NATIVE<IPlayerWeapon>;
@@ -2440,7 +2442,7 @@ declare global {
 
         public angVel: CON_NATIVE<number>;
         public crouchToggle: CON_NATIVE<number>;
-        
+
         public runSpeed: CON_NATIVE<number>;
         public jumpingCounter: CON_NATIVE<number>;
         public jumpingToggle: CON_NATIVE<number>;
@@ -2521,7 +2523,7 @@ declare global {
         public loogiePos: CON_NATIVE<vec2>;
 
         public maxPlayerHealth: CON_NATIVE<number>;
-        
+
         public onCrane: CON_NATIVE<number>;
         public onGround: CON_NATIVE<number>;
         public onWarpingSector: CON_NATIVE<number>;
@@ -2545,7 +2547,7 @@ declare global {
             picnum: constant,
             health: constant
         )
-        
+
         Main(first_action?: IAction);
 
         protected Events: OnEvent;

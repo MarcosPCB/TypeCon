@@ -49,4 +49,7 @@ export interface CompiledModule {
 
     /** List of other modules (paths or names) this module depends on */
     dependencies: string[];
+
+    /** Custom defines from markers (e.g. LANGUAGE_SET) */
+    markerDefines?: string[];
 }

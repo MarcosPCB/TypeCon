@@ -14,6 +14,7 @@ import { visitClassDeclaration } from './services/visitClassDeclaration';
 import { visitStatement } from './services/visitStatement';
 import { colorText } from '../../main';
 import { indent } from './helper/indent';
+import { createHash } from 'crypto';
 
 export type DiagnosticSeverity = "error" | "warning";
 
@@ -203,6 +204,7 @@ export interface CompilerContext {
   hasLocalVars: boolean;
   usingRD: boolean;
   project: Project;
+  headerDefines: string[];
 }
 
 export interface CompileResult {
@@ -315,7 +317,8 @@ export class TsToConCompiler {
       usingRD: false,
       project: this.project,
 
-      globalAllocations: []
+      globalAllocations: [],
+      headerDefines: []
     };
 
     const outputLines: string[] = [];
@@ -376,6 +379,20 @@ export class TsToConCompiler {
 
     if (prvContext)
       console.log(`\n${colorText('Including', 'yellow')}' ${file}...`);
+
+    // Parse markers from source comment (case-insensitive)
+    const setVersionMatch = sourceCode.match(/\/\/@setVersion=(\d+)/i);
+    if (setVersionMatch) {
+      context.headerDefines.push(`define LANGUAGE_SET_VERSION ${setVersionMatch[1]}`);
+    }
+
+    const langSetMatch = sourceCode.match(/\/\/@langSet=([\w.-]+)/i);
+    if (langSetMatch) {
+      const name = langSetMatch[1];
+      // Generate a 6-character hex hash from the name
+      const hash = createHash('md5').update(name).digest('hex').substring(0, 6).toUpperCase();
+      context.headerDefines.push(`define LANGUAGE_SET 0x${hash}`);
+    }
 
     const modules = sf.getModules();
 
@@ -445,11 +462,17 @@ export class TsToConCompiler {
       context.initCode = '';
     }
 
+    // Only prepend global headerDefines IF we are NOT in module mode 
+    // or if we are the top-level file processing?
+    // Actually, let's keep them in the module metadata.
+    // For single file output, we prepend them.
+    const finalOutput = (prvContext ? [] : context.headerDefines).concat(outputLines);
+
     if (modules.length > 0) {
       if (modules.findIndex(e => e.getName() == 'nocompile') != -1)
-        outputLines.length = 0;
-      else context.currentFile.code = outputLines.join('\n');
-    } else context.currentFile.code = outputLines.join('\n');
+        context.currentFile.code = (prvContext ? [] : context.headerDefines).join('\n');
+      else context.currentFile.code = finalOutput.join('\n');
+    } else context.currentFile.code = finalOutput.join('\n');
 
     if (context.diagnostics.length > 0) {
       console.log(colorText('=== DIAGNOSTICS ===', 'red'));
@@ -499,6 +522,7 @@ export class TsToConCompiler {
         version: '1.0',
         context: Object.fromEntries(result.context.symbolTable),
         globalAllocations: result.context.globalAllocations,
+        markerDefines: [...new Set(result.context.headerDefines)],
         code: result.conOutput,
         dependencies: finalDeps
       },
