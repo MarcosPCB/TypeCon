@@ -1,5 +1,7 @@
 node_modules
 compiled/*.con
+compiled/*.tco
+obj/*.tco
 obj/*.AST
 test/eduke
 test/eduke32

@@ -37,6 +37,7 @@ let compile_only = false;
 let headerWritten = false;
 let accept_con_modules = false;
 let con_module = false;
+let compile_mode: 'single' | 'module' = 'single';
 
 export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
     switch (color) {
@@ -70,26 +71,35 @@ Usage:
     Project options:
     \x1b[31msetup\x1b[0m: Creates the project's basic setup including folders, include files, templates and the basic TypeScript configuration
 
+    Common options (Works on both):
+    \x1b[31m-i or --input\x1b[0m:  Input file path
+    \x1b[32m-il or --input-list\x1b[0m: List of files to be processed (compilation or linking)
+    \x1b[33m-o or --output\x1b[0m:  Output file name
+    \x1b[34m-of or --output-folder\x1b[0m: Output folder path 
+    \x1b[93m-aCm or --accept-con-modules\x1b[0m: Project accepts relocatable CON modules 
+
     Compile options:
     \x1b[31m-c or --compile\x1b[0m:  Compile input files to .tco (Intermediate) format for separate linking.
-    \x1b[31m-i or --input\x1b[0m:  for the file path to be compiled
-    \x1b[37m-if or --input_folder\x1b[0m:  for the path folder to be compiled (compiles all files inside)
-    \x1b[32m-il or --input_list\x1b[0m: for a list of files to be compiled/linked
-    \x1b[33m-o or --output\x1b[0m:  for the output file name
-    \x1b[34m-of or --output_folder\x1b[0m: for the output folder path 
-    \x1b[35m-dl or --detail_lines\x1b[0m: to write the TS lines inside the CON code 
-    \x1b[36m-ss or --stack_size\x1b[0m: to define the stack size 
-    \x1b[36m-hs or --heap_size\x1b[0m: to define the heap's size
-    \x1b[38m-ps or --page_size\x1b[0m: to define the heap page's minimum size 
-    \x1b[39m-pn or --page_number\x1b[0m: to define the default number of heap pages
-    \x1b[91m-hl or --headerless\x1b[0m: Don't insert the header code (init code and states) inside the output CON 
-    \x1b[92m-h or --header\x1b[0m: Create the header file 
-    \x1b[96m-np or --no_precompiled\x1b[0m: Don't link pre-compiled modules
-    \x1b[93m-ci or --create_init\x1b[0m: (Old -l) Create header and init files with list of CON files provided via -il
+    \x1b[37m-if or --input-folder\x1b[0m: Compile all files within a folder
+    \x1b[96m-m or --module\x1b[0m: (Compiler) Enable module mode for single file compilation
+    \x1b[35m-sc or --share-context\x1b[0m: Share context between modules during compilation
+    \x1b[35m-dl or --detail-lines\x1b[0m: Write the original TS lines inside the CON code as comments
+    \x1b[35m-sp or --symbol-print\x1b[0m: Print the symbol table for debugging
+
+    Linker and Project options:
     \x1b[95m-L or --linker\x1b[0m: Link multiple .tco intermediate files into a single .con file
+    \x1b[36m-ss or --stack-size\x1b[0m: Define the virtual stack size 
+    \x1b[36m-hs or --heap-size\x1b[0m: Define the virtual heap's size
+    \x1b[38m-ps or --page-size\x1b[0m: Define the heap page's minimum size 
+    \x1b[39m-pn or --page-number\x1b[0m: Define the default number of heap pages
+    \x1b[91m-hl or --headerless\x1b[0m: Don't insert the header code (init code and states) inside the output CON 
+    \x1b[92m-h or --header\x1b[0m: Create the framework header file 
+    \x1b[93m-ci or --create-init\x1b[0m: Create header and init files with list of CON files provided via -il
     \x1b[96m-sep or --separate\x1b[0m: (Used with -L) Output linked modules as separate CON files instead of one big file
-    \x1b[94m-di or --default_inclusion\x1b[0m: Default inclusion (GAME.CON)  
-    \x1b[95m-ei or --eduke_init\x1b[0m: Init file is EDUKE.CON`
+    \x1b[94m-di or --default-inclusion\x1b[0m: Default inclusion (GAME.CON)  
+    \x1b[95m-ei or --eduke-init\x1b[0m: Init file is EDUKE.CON
+    \x1b[95m-Cm or --con-module\x1b[0m: (Linker) Output as a relocatable CON module (generates global array storage)
+    \x1b[96m-np or --no-precompiled\x1b[0m: Disable automatic linking of pre-compiled system modules`
 
 
 
@@ -376,7 +386,7 @@ async function Main() {
             }
         }
 
-        if (a == '--input_folder' || a == '-if') {
+        if (a == '--input-folder' || a == '-if') {
             input_folder = process.argv[i + 1];
 
             if (fileName != '') {
@@ -392,22 +402,22 @@ async function Main() {
             GetAllFilesFromPath(input_folder);
         }
 
-        if (a == '--line_print' || a == '-lp' || a == '--detail_lines' || a == '-dl')
+        if (a == '--line-print' || a == '-lp' || a == '--detail-lines' || a == '-dl')
             line_print = true;
 
-        if (a == '--symbol_print' || a == '-sp')
+        if (a == '--symbol-print' || a == '-sp')
             symbol_print = true;
 
-        if (a == '--stack_size' || a == '-ss')
+        if (a == '--stack-size' || a == '-ss')
             stack_size = Number(process.argv[i + 1]);
 
-        if (a == '--page_size' || a == '-ps')
+        if (a == '--page-size' || a == '-ps')
             heap_page_size = Number(process.argv[i + 1]);
 
-        if (a == '--page_number' || a == '-pn')
+        if (a == '--page-number' || a == '-pn')
             heap_page_number = Number(process.argv[i + 1]);
 
-        if (a == '--output_folder' || a == '-of')
+        if (a == '--output-folder' || a == '-of')
             output_folder = process.argv[i + 1];
 
         if (a == '--output' || a == '-o')
@@ -424,12 +434,12 @@ async function Main() {
             compile_options |= 4 + 1;
         }
 
-        if (a == '--no_precompiled' || a == '-np')
+        if (a == '--no-precompiled' || a == '-np')
             precompiled_modules = false;
 
 
 
-        if (a == '--create_init' || a == '-ci' || a == '--link' || a == '-l') {
+        if (a == '--create-init' || a == '-ci' || a == '--link' || a == '-l') {
             createInit = true;
         }
 
@@ -437,8 +447,7 @@ async function Main() {
             runLinker = true;
         }
 
-        if (a == '--input_list' || a == '-il') {
-            createInit = true;
+        if (a == '--input-list' || a == '-il') {
             let j = i + 1;
             for (; j < process.argv.length; j++) {
                 const arg = process.argv[j];
@@ -455,25 +464,28 @@ async function Main() {
             i = j - 1;
         }
 
-        if (a == '--share_context' || a == '-sc')
+        if (a == '--share-context' || a == '-sc')
             share_context = true;
 
         if (a == '--separate' || a == '-sep')
             separate = true;
 
-        if (a == '--default_inclusion' || a == '-di')
+        if (a == '--default-inclusion' || a == '-di')
             default_inclusion = true;
 
-        if (a == '--eduke_init' || a == '-ei') {
+        if (a == '--eduke-init' || a == '-ei') {
             init_file = 'EDUKE.CON';
             eduke_init = true;
         }
 
-        if (a == '--accept-CON-modules' || a == '-aCm')
+        if (a == '--accept-con-modules' || a == '-aCm')
             accept_con_modules = true;
 
-        if (a == '--CON-module' || a == '-Cm')
+        if (a == '--con-module' || a == '-Cm')
             con_module = true;
+
+        if (a == '--module' || a == '-m')
+            compile_mode = 'module';
 
         if (a == 'setup') {
             initFunc = true;
@@ -486,11 +498,16 @@ async function Main() {
         }
     }
 
+    if (default_inclusion && separate && !createInit) {
+        console.log(colorText("Error: --default-inclusion is only possible with the --create-init CLI when using --separate.", "red"));
+        process.exit(1);
+    }
+
     if (stack_size < 1024)
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
     // Create the Linker context? No, just compiler first.
-    const compiler = new TsToConCompiler({ lineDetail: line_print, symbolPrint: symbol_print });
+    const compiler = new TsToConCompiler({ lineDetail: line_print, symbolPrint: symbol_print, mode: compile_mode });
 
     let code = '';
 
@@ -525,10 +542,15 @@ async function Main() {
             for (const mod of modules) {
                 console.log(`${colorText('Writing Module:', 'cyan')} ${output_folder}/${mod.name}.con`);
                 fs.writeFileSync(`${output_folder}/${mod.name}.con`, mod.code);
-                linkList.push(`${output_folder}/${mod.name}.con`);
+                linkList.push(`${mod.name}.con`);
             }
         } else {
-            const linkedCode = linker.link();
+            let linkedCode = linker.link();
+            if (default_inclusion) {
+                linkedCode = `include GAME.CON\n\n` + linkedCode;
+                createInit = false;
+                headerWritten = true;
+            }
             // Default output name based on first input file
             let outName = output_file;
             if (!outName) {
@@ -537,7 +559,18 @@ async function Main() {
             }
             console.log(`${colorText('Writing Linked CON:', 'cyan')} ${output_folder}/${outName}`);
             fs.writeFileSync(`${output_folder}/${outName}`, linkedCode);
+            linkList.push(`${outName}`);
         }
+
+        if (createInit) {
+            console.log(colorText(`Creating Init Files...`, 'blue'));
+            CreateInit(linkList);
+            if (!headerWritten) {
+                console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
+                fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
+            }
+        }
+
         process.exit(0);
     }
 
@@ -583,31 +616,31 @@ async function Main() {
             code += f.code;
         }
 
-        fileName = GetOutputName(fileName);
+        const outName = GetOutputName(fileName) + (GetOutputName(fileName).toLowerCase().endsWith('.con') ? '' : '.con');
 
         console.log(' ');
 
         if (compile_options & 4) {
-            CreateInit([`${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`]);
             console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
             fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
+            headerWritten = true;
 
-            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`);
-            fs.writeFileSync(`${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`, code);
+            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${outName}`);
+            fs.writeFileSync(`${output_folder}/${outName}`, code);
         } else {
+            let finalCode = code;
             if (default_inclusion)
-                code = `include GAME.CON\n\n` + initSys.BuildFullCodeFile(code);
+                finalCode = `include GAME.CON\n\n` + initSys.BuildFullCodeFile(code);
             else {
                 if (!(compile_options & 1))
-                    code = initSys.BuildFullCodeFile(code);
+                    finalCode = initSys.BuildFullCodeFile(code);
             }
 
-            if (eduke_init)
-                fileName = 'EDUKE.CON';
-
-            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`);
-            fs.writeFileSync(`${output_folder}/${fileName}${fileName.toLowerCase().endsWith('.con') ? '' : '.con'}`, code);
+            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${outName}`);
+            fs.writeFileSync(`${output_folder}/${outName}`, finalCode);
         }
+
+        if (createInit) linkList.push(outName);
     }
 
     if (files.length > 0) {
@@ -684,7 +717,7 @@ async function Main() {
                 // So if header is requested, we also link?
                 // Let's preserve `createInit` logic.
                 // If `createInit` is true, we should add to `linkList`.
-                linkList.push(`${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`);
+                linkList.push(`${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`);
         });
     }
 

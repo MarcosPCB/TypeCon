@@ -82,16 +82,17 @@ export class Linker {
     public linkSeparate() {
         const { sortedModules, finalInit, globalSize } = this.prepareLinking();
 
-        let header = '';
-        if (!this.isConModule) {
-            header = finalInit.initCode + '\n' + finalInit.initStates + '\n';
-            header += `// Global Static Storage Start: ${finalInit.stackSize}\n`;
-            header += `// Global Static Storage Size: ${globalSize}\n\n`;
+        let globalArrayName = '';
+        if (this.isConModule) {
+            const firstModName = sortedModules[0]?.name || 'mod';
+            globalArrayName = this.generateGlobalArrayName(firstModName);
         }
+
+        const header = this.buildHeader(sortedModules, finalInit, globalSize, globalArrayName);
 
         const modules = sortedModules.map(mod => ({
             name: mod.name,
-            code: this.patchModule(mod)
+            code: this.patchModule(mod, globalArrayName)
         }));
 
         return { header, modules };
@@ -100,6 +101,28 @@ export class Linker {
     public link(): string {
         const { sortedModules, finalInit, globalSize } = this.prepareLinking();
 
+        let globalArrayName = '';
+        if (this.isConModule) {
+            const firstModName = sortedModules[0]?.name || 'mod';
+            globalArrayName = this.generateGlobalArrayName(firstModName);
+        }
+
+        let output = this.buildHeader(sortedModules, finalInit, globalSize, globalArrayName);
+
+        sortedModules.forEach(mod => {
+            output += `// Module: ${mod.name}\n${this.patchModule(mod, globalArrayName)}\n`;
+        });
+
+        return output;
+    }
+
+    private generateGlobalArrayName(firstModName: string): string {
+        const prefix = firstModName.substring(0, 4).toLowerCase();
+        const random = Math.random().toString(36).substring(2, 10);
+        return `GV_${prefix}${random}`;
+    }
+
+    private buildHeader(sortedModules: CompiledModule[], finalInit: CONInit, globalSize: number, globalArrayName: string): string {
         let output = '';
 
         // Collect all unique marker defines from all modules
@@ -113,14 +136,8 @@ export class Linker {
             output += `// Language Set Markers\n${Array.from(allMarkers).join('\n')}\n\n`;
         }
 
-        let globalArrayName = '';
-
         if (this.isConModule) {
             const firstModName = sortedModules[0]?.name || 'mod';
-            const prefix = firstModName.substring(0, 4).toLowerCase();
-            const random = Math.random().toString(36).substring(2, 10);
-            globalArrayName = `GV_${prefix}${random}`;
-
             output += `// CON Module: ${firstModName}\n`;
             output += `array ${globalArrayName} ${globalSize}\n\n`;
 
@@ -163,7 +180,6 @@ export class Linker {
             output += `endevent\n\n`;
 
             output += `appendevent EVENT_NEWGAME\n`;
-            // Set offsets in global array based on rsp tracking
             const initializedGlobals = new Set<string>();
             for (const mod of sortedModules) {
                 if (mod.globalAllocations) {
@@ -188,10 +204,6 @@ export class Linker {
             output += `// Global Static Storage Start: ${finalInit.stackSize}\n`;
             output += `// Global Static Storage Size: ${globalSize}\n\n`;
         }
-
-        sortedModules.forEach(mod => {
-            output += `// Module: ${mod.name}\n${this.patchModule(mod, globalArrayName)}\n`;
-        });
 
         return output;
     }
