@@ -29,6 +29,7 @@ export class CONInit {
     public readonly initCode: string;
     public readonly initStates: string;
 
+    public markerDefines: string[] = [];
     constructor(public readonly stackSize = 1024,
         public readonly heapPageSize = 4,
         public readonly heapNumPages = 128,
@@ -1082,7 +1083,8 @@ ends
                 process.exit(1);
             }
         }
-        return this.initCode + this.initStates + (this.precompiled ? preCompCode : '') + code;
+        const markers = this.markerDefines.length > 0 ? this.markerDefines.join('\n') + '\n\n' : '';
+        return markers + this.initCode + this.initStates + (this.precompiled ? preCompCode : '') + code;
     }
 
     BuildInitFile() {
@@ -1096,6 +1098,7 @@ ends
             }
         }
 
-        return this.initCode + this.initStates + (this.precompiled ? preCompCode : '');
+        const markers = this.markerDefines.length > 0 ? this.markerDefines.join('\n') + '\n\n' : '';
+        return markers + this.initCode + this.initStates + (this.precompiled ? preCompCode : '');
     }
 }

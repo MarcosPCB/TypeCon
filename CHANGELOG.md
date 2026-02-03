@@ -1,5 +1,30 @@
 # Changelog
 
+## [v0.7.0]
+
+### Added
+- **Separate Compilation & Linking**: Introduced the `Linker` module and `.tco` intermediate format.
+- **Project Structure**: Revamped `setup` command with template support and VS Code plugin automatic configuration.
+- **Relocatable CON Modules**: Added support for generating relocatable modules with global array storage.
+- **Enhanced CLI**: 
+  - New `-L, --linker` for combining intermediate files.
+  - New `-ic, --intermediate-code` for raw CON output.
+  - New `-sep, --separate` for modular linking.
+  - New `-m, --module` for explicit module-mode compilation.
+- **Modern JS Operators**: Added support for **Spread Operator (...)** in object and array literals.
+- **Documentation**: Comprehensive [Technical Architecture](file:///Users/mp/.gemini/antigravity/brain/f8762337-2946-4431-975c-414cacc7a35f/Architecture.md) guide covering memory, strings, and module sets.
+
+### Changed
+- Improved garbage collection efficiency and stack management.
+- Revamped `CFile` and `DN3D` module integration for better performance.
+- Simplified CLI flags for better readability and alias support (e.g., `-dl` for `-lp`).
+
+### Fixed
+- Fixed circular dependency issues in multi-file project compilation.
+- Resolved various member expression transpilation bugs within actor classes.
+- Fixed: Language set markers (`LANGUAGE_SET_VERSION`, `LANGUAGE_SET`) now correctly only appear in the project header and are omitted from individual compiled modules.
+
+
 ## [v0.6.0]
 
 ### Fixed

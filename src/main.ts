@@ -641,6 +641,7 @@ async function Main() {
         const file = fs.readFileSync(fileName);
 
         const result = compiler.compile(file.toString(), fileName);
+        if (result && result.context) initSys.markerDefines = [...new Set(result.context.headerDefines)];
 
         for (let i = compiledFiles.size - 1; i >= 0; i--) {
             const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
@@ -681,6 +682,7 @@ async function Main() {
 
             result = compiler.compile(file.toString(), f, result ? result.context : undefined);
         }
+        if (result && result.context) initSys.markerDefines = [...new Set(result.context.headerDefines)];
 
         // Sort compiled files by dependency
         const sortedFiles: any[] = [];

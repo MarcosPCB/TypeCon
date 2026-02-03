@@ -462,17 +462,8 @@ export class TsToConCompiler {
       context.initCode = '';
     }
 
-    // Only prepend global headerDefines IF we are NOT in module mode 
-    // or if we are the top-level file processing?
-    // Actually, let's keep them in the module metadata.
-    // For single file output, we prepend them.
-    const finalOutput = (prvContext ? [] : context.headerDefines).concat(outputLines);
-
-    if (modules.length > 0) {
-      if (modules.findIndex(e => e.getName() == 'nocompile') != -1)
-        context.currentFile.code = (prvContext ? [] : context.headerDefines).join('\n');
-      else context.currentFile.code = finalOutput.join('\n');
-    } else context.currentFile.code = finalOutput.join('\n');
+    const finalOutput = outputLines;
+    context.currentFile.code = finalOutput.join('\n');
 
     if (context.diagnostics.length > 0) {
       console.log(colorText('=== DIAGNOSTICS ===', 'red'));
