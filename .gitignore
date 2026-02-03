@@ -3,6 +3,7 @@ compiled/*.con
 compiled/*.tco
 obj/*.tco
 obj/*.AST
+asm/*.icc
 test/eduke
 test/eduke32
 *.cfg

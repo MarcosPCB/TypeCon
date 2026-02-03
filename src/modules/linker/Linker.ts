@@ -27,6 +27,11 @@ export class Linker {
     }
 
     public loadModule(filePath: string) {
+        if (!fs.existsSync(filePath)) {
+            console.error(colorText(`Error: Module file not found: ${filePath}`, 'red'));
+            process.exit(1);
+        }
+
         try {
             const content = fs.readFileSync(filePath, 'utf-8');
             const mod = JSON.parse(content) as CompiledModule;
@@ -39,7 +44,7 @@ export class Linker {
             console.log(`Loaded module: ${mod.name} (${filePath})`);
         } catch (e) {
             console.error(colorText(`Error loading module ${filePath}: ${e}`, 'red'));
-            throw e;
+            process.exit(1);
         }
     }
 

@@ -18,6 +18,8 @@ let line_print = false;
 let symbol_print = false;
 let stack_size = 1024;
 let output_folder = 'compiled';
+let objFolder = 'obj';
+let objFolderExplicitlySet = false;
 let output_file = '';
 let linkList: string[] = [];
 let linkerList: string[] = [];
@@ -38,6 +40,7 @@ let headerWritten = false;
 let accept_con_modules = false;
 let con_module = false;
 let compile_mode: 'single' | 'module' = 'single';
+let intermediate_code = false;
 
 export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
     switch (color) {
@@ -83,6 +86,7 @@ Usage:
     \x1b[37m-if or --input-folder\x1b[0m: Compile all files within a folder
     \x1b[96m-m or --module\x1b[0m: (Compiler) Enable module mode for single file compilation
     \x1b[35m-sc or --share-context\x1b[0m: Share context between modules during compilation
+    \x1b[36m-ic or --intermediate-code\x1b[0m: Generate intermediate code (CON with markers) in 'asm' folder
     \x1b[35m-dl or --detail-lines\x1b[0m: Write the original TS lines inside the CON code as comments
     \x1b[35m-sp or --symbol-print\x1b[0m: Print the symbol table for debugging
 
@@ -417,8 +421,10 @@ async function Main() {
         if (a == '--page-number' || a == '-pn')
             heap_page_number = Number(process.argv[i + 1]);
 
-        if (a == '--output-folder' || a == '-of')
+        if (a == '--output-folder' || a == '-of') {
             output_folder = process.argv[i + 1];
+            objFolderExplicitlySet = true;
+        }
 
         if (a == '--output' || a == '-o')
             output_file = process.argv[i + 1];
@@ -486,6 +492,12 @@ async function Main() {
 
         if (a == '--module' || a == '-m')
             compile_mode = 'module';
+
+        if (a == '--intermediate-code' || a == '-ic') {
+            compile_mode = 'module';
+            intermediate_code = true;
+            compile_only = true;
+        }
 
         if (a == 'setup') {
             initFunc = true;
@@ -587,16 +599,35 @@ async function Main() {
             process.exit(1);
         }
 
-        console.log(colorText('Compiling modules to .tco...', 'cyan'));
+        if (intermediate_code && !objFolderExplicitlySet) {
+            objFolder = 'asm';
+        }
+
+        if (objFolderExplicitlySet) {
+            objFolder = output_folder;
+        }
+
+        if (!fs.existsSync(objFolder)) {
+            fs.mkdirSync(objFolder, { recursive: true });
+        }
+
+        console.log(colorText(`Compiling modules to ${intermediate_code ? 'intermediate CON' : '.tco'}...`, 'cyan'));
         let sharedContext: any;
         for (const f of files) {
             const fContent = fs.readFileSync(f, 'utf8');
             const result = compiler.compileModule(fContent.toString(), f, sharedContext);
             if (result && result.module) {
                 sharedContext = result.context;
-                const outPath = path.join(output_folder, path.basename(f, '.ts') + '.tco');
-                console.log(`Writing ${outPath}`);
-                fs.writeFileSync(outPath, JSON.stringify(result.module, (k, v) => k === 'parent' ? undefined : v, 2));
+
+                if (intermediate_code) {
+                    const outPath = path.join(objFolder, path.basename(f, '.ts') + '.icc');
+                    console.log(`Writing ${outPath}`);
+                    fs.writeFileSync(outPath, result.module.code);
+                } else {
+                    const outPath = path.join(objFolder, path.basename(f, '.ts') + '.tco');
+                    console.log(`Writing ${outPath}`);
+                    fs.writeFileSync(outPath, JSON.stringify(result.module, (k, v) => k === 'parent' ? undefined : v, 2));
+                }
             } else {
                 console.log(colorText(`Failed to compile module ${f}`, 'red'));
             }
