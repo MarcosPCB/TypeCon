@@ -85,6 +85,7 @@ By ItsMarcos - Use '--help' or '-?' to get the list of commands
 - **`-np, --no-precompiled`**: Disables automatic linking of pre-compiled system modules.
 - **`-di, --default-inclusion`**: Includes `GAME.CON` at the top of the output.
 - **`-ei, --eduke-init`**: Sets the initialization filename to `EDUKE.CON`.
+- **`-C, --clean`**: Empty the `obj`, `asm`, and `compiled` folders.
 
 ---
 

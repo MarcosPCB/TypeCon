@@ -41,6 +41,7 @@ let accept_con_modules = false;
 let con_module = false;
 let compile_mode: 'single' | 'module' = 'single';
 let intermediate_code = false;
+let clean = false;
 
 export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
     switch (color) {
@@ -103,7 +104,8 @@ Usage:
     \x1b[94m-di or --default-inclusion\x1b[0m: Default inclusion (GAME.CON)  
     \x1b[95m-ei or --eduke-init\x1b[0m: Init file is EDUKE.CON
     \x1b[95m-Cm or --con-module\x1b[0m: (Linker) Output as a relocatable CON module (generates global array storage)
-    \x1b[96m-np or --no-precompiled\x1b[0m: Disable automatic linking of pre-compiled system modules`
+    \x1b[96m-np or --no-precompiled\x1b[0m: Disable automatic linking of pre-compiled system modules
+    \x1b[91m-C or --clean\x1b[0m: Empty build folders (obj, asm, compiled) and exit`
 
 
 
@@ -499,6 +501,9 @@ async function Main() {
             compile_only = true;
         }
 
+        if (a == '--clean' || a == '-C')
+            clean = true;
+
         if (a == 'setup') {
             initFunc = true;
             Setup();
@@ -508,6 +513,18 @@ async function Main() {
             console.log(helpText)
             process.exit(0);
         }
+    }
+
+    if (clean) {
+        console.log(colorText('Cleaning build folders...', 'red'));
+        const foldersToClean = ['obj', 'asm', 'compiled'];
+        for (const folder of foldersToClean) {
+            if (fs.existsSync(folder)) {
+                console.log(`Cleaning ${folder}...`);
+                fsExtra.emptyDirSync(folder);
+            }
+        }
+        process.exit(0);
     }
 
     if (default_inclusion && separate && !createInit) {
@@ -538,7 +555,7 @@ async function Main() {
             process.exit(1);
         }
 
-        const linker = new Linker(output_folder, initSys, con_module);
+        const linker = new Linker(output_folder, initSys, con_module, (compile_options & 1) !== 0);
         for (const tco of inputFiles) {
             const cleanPath = tco.replace(/'/g, '');
             linker.loadModule(cleanPath);
@@ -547,8 +564,11 @@ async function Main() {
         if (separate) {
             const { header, modules } = linker.linkSeparate();
 
+            let finalHeader = header;
+            if (default_inclusion && !createInit) finalHeader = `include GAME.CON\n\n` + finalHeader;
+
             console.log(`${colorText('Writing Header:', 'cyan')} ${output_folder}/header.con`);
-            fs.writeFileSync(`${output_folder}/header.con`, header);
+            fs.writeFileSync(`${output_folder}/header.con`, finalHeader);
             headerWritten = true;
 
             for (const mod of modules) {
@@ -557,9 +577,11 @@ async function Main() {
                 linkList.push(`${mod.name}.con`);
             }
         } else {
-            let linkedCode = linker.link();
-            if (default_inclusion) {
-                linkedCode = `include GAME.CON\n\n` + linkedCode;
+            const { code: linkedCode, header: linkerHeader } = linker.link();
+            let finalCode = linkedCode;
+
+            if (default_inclusion && !((compile_options & 1))) {
+                finalCode = `include GAME.CON\n\n` + finalCode;
                 createInit = false;
                 headerWritten = true;
             }
@@ -570,16 +592,21 @@ async function Main() {
                 outName = firstFile + '.con';
             }
             console.log(`${colorText('Writing Linked CON:', 'cyan')} ${output_folder}/${outName}`);
-            fs.writeFileSync(`${output_folder}/${outName}`, linkedCode);
+            fs.writeFileSync(`${output_folder}/${outName}`, finalCode);
             linkList.push(`${outName}`);
-        }
 
-        if (createInit) {
-            console.log(colorText(`Creating Init Files...`, 'blue'));
-            CreateInit(linkList);
-            if (!headerWritten) {
-                console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
-                fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
+            if (createInit || (compile_options & 4)) {
+                if (createInit) {
+                    console.log(colorText(`Creating Init Files...`, 'blue'));
+                    CreateInit(linkList);
+                }
+
+                if (!headerWritten && (compile_options & 4)) {
+                    console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
+                    let hCode = linkerHeader; // Use header from liker which has global size
+                    if (default_inclusion && !createInit) hCode = `include GAME.CON\n\n` + hCode;
+                    fs.writeFileSync(`${output_folder}/header.con`, hCode);
+                }
             }
         }
 

@@ -11,6 +11,7 @@
   - New `-ic, --intermediate-code` for raw CON output.
   - New `-sep, --separate` for modular linking.
   - New `-m, --module` for explicit module-mode compilation.
+  - New `-C, --clean` for project cleanup.
 - **Modern JS Operators**: Added support for **Spread Operator (...)** in object and array literals.
 - **Documentation**: Comprehensive [Technical Architecture](file:///Users/mp/.gemini/antigravity/brain/f8762337-2946-4431-975c-414cacc7a35f/Architecture.md) guide covering memory, strings, and module sets.
 

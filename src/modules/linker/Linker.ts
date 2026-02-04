@@ -20,7 +20,8 @@ export class Linker {
     constructor(
         private outputFolder: string,
         private frameworkInit: CONInit,
-        isConModule = false
+        isConModule = false,
+        private headerless = false
     ) {
         this.isConModule = isConModule;
         this.globalOffset = 0;
@@ -93,7 +94,7 @@ export class Linker {
             globalArrayName = this.generateGlobalArrayName(firstModName);
         }
 
-        const header = this.buildHeader(sortedModules, finalInit, globalSize, globalArrayName);
+        const header = this.buildHeader(sortedModules, finalInit, globalSize, globalArrayName, true);
 
         const modules = sortedModules.map(mod => ({
             name: mod.name,
@@ -103,7 +104,7 @@ export class Linker {
         return { header, modules };
     }
 
-    public link(): string {
+    public link(): { code: string, header: string } {
         const { sortedModules, finalInit, globalSize } = this.prepareLinking();
 
         let globalArrayName = '';
@@ -112,13 +113,14 @@ export class Linker {
             globalArrayName = this.generateGlobalArrayName(firstModName);
         }
 
-        let output = this.buildHeader(sortedModules, finalInit, globalSize, globalArrayName);
+        const fullHeader = this.buildHeader(sortedModules, finalInit, globalSize, globalArrayName, true);
+        let output = this.headerless ? "" : fullHeader;
 
         sortedModules.forEach(mod => {
             output += `// Module: ${mod.name}\n${this.patchModule(mod, globalArrayName)}\n`;
         });
 
-        return output;
+        return { code: output, header: fullHeader };
     }
 
     private generateGlobalArrayName(firstModName: string): string {
@@ -127,7 +129,7 @@ export class Linker {
         return `GV_${prefix}${random}`;
     }
 
-    private buildHeader(sortedModules: CompiledModule[], finalInit: CONInit, globalSize: number, globalArrayName: string): string {
+    private buildHeader(sortedModules: CompiledModule[], finalInit: CONInit, globalSize: number, globalArrayName: string, forceFullHeader = false): string {
         let output = '';
 
         // Collect all unique marker defines from all modules
@@ -205,9 +207,11 @@ export class Linker {
             }
             output += `endevent\n\n`;
         } else {
-            output += finalInit.initCode + '\n' + finalInit.initStates + '\n';
-            output += `// Global Static Storage Start: ${finalInit.stackSize}\n`;
-            output += `// Global Static Storage Size: ${globalSize}\n\n`;
+            if (!this.headerless || forceFullHeader) {
+                output += finalInit.initCode + '\n' + finalInit.initStates + '\n';
+                output += `// Global Static Storage Start: ${finalInit.stackSize}\n`;
+                output += `// Global Static Storage Size: ${globalSize}\n\n`;
+            }
         }
 
         return output;
