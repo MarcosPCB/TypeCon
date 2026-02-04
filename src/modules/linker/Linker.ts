@@ -209,6 +209,10 @@ export class Linker {
         } else {
             if (!this.headerless || forceFullHeader) {
                 output += finalInit.initCode + '\n' + finalInit.initStates + '\n';
+                if (finalInit.precompiled) {
+                    const preComp = finalInit.GetPrecompiledCode();
+                    if (preComp) output += preComp;
+                }
                 output += `// Global Static Storage Start: ${finalInit.stackSize}\n`;
                 output += `// Global Static Storage Size: ${globalSize}\n\n`;
             }
