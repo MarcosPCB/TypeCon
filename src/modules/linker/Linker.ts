@@ -295,37 +295,20 @@ export class Linker {
     private patchModule(mod: CompiledModule, globalArrayName?: string): string {
         let code = mod.code;
 
-        code = code.replace(/_G_ADDR_([A-Za-z0-9_]+)/g, (match, p1) => {
+        const resolveAddr = (match: string, p1: string) => {
             const idx = this.memoryMap.get(p1);
             if (idx === undefined) {
                 throw new Error(`Linker Error: Global symbol '${p1}' not found in allocation map for module ${mod.name}.`);
             }
 
             if (this.isConModule && globalArrayName) {
-                // In CON-module mode, we use the global array access pattern:
-                // Note: The user said marker replaced by GV_...[offset].
-                // Usually markers are used like: set ri _G_ADDR_var -> set ri GV_...[offset]
-                // But markers are usually just the address. 
-                // If it's replaced by GV_...[offset], and flat[ri] is used later... that won't work unless ri is the value?
-                // No, the user says "the markes would be replaced by e.g. GV_modu56bs9fj7[<variable offset>]".
-                // In CON, array access is array[index].
-                // So "set ri _G_ADDR_x" -> "set ri GV_...[offset]". This is invalid CON if it's meant to be an address.
-                // Wait, if GV_... is an array, then GV_...[offset] is a variable.
-                // If the marker is used where an address is expected, we probably should replace the WHOLE access pattern?
-                // Standard TCO uses:
-                // set ri _G_ADDR_x
-                // setarray flat[ri] ra  (for assignment)
-                // or
-                // set ra flat[ri] (for read)
-
-                // If we replace _G_ADDR_x with a variable, then flat[GV_...[offset]]?
-                // No, the user says "replaced by GV_...[offset]".
-                // This implies the module should be refactored to use the GV_ array directly for storage?
-                // Or maybe GV_ array HOLDS the final addresses in 'flat'.
                 return `${globalArrayName}[${idx}]`;
             }
             return idx.toString();
-        });
+        };
+
+        code = code.replace(/_G_ADDR_([A-Za-z0-9_]+)/g, resolveAddr);
+        code = code.replace(/__RELOC_GLOBAL_([A-Za-z0-9_]+)__/g, resolveAddr);
 
         if (this.isConModule && globalArrayName) {
             // We also need to change 'flat[' to globalArrayName + '[' if the module is supposed to use its own storage.
