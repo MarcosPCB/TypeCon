@@ -268,8 +268,8 @@ export function parseVarForActionsMovesAi(
         // `set temp __RELOC_GLOBAL_${rootName}__`
         // `add temp ${deltaGv}`
         // `setarray flat[temp] ri`
-        // NOTE: We can recycle registers. `ri` is used for value. `rj` for index?
-        code += `set rj __RELOC_GLOBAL_${rootName}__\nadd rj ${deltaGv}\nsetarray flat[rj] ri\n`;
+        // NOTE: We can recycle registers. `ri` is used for value. `rsi` for index?
+        code += `set rsi __RELOC_GLOBAL_${rootName}__\nadd rsi ${deltaGv}\nsetarray flat[rsi] ri\n`;
       } else {
         code += `set ri ${targetOffset}\nsetarray flat[gv] ri\n`;
       }
