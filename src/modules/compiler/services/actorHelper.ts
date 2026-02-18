@@ -168,43 +168,26 @@ export function parseVarForActionsMovesAi(
   // top-level object whose *properties* are the actions / moves / ais
   if (!init.isKind(SyntaxKind.ObjectLiteralExpression)) return;
 
+  const rootName = decl.getName();
+  const uniqueGlobalName = `${rootName}_${ctx.currentActorPicnum}`;
+
   ctx.symbolTable.set(decl.getName(), {
-    name: decl.getName(),
+    name: uniqueGlobalName,
     offset: ctx.globalVarCount,
     global: true,
     readonly: true,
     type: ESymbolType.object,
     children: {}
   });
-
-  const rootName = decl.getName();
   const startGlobal = ctx.globalVarCount;
   const props = (init as ObjectLiteralExpression).getProperties();
 
-  // Calculate total size for allocation
-  // 1 (Root Ptr) + 1 (Root Array Size/Ptr) + ...
-  // Code logic:
-  // 1. `set ri ${gv + 1} ... flat[gv] ri` -> (2 vars: gv, gv+1? No. gv points to gv+1. usage: 1 slot at gv?)
-  // No. `setarray flat[gv] ri`. Takes 1 slot.
-  // `setarray flat[ri] 0`. ri is somewhere else.
-  // We update `ctx.globalVarCount` multiple times.
-  // Line 178: `ctx.globalVarCount += props.length * 2`.
-  // Plus the initial `ctx.globalVarCount++` (Line 141).
-  // Plus the loop increments?
-  // Line 164: `ctx.globalVarCount++`.
-  // Line 172: `ctx.globalVarCount++` inside inner loop.
-
-  // Let's defer allocation size calculation or do it precisely?
-  // The previous code calculates final `ctx.globalVarCount`. 
-  // I can just capture start/end difference if I wanted, but the allocation creates the array entry.
-
-  // Actually, simply tracking start is enough for code generation. 
-  // I will push to globalAllocations at the END based on the diff.
+  // ... (comments omitted for brevity)
 
   let code = '';
   if (ctx.options.mode === 'module') {
-    code += `set ri __RELOC_GLOBAL_${rootName}__\nadd ri 1\n`;
-    code += `setarray flat[__RELOC_GLOBAL_${rootName}__] ri\n`;
+    code += `set ri __RELOC_GLOBAL_${uniqueGlobalName}__\nadd ri 1\n`;
+    code += `setarray flat[__RELOC_GLOBAL_${uniqueGlobalName}__] ri\n`;
   } else {
     code += `set ri ${ctx.globalVarCount + 1}\nsetarray flat[${ctx.globalVarCount}] ri\n`;
   }
@@ -231,35 +214,12 @@ export function parseVarForActionsMovesAi(
       sym.offset = i; // This is offset relative to the Array? 
       sym.parent = obj;
 
-      // Code Generation:
-      // `set ri ${ctx.globalVarCount + a.length + i}`
-      // `setarray flat[gv] ri`
-
-      // Math:
-      // `ctx.globalVarCount` here is `startGlobal + 1 + i`?
-      // Wait, loop uses `gv` which starts at `startGlobal + 1`.
-      // `gv` increments by 1 each iter.
-      // `ctx.globalVarCount` increments by ???
-      // Line 164: `ctx.globalVarCount++`.
-      // Line 172: inner loop `ctx.globalVarCount++`.
-      // So `ctx.globalVarCount` drifts far ahead.
-      // But `set ri` targets `ctx.globalVarCount + a.length + i`.
-      // This seems to point to the START of the Children Data Blocks?
-      // `a.length` is number of props.
-      // `i` is current prop index.
-      // `ctx.globalVarCount` is base of... current pointer array entry?
-
-      // In Module Mode:
-      // We need `delta = (current_target) - startGlobal`.
-      // `current_target` = `ctx.globalVarCount + a.length + i`. (From original logic)
-      // `delta` = `(ctx.globalVarCount + a.length + i) - startGlobal`.
-
       const targetOffset = ctx.globalVarCount + a.length + i;
       const deltaRef = targetOffset - startGlobal;
       const deltaGv = gv - startGlobal;
 
       if (ctx.options.mode === 'module') {
-        code += `set ri __RELOC_GLOBAL_${rootName}__\nadd ri ${deltaRef}\n`;
+        code += `set ri __RELOC_GLOBAL_${uniqueGlobalName}__\nadd ri ${deltaRef}\n`;
         // flat[BASE + delta] -> set temp BASE; add temp delta; setarray flat[temp] ...
         // Optimised: setarray flat[__RELOC_..__] is not valid if index is expression.
         // CON: `setarray flat[var]` or `flat[const]`.
@@ -269,7 +229,7 @@ export function parseVarForActionsMovesAi(
         // `add temp ${deltaGv}`
         // `setarray flat[temp] ri`
         // NOTE: We can recycle registers. `ri` is used for value. `rsi` for index?
-        code += `set rsi __RELOC_GLOBAL_${rootName}__\nadd rsi ${deltaGv}\nsetarray flat[rsi] ri\n`;
+        code += `set rsi __RELOC_GLOBAL_${uniqueGlobalName}__\nadd rsi ${deltaGv}\nsetarray flat[rsi] ri\n`;
       } else {
         code += `set ri ${targetOffset}\nsetarray flat[gv] ri\n`;
       }
@@ -278,7 +238,7 @@ export function parseVarForActionsMovesAi(
       // `set ri ${ctx.globalVarCount + a.length + i}`
       // `setarray flat[ri] 0`
       if (ctx.options.mode === 'module') {
-        code2 += `set ri __RELOC_GLOBAL_${rootName}__\nadd ri ${deltaRef}\nsetarray flat[ri] 0\n`;
+        code2 += `set ri __RELOC_GLOBAL_${uniqueGlobalName}__\nadd ri ${deltaRef}\nsetarray flat[ri] 0\n`;
       } else {
         code2 += `set ri ${targetOffset}\nsetarray flat[ri] 0\n`;
       }
@@ -353,7 +313,7 @@ export function parseVarForActionsMovesAi(
   if (ctx.options.mode === 'module') {
     const totalSize = (ctx.globalVarCount + (props.length * 2)) - startGlobal;
     ctx.globalAllocations.push({
-      name: rootName,
+      name: uniqueGlobalName,
       size: totalSize
     });
   }
