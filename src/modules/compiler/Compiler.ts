@@ -12,6 +12,7 @@ import { CompiledModule } from "./Intermediate";
 import { visitFunctionDeclaration } from './services/visitFunctionDeclaration';
 import { visitClassDeclaration } from './services/visitClassDeclaration';
 import { visitStatement } from './services/visitStatement';
+import { visitModuleDeclaration } from './services/visitModuleDeclaration';
 import { colorText } from '../../main';
 import { indent } from './helper/indent';
 import { createHash } from 'crypto';
@@ -425,6 +426,10 @@ export class TsToConCompiler {
         outputLines.push(visitFunctionDeclaration(st as FunctionDeclaration, context));
       } else if (st.isKind(SyntaxKind.ClassDeclaration) && !(context.currentFile.options & ECompileOptions.no_compile)) {
         outputLines.push(visitClassDeclaration(st as ClassDeclaration, context));
+      } else if (st.isKind(SyntaxKind.ModuleDeclaration)) {
+        const result = visitModuleDeclaration(st as any, context);
+        outputLines.push(result.definitions);
+        context.initCode += result.initialization;
       } else {
         const stmtCode = visitStatement(st, context);
         if (stmtCode.trim() !== '') {

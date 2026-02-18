@@ -506,13 +506,41 @@ async function Main() {
 
         if (a == 'setup') {
             initFunc = true;
-            Setup();
         }
 
         if (a == '--help' || a == '-?') {
             console.log(helpText)
             process.exit(0);
         }
+    }
+
+    // STRICT MODE VALIDATION
+    let modeCount = 0;
+    if (initFunc) modeCount++;
+    if (runLinker) modeCount++;
+    if (compile_only || (fileName !== '' || files.length > 0)) modeCount++;
+    if (clean) modeCount++;
+
+    if (modeCount === 0 && !createInit) {
+        console.log(colorText('\nNo active mode detected!', 'red'));
+        console.log(colorText('Please specify an operation:', 'yellow'));
+        console.log(colorText('  -c / --compile   : Compile source files', 'cyan'));
+        console.log(colorText('  -L / --linker    : Run linker', 'cyan'));
+        console.log(colorText('  -C / --clean     : Clean build folders', 'cyan'));
+        console.log(colorText('  setup            : Run setup wizard', 'cyan'));
+        console.log(helpText);
+        process.exit(1);
+    }
+
+    if (modeCount > 1) {
+        console.log(colorText('\nError: Multiple conflicting modes selected!', 'red'));
+        console.log(colorText('Please select only ONE of the following:', 'yellow'));
+        console.log(colorText('  -c, -L, -C, or setup', 'cyan'));
+        process.exit(1);
+    }
+
+    if (initFunc) {
+        await Setup();
     }
 
     if (clean) {
@@ -543,15 +571,36 @@ async function Main() {
     const initSys = new CONInit(stack_size, heap_page_size, heap_page_number, precompiled_modules, heap_page_size * heap_page_number, 0, accept_con_modules);
 
     // --- LINK MODE (Explicit Linker call) ---
+    // --- LINK MODE (Explicit Linker call) ---
     if (runLinker) {
         // Collect input files from -i and -il
         const inputFiles: string[] = [];
+
+        if (fileName === '' && files.length === 0 && input_folder === '') {
+            console.log(colorText('No input specified, using default \'obj\' folder...', 'yellow'));
+            input_folder = 'obj';
+        }
+
+        if (input_folder !== '') {
+            GetAllFilesFromPath(input_folder);
+            // In linker mode, we only want .tco files from the folder
+            const tcoFiles = files.filter(f => f.endsWith('.tco') || f.endsWith('.icc'));
+            // Clear the original files list as it might contain other types if we just pushed to it
+            // Actually files is global and used by GetAllFilesFromPath. 
+            // We should just filter what we add to inputFiles.
+            // But wait, GetAllFilesFromPath pushes directly to `files`.
+            // So `files` now contains everything from `input_folder`.
+            // We should filter `files` in place or just use the filtered list.
+            files.length = 0; // Clear global files list
+            files.push(...tcoFiles);
+        }
+
         if (fileName) inputFiles.push(fileName);
         if (files.length > 0) inputFiles.push(...files);
         if (linkerList.length > 0) inputFiles.push(...linkerList);
 
         if (inputFiles.length === 0) {
-            console.log(colorText('Error: No input files provided for linker. Use -i or -il.', 'red'));
+            console.log(colorText('Error: No input files provided for linker (and \'obj\' folder is empty or missing). Use -i, -il, or -if.', 'red'));
             process.exit(1);
         }
 
@@ -567,9 +616,11 @@ async function Main() {
             let finalHeader = header;
             if (default_inclusion && !createInit) finalHeader = `include GAME.CON\n\n` + finalHeader;
 
-            console.log(`${colorText('Writing Header:', 'cyan')} ${output_folder}/header.con`);
-            fs.writeFileSync(`${output_folder}/header.con`, finalHeader);
-            headerWritten = true;
+            if (compile_options & 4) {
+                console.log(`${colorText('Writing Header:', 'cyan')} ${output_folder}/header.con`);
+                fs.writeFileSync(`${output_folder}/header.con`, finalHeader);
+                headerWritten = true;
+            }
 
             for (const mod of modules) {
                 console.log(`${colorText('Writing Module:', 'cyan')} ${output_folder}/${mod.name}.con`);
@@ -672,6 +723,11 @@ async function Main() {
 
         for (let i = compiledFiles.size - 1; i >= 0; i--) {
             const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
+            // If we are using precompiled modules, don't append the source code of the system modules
+            // They are already included in the header via initSys
+            if (precompiled_modules && f.path.includes('precompile'))
+                continue;
+
             code += f.code;
         }
 

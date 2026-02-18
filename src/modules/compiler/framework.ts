@@ -1056,13 +1056,25 @@ ends
             return null
         }
 
+        const definedStates = new Set<string>();
         let code = '';
 
         for (const f of dir) {
             if (f.isFile() && f.name.endsWith('.con')) {
                 try {
-                    const module = readFileSync(path.join(f.parentPath, f.name));
-                    code += module.toString();
+                    let module = readFileSync(path.join(f.parentPath, f.name)).toString();
+
+                    // Deduplicate states
+                    module = module.replace(/defstate\s+(\w+)[\s\S]*?\n\s*ends/g, (match, name) => {
+                        if (definedStates.has(name)) {
+                            return `// Duplicate state ${name} removed\n`;
+                        } else {
+                            definedStates.add(name);
+                            return match;
+                        }
+                    });
+
+                    code += module + '\n';
                 } catch (err) {
                     console.log(`Unable to read/open pre-compiled module ${path.join(f.parentPath, f.name)}`);
                     return null;

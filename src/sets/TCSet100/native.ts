@@ -1,4 +1,4 @@
-namespace noread {}
+namespace noread { }
 
 //Type for native functions
 export type CON_NATIVE<Type> = Type;
@@ -54,7 +54,7 @@ export enum EMoveFlags {
     jumptoplayer = 257,	    //actor will move vertically and then fall as if jumping.	                                257*
     seekplayer = 512,	    //actor will try to find the best path to the nearest player.	                            512
     furthestdir = 1024,	    //actor faces the furthest distance from the closest player.                                1024
-    dodgebullet	= 4096      //actor attempts to avoid all shots directed at him. The actor will not avoid GROWSPARK.    4096	
+    dodgebullet = 4096      //actor attempts to avoid all shots directed at him. The actor will not avoid GROWSPARK.    4096	
 }
 
 export enum EOperateFlags {
@@ -149,7 +149,7 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     {
         name: 'CStat',
         code: ((args?: boolean) => {
-            if(args == true)
+            if (args == true)
                 return `seta[].cstat r0 \n`;
             return `geta[].cstat rb \n`
         }),
@@ -195,12 +195,12 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL,
             CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL
         ],
-        arguments_default: [ 4, 4, 1, 1]
+        arguments_default: [4, 4, 1, 1]
     },
     {
         name: 'Count',
         code: ((args?: boolean) => {
-            if(args == true)
+            if (args == true)
                 return `seta[].htg_t 0 r0`;
             return `geta[].htg_t 0 rb`;
         }),
@@ -213,7 +213,7 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
     {
         name: 'ActionCount',
         code: ((args?: boolean) => {
-            if(args == true)
+            if (args == true)
                 return `seta[].htg_t 2 r0`;
             return `geta[].htg_t 2 rb`;
         }),
@@ -430,8 +430,8 @@ setp[].pals_time r3
     {
         name: 'Spawn',
         code: (args?: boolean, fn?: string) => {
-            if(args == true)
-            return `
+            if (args == true)
+                return `
 set rd RETURN
 ifge r2 1
   eqspawn r0
@@ -448,7 +448,7 @@ state pop
 ` : ''}
 set rb ra
 set RETURN rd`
-else return `
+            else return `
 set rd RETURN
 espawn r0
 set rb RETURN
@@ -539,7 +539,7 @@ state pop
 ` : ''}
 set rb ra
 set RETURN rd`
-: `
+                : `
 set rd RETURN
 eshoot r0
 set rb RETURN
@@ -933,8 +933,8 @@ state pop
         name: 'includes',
         return_type: 'variable',
         returns: true,
-        arguments: [ CON_NATIVE_FLAGS.VARIABLE ],
-        type_belong: [ 'string' ],
+        arguments: [CON_NATIVE_FLAGS.VARIABLE],
+        type_belong: ['string'],
         code: (args) => {
             return `
 state push
@@ -1137,13 +1137,13 @@ state popr1
     },
     {
         name: 'push',
-        type_belong: [ 'array' ],
+        type_belong: ['array'],
         arguments: [
             CON_NATIVE_FLAGS.VARIABLE
         ],
         returns: false,
         return_type: null,
-         code: (args?: boolean, fn?: string) => {
+        code: (args?: boolean, fn?: string) => {
             return `
 state push
 state pushd
@@ -1174,13 +1174,13 @@ state pop
     },
     {
         name: 'pop',
-        type_belong: [ 'array' ],
+        type_belong: ['array'],
         arguments: [
             CON_NATIVE_FLAGS.VARIABLE
         ],
         returns: false,
         return_type: null,
-         code: (args?: boolean, fn?: string) => {
+        code: (args?: boolean, fn?: string) => {
             return `
 state push
 state pushd
@@ -1218,7 +1218,7 @@ state pop
         arguments: [
             CON_NATIVE_FLAGS.VARIABLE
         ],
-        object_belong: [ 'sysFrame' ]
+        object_belong: ['sysFrame']
     },
     {
         name: 'BufferToIndex',
@@ -1231,7 +1231,7 @@ state pop
             CON_NATIVE_FLAGS.VARIABLE,
             CON_NATIVE_FLAGS.VARIABLE
         ],
-        object_belong: [ 'sysFrame' ]
+        object_belong: ['sysFrame']
     },
     {
         name: 'BufferToSourceIndex',
@@ -1244,7 +1244,7 @@ state pop
             CON_NATIVE_FLAGS.VARIABLE,
             CON_NATIVE_FLAGS.VARIABLE
         ],
-        object_belong: [ 'sysFrame' ]
+        object_belong: ['sysFrame']
     },
     {
         name: 'CONBreak',
@@ -1292,7 +1292,7 @@ state pop
     {
         name: 'AmmoDiscount',
         code: (args?: boolean) => {
-            if(args !== undefined)
+            if (args !== undefined)
                 return `
 setarray nwsAmmoDisc[flat[rbp]] r0
 set rb r0`
@@ -1308,7 +1308,7 @@ set rb nwsAmmoDisc[flat[rbp]]`
     {
         name: 'MaxAmmo',
         code: (args?: boolean) => {
-            if(args !== undefined)
+            if (args !== undefined)
                 return `
 setarray nwsMaxAmmo[flat[rbp]] r0
 set rb r0`
@@ -1324,7 +1324,7 @@ set rb nwsMaxAmmo[flat[rbp]]`
     {
         name: 'CurrentAmmo',
         code: (args?: boolean) => {
-            if(args !== undefined)
+            if (args !== undefined)
                 return `
 setarray nwsCurrAmmo[flat[rbp]] r0
 set rb r0`
@@ -1340,7 +1340,7 @@ set rb nwsCurrAmmo[rb]`
     {
         name: 'DecreaseAmmo',
         code: (args?: boolean) => {
-                return `
+            return `
 set ra nwsCurrAmmo[flat[rbp]]
 sub ra nwsAmmoDisc[flat[rbp]]
 clamp ra 0 nwsMaxAmmo[flat[rbp]]
@@ -1353,7 +1353,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'IncreaseAmmo',
         code: (args?: boolean) => {
-                return `
+            return `
 set ra nwsCurrAmmo[flat[rbp]]
 add ra r0
 clamp ra 0 nwsMaxAmmo[flat[rbp]]
@@ -1631,7 +1631,7 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
     }
 ];
 
-export const nativeVars_Players: CON_NATIVE_VAR[] =[
+export const nativeVars_Players: CON_NATIVE_VAR[] = [
     {
         name: 'weaponSystem',
         var_type: CON_NATIVE_TYPE.object,

@@ -11,7 +11,7 @@ import { storeEnum } from "./storeEnum";
 import { visitFunctionDeclaration } from "./visitFunctionDeclaration";
 import { visitWhileStatement } from "./visitWhileStatement";
 import { addDiagnostic } from "./addDiagnostic";
-import { ExpressionStatement, ReturnStatement, Statement, SyntaxKind, VariableStatement, IfStatement, SwitchStatement, TypeAliasDeclaration, InterfaceDeclaration, EnumDeclaration, ModuleDeclaration, ModuleDeclarationKind, FunctionDeclaration, WhileStatement } from "ts-morph";
+import { ExpressionStatement, ReturnStatement, Statement, SyntaxKind, VariableStatement, IfStatement, SwitchStatement, TypeAliasDeclaration, InterfaceDeclaration, EnumDeclaration, FunctionDeclaration, WhileStatement } from "ts-morph";
 import { ECompileOptions } from "../framework";
 
 // All dependencies are now imported directly
@@ -65,61 +65,6 @@ export function visitStatement(stmt: Statement, context: CompilerContext): strin
 
       return code;
     }
-
-    case SyntaxKind.ModuleDeclaration:
-      const md = stmt as ModuleDeclaration;
-
-      const curModule = context.curModule;
-
-      const b = context.currentFile.options;
-      const moduleName = md.getName();
-      const compilable = md.getDeclarationKind() != ModuleDeclarationKind.Global && !['nocompile', 'noread', 'statedecl'].includes(moduleName);
-
-      if (!compilable)
-        context.currentFile.options |= ECompileOptions.no_compile;
-
-      const stmts = (stmt as ModuleDeclaration).getStatements();
-
-      if (compilable)
-        context.symbolTable.set(moduleName, {
-          name: moduleName,
-          type: ESymbolType.module,
-          offset: 0
-        });
-
-      const localCtx: CompilerContext = {
-        ...context,
-        symbolTable: new Map(context.symbolTable),
-        curModule: compilable ? context.symbolTable.get(moduleName) as SymbolDefinition : curModule
-      };
-
-      let mCode = '';
-
-      stmts.forEach(st => {
-        if (!st.isKind(SyntaxKind.ClassDeclaration))
-          mCode += visitStatement(st, localCtx);
-      });
-
-      if (compilable) {
-        const children: { [k: string]: SymbolDefinition | EnumDefinition } = Object.fromEntries([...localCtx.symbolTable].filter(e => !context.symbolTable.has(e[0])));
-
-        context.symbolTable.set(moduleName, {
-          name: moduleName,
-          type: ESymbolType.module,
-          offset: 0,
-          children
-        });
-
-        code += mCode;
-      } else {
-        context.symbolTable = localCtx.symbolTable;
-        context.typeAliases = localCtx.typeAliases;
-      }
-
-      context.curModule = curModule;
-
-      context.currentFile.options = b;
-      return code;
 
     case SyntaxKind.ImportDeclaration:
       return code;

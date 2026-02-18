@@ -6,8 +6,8 @@ console.log("Build completed successfully!");
 
 // compile the extra modules
 console.log(`Compiling extra modules...`);
-execSync(`yarn start -if ./src/sets/TCSet100/precompile/src -of ./src/sets/TCSet100/precompile/generated -hl -np`,
-    { stdio: 'inherit'}
+execSync(`yarn start -C && yarn start -c -if ./src/sets/TCSet100/precompile/src && yarn start -L -of ./src/sets/TCSet100/precompile/generated -hl -np -sep && yarn start -C`,
+    { stdio: 'inherit' }
 );
 console.log(`Compiled modules`);
 
