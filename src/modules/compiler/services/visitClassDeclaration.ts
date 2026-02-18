@@ -108,10 +108,8 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
   for (const p of properties) {
     if (p.getTypeNode().getText().match(/\b(TAction|IAction|TMove|IMove|TAi|IAi)\b/)) {
       if (!hasLabels) {
-        let globalOffsetStr: string | number = localCtx.globalVarCount;
-        if (context.options.mode === 'module') {
-          globalOffsetStr = `_G_ADDR_lb${localCtx.currentActorPicnum}_enabler`;
-        }
+        let globalOffsetStr: string | number = `_G_ADDR_lb${localCtx.currentActorPicnum}_enabler`;
+
         localCtx.initCode = `setarray flat[${globalOffsetStr}] 0\n`
         localCtx.globalVarCount++;
         localCtx.symbolTable.set(`lb${localCtx.currentActorPicnum}_enabler`, {
@@ -121,12 +119,10 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
           type: ESymbolType.boolean
         });
 
-        if (context.options.mode === 'module') {
-          context.globalAllocations.push({
-            name: `lb${localCtx.currentActorPicnum}_enabler`,
-            size: 1
-          });
-        }
+        context.globalAllocations.push({
+          name: `lb${localCtx.currentActorPicnum}_enabler`,
+          size: 1
+        });
 
         hasLabels = true;
       }

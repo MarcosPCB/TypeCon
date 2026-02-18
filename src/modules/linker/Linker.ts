@@ -77,7 +77,7 @@ export class Linker {
         if (this.isConModule) {
             this.globalOffset = 0; // Relative offsets
         } else {
-            this.globalOffset = finalInit.stackSize; // Absolute offsets
+            this.globalOffset = 0; // Absolute offsets
         }
 
         this.allocateGlobals(sortedModules);

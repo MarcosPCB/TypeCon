@@ -62,6 +62,7 @@ export function visitModuleDeclaration(md: ModuleDeclaration, context: CompilerC
         context.typeAliases = localCtx.typeAliases;
     }
 
+    context.globalVarCount = localCtx.globalVarCount;
     context.curModule = curModule;
     context.currentFile.options = b;
 
