@@ -370,20 +370,20 @@ appendevent EVENT_SPAWN
 ${Object.values(localCtx.currentActorLabels).map(e => {
       if (e.name.startsWith('A_'))
         return `
-      set ri flat[${e.parent ? e.parent.offset : e.offset}]
+      set ri flat[${e.parent ? `__RELOC_GLOBAL_${e.parent.name}__` : e.offset}]
       ${e.parent && e.offset != 0 ? `add ri ${e.offset}` : ''}
       action ${e.name}
       setarray flat[flat[ri]] sprite[].htg_t 4`;
 
       if (e.name.startsWith('M_'))
         return `
-      set ri flat[${e.parent ? e.parent.offset : e.offset}]
+      set ri flat[${e.parent ? `__RELOC_GLOBAL_${e.parent.name}__` : e.offset}]
       ${e.parent && e.offset != 0 ? `add ri ${e.offset}` : ''}
       move ${e.name} 0
       setarray flat[flat[ri]] sprite[].htg_t 1`;
 
       return `
-      set ri flat[${e.parent ? e.parent.offset : e.offset}]
+      set ri flat[${e.parent ? `__RELOC_GLOBAL_${e.parent.name}__` : e.offset}]
       ${e.parent && e.offset != 0 ? `add ri ${e.offset}` : ''}
       ai ${e.name}
       set ri flat[ri]
