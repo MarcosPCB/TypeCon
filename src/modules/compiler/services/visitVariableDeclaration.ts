@@ -87,7 +87,7 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
           size: 1
         });
         // Use G_ADDR for initialization
-        code += `set ri _G_ADDR_${varName}\nsetarray flat[ri] ra\n`;
+        code += `set rsp _G_ADDR_${varName}\nsetarray flat[rsp] ra\n`;
       } else {
         // Absolute global offset
         code += `setarray flat[${context.globalVarCount}] ra\n`;

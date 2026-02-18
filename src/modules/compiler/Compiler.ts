@@ -463,7 +463,7 @@ export class TsToConCompiler {
     }
 
     if (context.initCode !== '') {
-      outputLines.push(`\nappendevent EVENT_NEWGAME\n${indent(context.initCode, 1)}endevent\n`);
+      outputLines.push(`\nonevent EVENT_NEWGAME\n${indent(context.initCode, 1)}\nendevent\n`);
       context.initCode = '';
     }
 

@@ -15,7 +15,8 @@ type test = {
     low: wow[]
 }
 
-let gTestVar = 0;
+let gTestVar = 9098;
+let gTestVar2 = 6789;
 
 /**
  * This will generated the DISPLAYREST event in CON
