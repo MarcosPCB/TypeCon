@@ -46,6 +46,7 @@ export interface CompilerOptions {
   debug?: boolean;
   lineDetail?: boolean;
   symbolPrint?: boolean;
+
   mode?: 'single' | 'module';
 }
 
@@ -110,6 +111,8 @@ export interface SymbolDefinition {
   returns?: Exclude<ESymbolType, ESymbolType.enum> | null;
   literal?: string | number | null; //Can hold the sub function address
   parent?: SymbolDefinition;
+  parentFunc?: string; // Name of the function this symbol belongs to (for locals)
+  parentClass?: string; // Name of the class this symbol belongs to
 }
 
 export interface TypeAliasDefinition {
@@ -463,7 +466,7 @@ export class TsToConCompiler {
     }
 
     if (context.initCode !== '') {
-      outputLines.push(`\nonevent EVENT_NEWGAME\n${indent(context.initCode, 1)}\nendevent\n`);
+      outputLines.unshift(`\nonevent EVENT_NEWGAME\n${indent(context.initCode, 1)}\nendevent\n`);
       context.initCode = '';
     }
 

@@ -51,6 +51,9 @@ class displayRest extends CEvent {
             ang: 0
         }
 
+        PrintValue(p.xy.x);
+        PrintValue(p.scale);
+
         /**
          * Here we are declaring variables that are initialized with some antive structures values
          * Also, you can do const sector = sectors[0];

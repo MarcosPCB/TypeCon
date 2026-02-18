@@ -89,10 +89,11 @@ Usage:
     \x1b[35m-sc or --share-context\x1b[0m: Share context between modules during compilation
     \x1b[36m-ic or --intermediate-code\x1b[0m: Generate intermediate code (CON with markers) in 'asm' folder
     \x1b[35m-dl or --detail-lines\x1b[0m: Write the original TS lines inside the CON code as comments
-    \x1b[35m-sp or --symbol-print\x1b[0m: Print the symbol table for debugging
+
 
     Linker and Project options:
     \x1b[95m-L or --linker\x1b[0m: Link multiple .tco intermediate files into a single .con file
+    \x1b[35m-sp or --symbol-print\x1b[0m: Print the symbol table for debugging
     \x1b[36m-ss or --stack-size\x1b[0m: Define the virtual stack size 
     \x1b[36m-hs or --heap-size\x1b[0m: Define the virtual heap's size
     \x1b[38m-ps or --page-size\x1b[0m: Define the heap page's minimum size 
@@ -564,7 +565,7 @@ async function Main() {
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
     // Create the Linker context? No, just compiler first.
-    const compiler = new TsToConCompiler({ lineDetail: line_print, symbolPrint: symbol_print, mode: compile_mode });
+    const compiler = new TsToConCompiler({ lineDetail: line_print, mode: compile_mode });
 
     let code = '';
 
@@ -604,7 +605,7 @@ async function Main() {
             process.exit(1);
         }
 
-        const linker = new Linker(output_folder, initSys, con_module, (compile_options & 1) !== 0);
+        const linker = new Linker(output_folder, initSys, con_module, (compile_options & 1) !== 0, symbol_print);
         for (const tco of inputFiles) {
             const cleanPath = tco.replace(/'/g, '');
             linker.loadModule(cleanPath);

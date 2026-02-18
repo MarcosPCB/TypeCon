@@ -6,9 +6,10 @@ import { getTypeAliasNameForObjectLiteral } from './getTypeAliasNameForObjectLit
 import { getArraySize } from './getArraySize';
 import { getObjectSize } from './getObjectSize';
 import { getObjectTypeLayout } from './getObjectLayout';
+import { formatLineDetail } from "../helper/formatLineDetail";
 
 export function processObjectLiteral(objLit: ObjectLiteralExpression, context: CompilerContext): { code: string, layout: { [key: string]: SymbolDefinition }, size: number, instanceSize: number } {
-  let code = context.options.lineDetail ? `/* Object literal: ${objLit.getText()} */\n` : '';
+  let code = context.options.lineDetail ? formatLineDetail(`Object literal: ${objLit.getText()}`) : '';
 
   // Reserve one slot for the object's base pointer.
   code += `add rsp 1\nset ri rsp\nadd ri 1\nsetarray flat[rsp] ri\n`;
@@ -63,7 +64,7 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
         //An array of objects is an array of pointers
         if (propType.endsWith("[]")) {
           curTotalSize++;
-          code += context.options.lineDetail ? `/* Object array property: ${prop.getText()} */\n` : '';
+          code += context.options.lineDetail ? formatLineDetail(`Object array property: ${prop.getText()}`) : '';
           code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
           curTotalSize++;
           // For an array property (e.g., low: wow[])
@@ -78,10 +79,10 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
             //Set the pointer
             for (let j = 0; j < count; j++) {
               curTotalSize++;
-              instanceCode += context.options.lineDetail ? `/* Element ${j} pointer */\n` : '';
+              instanceCode += context.options.lineDetail ? formatLineDetail(`Element ${j} pointer`) : '';
               instanceCode += `add rsp 1\nset ri rsp\nadd ri 1\nsetarray flat[rsp] ri\n`;
               for (let k = 0; k < instanceSize; k++) {
-                instanceCode += context.options.lineDetail ? `/* Element ${j} property ${k} */\n` : '';
+                instanceCode += context.options.lineDetail ? formatLineDetail(`Element ${j} property ${k}`) : '';
                 instanceCode += `set ra 0\nadd rsp 1\nsetarray flat[rsp] ra\n`;
                 curTotalSize++;
               }
@@ -98,13 +99,13 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
               children: { ...result }  // clone children as plain object
             };
           } else {
-            code += context.options.lineDetail ? `/* Array property: ${prop.getText()} */\n` : '';
+            code += context.options.lineDetail ? formatLineDetail(`Array property: ${prop.getText()}`) : '';
             // For each element, allocate instanceSize slots.
             for (let j = 0; j < count; j++) {
               curTotalSize += 1;
-              instanceCode += context.options.lineDetail ? `/* Element ${j} pointer */\n` : '';
+              instanceCode += context.options.lineDetail ? formatLineDetail(`Element ${j} pointer`) : '';
               instanceCode += `add rsp 1\nset ri rsp\nadd ri 1\nsetarray flat[rsp] ri\n`;
-              instanceCode += context.options.lineDetail ? `/* Element ${j} instance */\n` : '';
+              instanceCode += context.options.lineDetail ? formatLineDetail(`Element ${j} instance`) : '';
               for (let k = 0; k < instanceSize; k++) {
                 instanceCode += `set ra 0\nadd rsp 1\nsetarray flat[i] ra\n`;
                 curTotalSize++;
@@ -120,7 +121,7 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
             };
           }
         } else if (context.typeAliases.has(propType)) {
-          code += context.options.lineDetail ? `/* Object property: ${prop.getText()} */\n` : '';
+          code += context.options.lineDetail ? formatLineDetail(`Object property: ${prop.getText()}`) : '';
           curTotalSize++;
           code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
           // For a nested object property.
@@ -136,7 +137,7 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
             children: { ...result.layout }  // clone children as plain object
           };
         } else {
-          code += context.options.lineDetail ? `/* Primitive property: ${prop.getText()} */\n` : '';
+          code += context.options.lineDetail ? formatLineDetail(`Primitive property: ${prop.getText()}`) : '';
           //curTotalSize++;
           // For a primitive property.
           const init = pa.getInitializerOrThrow();
@@ -162,7 +163,7 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
             const spreadSym = context.symbolTable.get(spreadName);
             if (spreadSym && spreadSym.children && spreadSym.children[propName]) {
               const child = spreadSym.children[propName] as SymbolDefinition;
-              code += context.options.lineDetail ? `/* Spread property: ${spreadName}.${propName} */\n` : '';
+              code += context.options.lineDetail ? formatLineDetail(`Spread property: ${spreadName}.${propName}`) : '';
               code += `set ri rbp\nadd ri ${(spreadSym as SymbolDefinition).offset}\nset ra flat[ri]\n`;  // Get base of source object
               code += `set ri ra\nadd ri ${child.offset}\nset ra flat[ri]\n`; // Get value of property
               code += `add rsp 1\nsetarray flat[rsp] ra\n`;
@@ -190,7 +191,7 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
         const init = p.getInitializerOrThrow();
         const propName = p.getName().replace(/[`'"]/g, "");
         if (init.isKind(SyntaxKind.ArrayLiteralExpression)) {
-          code += context.options.lineDetail ? `/* Array literal: ${p.getText()} */\n` : '';
+          code += context.options.lineDetail ? formatLineDetail(`Array literal: ${p.getText()}`) : '';
           curTotalSize++;
           code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
           const initText = init.getText();
@@ -210,7 +211,7 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
             num_elements: count,
           };
         } else if (init.isKind(SyntaxKind.ObjectLiteralExpression)) {
-          code += context.options.lineDetail ? `/* Object literal property: ${p.getText()} */\n` : '';
+          code += context.options.lineDetail ? formatLineDetail(`Object literal property: ${p.getText()}`) : '';
           // For a nested object property.
           curTotalSize++;
           code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
@@ -226,7 +227,7 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
             children: { ...result.layout }  // clone children as plain object
           };
         } else {
-          code += context.options.lineDetail ? `/* Primitive property: ${p.getText()} */\n` : '';
+          code += context.options.lineDetail ? formatLineDetail(`Primitive property: ${p.getText()}`) : '';
           // For a primitive property.
           //curTotalSize++;
           code += visitExpression(init, context);
@@ -261,7 +262,7 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
           // Skip if property already defined by a later property assignment (override check could be more robust)
           if (layout[childKey]) continue;
 
-          code += context.options.lineDetail ? `/* Spread property: ${spreadName}.${childKey} */\n` : '';
+          code += context.options.lineDetail ? formatLineDetail(`Spread property: ${spreadName}.${childKey}`) : '';
           code += `set ri rbp\nadd ri ${(spreadSym as SymbolDefinition).offset}\nset ra flat[ri]\n`; // ra = base address of spread object
           code += `set ri ra\nadd ri ${child.offset}\nset ra flat[ri]\n`; // ra = value of property
           code += `add rsp 1\nsetarray flat[rsp] ra\n`;

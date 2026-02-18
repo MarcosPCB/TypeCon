@@ -43,7 +43,7 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
 
     if (context.symbolTable.has(name)) {
       const off = context.symbolTable.get(name) as SymbolDefinition;
-      code += context.options.symbolPrint ? `/*Symbol ${JSON.stringify(off, undefined, 2)}*/\n` : '';
+
       if (off.type & ESymbolType.constant) {
         if (direct)
           return String(off.literal);
@@ -61,7 +61,10 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
       if (off.type & ESymbolType.native)
         return code + `set ${reg} ${off.CON_code}\n`;
 
-      code += `set ri rbp\nadd ri ${off.offset}\nset ${reg} flat[ri]\n`;
+      if (off.global)
+        code += `set ${reg} flat[_G_ADDR_${name}]\n`;
+      else
+        code += `set ri rbp\nadd ri ${off.offset}\nset ${reg} flat[ri]\n`;
       if (off.type & ESymbolType.string)
         context.curExpr = ESymbolType.string;
 

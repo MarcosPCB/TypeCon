@@ -11,6 +11,7 @@ import { getObjectSize } from "./getObjectSize";
 import { visitMethodDeclaration } from "./visitMethodDeclaration";
 import { visitMemberExpression } from "./visitMemberExpression";
 import { visitLeafOrLiteral } from "./visitLeafOrLiteral";
+import { formatLineDetail } from "../helper/formatLineDetail";
 
 /******************************************************************************
    * VISIT CLASS DECL => if extends CActor => parse constructor => skip code => gather actions
@@ -156,7 +157,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
             paramMap: {}
           };
 
-          code += `${context.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  ifactor ${localCtx.currentActorPicnum} {\n`;
+          code += `${context.options.lineDetail ? formatLineDetail(e.getText(), '\n') : ''}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  ifactor ${localCtx.currentActorPicnum} {\n`;
           const body = e.getBody() as any;
           if (body) {
             const stmts = body.getStatements() as Statement[];
@@ -241,7 +242,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
 
   if (ctors.length > 0 && type == '') {
     context.curClass = cls;
-    code = `${context.options.lineDetail ? `/*${ctors[0].getText()}*/` : ''}\ndefstate ${className}_constructor \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+    code = `${context.options.lineDetail ? formatLineDetail(ctors[0].getText()) : ''}\ndefstate ${className}_constructor \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
     code += indent(`state pushr2\nset r0 ${cls.num_elements}\nset r1 ${EHeapType.object}\nstate alloc\nstate popr2\nstate pushb\n`, 1);
     code += visitConstructorDeclaration(ctors[0], context, '');
     code += `  state popb\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
@@ -323,7 +324,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
               }
             });
 
-            codeV += `${context.options.lineDetail ? `\n/*${e.getText()}*/` : ''}\n${localCtx.currentActorHardcoded ? 'actor' : `useractor ${localCtx.currentActorIsEnemy ? 1 : 0}`} ${picnum} ${extra} ${action}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+            codeV += `${context.options.lineDetail ? formatLineDetail(e.getText(), '\n') : ''}\n${localCtx.currentActorHardcoded ? 'actor' : `useractor ${localCtx.currentActorIsEnemy ? 1 : 0}`} ${picnum} ${extra} ${action}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
 
             stmts.forEach(s => {
               if (!s.isKind(SyntaxKind.ReturnStatement))

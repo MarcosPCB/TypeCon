@@ -6,9 +6,10 @@ import { nativeVars_Sprites, nativeVars_Sectors, nativeVars_Walls } from "../../
 import { unrollMemberExpression } from "./unrollMemberExpression";
 import { visitExpression } from "./visitExpression";
 import { FindLabel } from "./actorHelper";
+import { formatLineDetail } from "../helper/formatLineDetail";
 
 export function visitMemberExpression(expr: Expression, context: CompilerContext, assignment?: boolean, direct?: boolean, reg = 'ra'): string {
-  let code = context.options.lineDetail ? `/* ${expr.getText()} */\n` : '';
+  let code = context.options.lineDetail ? formatLineDetail(expr.getText()) : '';
   const segments = unrollMemberExpression(expr);
 
   if (segments.length === 0) {

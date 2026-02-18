@@ -12,6 +12,7 @@ import { subFunctionInit } from "./subFunctionInit";
 
 export function visitVariableDeclaration(decl: VariableDeclaration, context: CompilerContext): string {
   const varName = decl.getName();
+
   let code = "";
 
   const type = decl.getType();
@@ -78,7 +79,7 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
       } else code += visitExpression(init as Expression, context);
     }
 
-    const isGlobal = !context.curFunc && !context.curClass;
+    const isGlobal = !context.curFunc && !context.curClass && !context.isInSubFunction;
 
     if (isGlobal) {
       if (context.options.mode === 'module') {
@@ -87,7 +88,7 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
           size: 1
         });
         // Use G_ADDR for initialization
-        code += `set rsp _G_ADDR_${varName}\nsetarray flat[rsp] ra\n`;
+        code += `set flat[_G_ADDR_${varName}]\n`;
       } else {
         // Absolute global offset
         code += `setarray flat[${context.globalVarCount}] ra\n`;
@@ -107,16 +108,20 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
       // Local variable (Stack)
       code += `add rsp 1\nsetarray flat[rsp] ra\n`;
       context.symbolTable.set(varName, {
-        name: varName, type: context.curExpr,
-        offset: context.localVarCount, size: 1,
+        name: varName,
+        type: context.curExpr,
+        offset: context.localVarCount,
+        parentFunc: context.curFunc ? context.curFunc.name : undefined,
+        size: 1,
         native_pointer: context.localVarNativePointer,
         native_pointer_index: context.localVarNativePointerIndexed,
+        global: false,
         children: context.curSymRet ? context.curSymRet.children : undefined,
       });
       context.localVarCount++;
     }
 
-    code += context.options.symbolPrint ? `/*Symbol ${JSON.stringify(context.symbolTable.get(varName), undefined, 2)}*/\n` : '';
+
 
     context.localVarNativePointer = undefined;
     context.localVarNativePointerIndexed = false;
