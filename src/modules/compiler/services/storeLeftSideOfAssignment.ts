@@ -31,7 +31,7 @@ export function storeLeftSideOfAssignment(left: Expression, context: CompilerCon
 
 
       if (v.global)
-        code += `set flat[_G_ADDR_${v.name}] ${reg}\n`;
+        code += `setarray flat[_G_ADDR_${v.name}] ${reg}\n`;
       else
         code += `set ri rbp\nadd ri ${v.offset}\nsetarray flat[ri] ${reg}\n`;
       return code;
