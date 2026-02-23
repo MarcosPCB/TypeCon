@@ -90,45 +90,80 @@ export class Linker {
         return { sortedModules, finalInit, globalSize };
     }
 
+    private printSymbolDetails(sym: SymbolDefinition, indent: number): { txt: string, json: any } {
+        let txt = '';
+        const json: any = {};
+        const prefix = ' '.repeat(indent);
+
+        if (sym.children && Object.keys(sym.children).length > 0) {
+            txt += `${prefix}Properties:\n`;
+            json.properties = [];
+            const sortedChildren = Object.entries(sym.children).sort((a, b) => ((a[1] as any).offset || 0) - ((b[1] as any).offset || 0));
+
+            for (const [cName, cSym] of sortedChildren) {
+                const cTypeStr = this.getSymbolTypeName(cSym.type);
+                const cOff = (cSym as any).offset !== undefined ? (cSym as any).offset : 0;
+                const cSize = (cSym as any).size || 1;
+                txt += `${prefix}  .${cName.padEnd(31)} off:${cOff.toString().padEnd(4)} size:${cSize.toString().padEnd(4)} type:${cTypeStr}\n`;
+
+                const cJson: any = { name: cName, offset: cOff, size: cSize, type: cTypeStr };
+                const cDetails = this.printSymbolDetails(cSym as SymbolDefinition, indent + 4);
+                if (cDetails.txt) txt += cDetails.txt;
+                Object.assign(cJson, cDetails.json);
+                json.properties.push(cJson);
+            }
+        }
+
+        if ((sym as any).num_elements) {
+            txt += `${prefix}Elements: ${(sym as any).num_elements}\n`;
+            json.num_elements = (sym as any).num_elements;
+        }
+
+        return { txt, json };
+    }
+
     private printSymbolTable() {
         const symbolsTxtPath = path.join(this.outputFolder, 'symbols.txt');
         const symbolsJsonPath = path.join(this.outputFolder, 'symbols.json');
 
         // User requested simplification: 
         // "just print the global, local variables and sub functions, please, with their addresses and init values"
+        // Also: added detailed layout info for objects, arrays, and strings.
 
         let txtOutput = '=== LINKER SYMBOL TABLE ===\n\n';
         const jsonOutput: any = { globals: [], locals: [], sub_functions: [] };
 
         // --- 1. Global Variables ---
-        // Definition: Symbols with allocated memory addresses (in memoryMap)
         txtOutput += '[Global Variables]\n';
-        txtOutput += 'Name'.padEnd(35) + 'Address'.padEnd(10) + 'Size       ' + 'Type\n';
+        txtOutput += 'Name'.padEnd(35) + 'Address'.padEnd(10) + 'Size      ' + 'Type\n';
         txtOutput += '-'.repeat(70) + '\n';
 
         const sortedAllocated = Array.from(this.memoryMap.entries()).sort((a, b) => a[1] - b[1]);
 
         for (const [name, addr] of sortedAllocated) {
-            const sym = this.globalSymbolTable.get(name);
-            // Verify it's not a function or class/enum (though memoryMap usually implies variable)
-            // Some "globals" might be label enablers or native pointers.
-            if (sym && (sym.type === ESymbolType.function || sym.type === ESymbolType.class || sym.type === ESymbolType.enum)) {
+            const sym = this.globalSymbolTable.get(name) as SymbolDefinition | undefined;
+            if (sym && ((sym.type & ESymbolType.function) || (sym.type & ESymbolType.class) || (sym.type & ESymbolType.enum))) {
                 continue; // specific request to avoid functions here
             }
 
-            const size = sym && sym.type !== ESymbolType.enum ? ((sym as any).size || 1) : 1;
+            const size = sym && !(sym.type & ESymbolType.enum) ? ((sym as any).size || 1) : 1;
             const typeStr = sym ? this.getSymbolTypeName(sym.type) : 'unknown';
 
-            // Init value is generally not known at link time for globals (runtime init), unless it's a constant.
-            // But globals in memoryMap are mutable variables.
-
             txtOutput += `${name.padEnd(35)} ${addr.toString().padEnd(10)} ${size.toString().padEnd(10)} ${typeStr}\n`;
-            jsonOutput.globals.push({ name, address: addr, size, type: typeStr });
+
+            const gJson: any = { name, address: addr, size, type: typeStr };
+
+            if (sym) {
+                const details = this.printSymbolDetails(sym, 2, addr);
+                txtOutput += details.txt;
+                Object.assign(gJson, details.json);
+            }
+
+            jsonOutput.globals.push(gJson);
         }
         txtOutput += '\n';
 
         // --- 2. Local Variables ---
-        // Definition: Symbols with parentFunc property. Grouped by Module -> Function.
         txtOutput += '[Local Variables]\n';
 
         for (const mod of this.modules.values()) {
@@ -136,7 +171,6 @@ export class Linker {
 
             if (locals.length === 0) continue;
 
-            // Group by parent function
             const byFunc: Record<string, SymbolDefinition[]> = {};
             for (const s of locals) {
                 const pFunc = (s as any).parentFunc || 'unknown';
@@ -145,39 +179,44 @@ export class Linker {
             }
 
             for (const [funcName, vars] of Object.entries(byFunc)) {
-                // Sort by offset
                 vars.sort((a: any, b: any) => (a.offset || 0) - (b.offset || 0));
 
                 txtOutput += `Module: ${mod.name}, Function: ${funcName}\n`;
-                txtOutput += '  Name'.padEnd(35) + 'Offset'.padEnd(10) + 'Type\n';
-                txtOutput += '  ' + '-'.repeat(60) + '\n';
+                txtOutput += '  Name'.padEnd(35) + 'Offset'.padEnd(10) + 'Size      ' + 'Type\n';
+                txtOutput += '  ' + '-'.repeat(70) + '\n';
 
                 for (const v of vars) {
                     const typeStr = this.getSymbolTypeName(v.type);
                     const offset = (v as any).offset !== undefined ? (v as any).offset : 0;
-                    txtOutput += `  ${v.name.padEnd(33)} ${offset.toString().padEnd(10)} ${typeStr}\n`;
+                    const size = (v as any).size || 1;
 
-                    jsonOutput.locals.push({
+                    txtOutput += `  ${v.name.padEnd(33)} ${offset.toString().padEnd(10)} ${size.toString().padEnd(10)} ${typeStr}\n`;
+
+                    const lJson: any = {
                         module: mod.name,
                         function: funcName,
                         name: v.name,
                         offset,
+                        size,
                         type: typeStr
-                    });
+                    };
+
+                    const details = this.printSymbolDetails(v, 4, offset);
+                    txtOutput += details.txt;
+                    Object.assign(lJson, details.json);
+
+                    jsonOutput.locals.push(lJson);
                 }
                 txtOutput += '\n';
             }
         }
 
         // --- 3. Sub Functions ---
-        // Definition: Symbols with type ESymbolType.sub_function
         txtOutput += '[Sub Functions]\n';
         txtOutput += 'Module'.padEnd(20) + 'Name'.padEnd(35) + 'Type'.padEnd(15) + 'Info\n';
         txtOutput += '-'.repeat(80) + '\n';
 
         for (const mod of this.modules.values()) {
-            // Check for sub_functions in module context
-            // Note: Compiler logic for sub-functions might set type to exactly sub_function or bitwise.
             const subFuncs = Object.values(mod.context).filter((s: any) => (s.type & ESymbolType.sub_function));
 
             if (subFuncs.length > 0) {
@@ -185,8 +224,6 @@ export class Linker {
 
                 for (const s of subFuncs) {
                     const typeStr = this.getSymbolTypeName(s.type);
-                    // Sub-functions might correspond to an index or code block
-                    // Compiler puts them in 'subFunction' list, keys might be generated names or var names assigned to them.
                     let info = 'N/A';
                     if ((s as any).index !== undefined) info = `idx:${(s as any).index}`;
 
