@@ -8,12 +8,14 @@ import { getObjectSize } from './getObjectSize';
 import { getObjectTypeLayout } from './getObjectLayout';
 import { formatLineDetail } from "../helper/formatLineDetail";
 
-export function processObjectLiteral(objLit: ObjectLiteralExpression, context: CompilerContext): { code: string, layout: { [key: string]: SymbolDefinition }, size: number, instanceSize: number } {
+export function processObjectLiteral(objLit: ObjectLiteralExpression, context: CompilerContext, isNested = false): { code: string, layout: { [key: string]: SymbolDefinition }, size: number, instanceSize: number } {
   let code = context.options.lineDetail ? formatLineDetail(`Object literal: ${objLit.getText()}`) : '';
 
-  // Reserve one slot for the object's base pointer.
-  code += `add rsp 1\nset ri rsp\nadd ri 1\nsetarray flat[rsp] ri\n`;
-  // The object's base pointer is now stored at flat[rsp].
+  if (!isNested) {
+    // Reserve one slot for the object's base pointer.
+    code += `add rsp 1\nset ri rsp\nadd ri 1\nsetarray flat[rsp] ri\n`;
+    // The object's base pointer is now stored at flat[rsp].
+  }
 
   //We will store the code for nested objects and arrays here
   //After definining all the root properties, then we add the instance code
@@ -125,7 +127,7 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
           curTotalSize++;
           code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
           // For a nested object property.
-          const result = processObjectLiteral(pa.getInitializerOrThrow() as ObjectLiteralExpression, context);
+          const result = processObjectLiteral(pa.getInitializerOrThrow() as ObjectLiteralExpression, context, true);
           instanceCode += result.code;
           const nestedSize = result.size;
           curTotalSize += result.size;
@@ -215,7 +217,7 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
           // For a nested object property.
           curTotalSize++;
           code += `add rsp 1\nset ri rsp\nadd ri ${curTotalSize - totalSlots}\nsetarray flat[rsp] ri\n`
-          const result = processObjectLiteral(init, context);
+          const result = processObjectLiteral(init, context, true);
           instanceCode += result.code;
           const nestedSize = result.size;
           curTotalSize += result.size;
