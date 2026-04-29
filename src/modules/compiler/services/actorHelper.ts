@@ -231,7 +231,7 @@ export function parseVarForActionsMovesAi(
         // NOTE: We can recycle registers. `ri` is used for value. `rsi` for index?
         code += `set rsi __RELOC_GLOBAL_${uniqueGlobalName}__\nadd rsi ${deltaGv}\nsetarray flat[rsi] ri\n`;
       } else {
-        code += `set ri ${targetOffset}\nsetarray flat[gv] ri\n`;
+        code += `set ri ${targetOffset}\nsetarray flat[${gv}] ri\n`;
       }
 
       // code2 logic
@@ -439,8 +439,8 @@ export function parseIAiLiteral(
     readonly: true,
     children: {
       loc: { name: 'loc', type: ESymbolType.number | ESymbolType.pointer, offset: 0, literal: `AI_${className}_${fallbackName}` },
-      action: action,
-      move: move,
+      action: { ...action, offset: 1 },
+      move: { ...move, offset: 2 },
       flags: { name: 'flags', type: ESymbolType.number, offset: 3, literal: flags },
     }
   };

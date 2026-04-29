@@ -10,7 +10,7 @@ export function visitObjectLiteral(objLit: ObjectLiteralExpression, context: Com
   const varName = getVarNameForObjectLiteral(objLit);
   if (varName) {
     // Store the layout in the global symbol table.
-    context.symbolTable.set(varName, { name: varName, type: ESymbolType.object, offset: context.localVarCount + 1, size: result.size, children: result.layout });
+    context.symbolTable.set(varName, { name: varName, type: ESymbolType.object, offset: context.localVarCount, size: result.size, children: result.layout });
     result.code += context.options.symbolPrint ? `/*Symbol ${JSON.stringify(context.symbolTable.get(varName), undefined, 2)}*/\n` : '';
   }
   if (context.currentFile.options & ECompileOptions.no_compile)
