@@ -68,8 +68,6 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
     if (context.currentFile.options & ECompileOptions.no_compile)
       return code;
 
-    context.localVarCount++;
-
     // We need to set the parentFunc to make it show up in Linker as a local variable
     const sym = context.symbolTable.get(varName);
     if (sym && sym.type !== ESymbolType.enum) {

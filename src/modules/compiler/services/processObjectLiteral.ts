@@ -90,8 +90,6 @@ export function processObjectLiteral(objLit: ObjectLiteralExpression, context: C
               }
             }
 
-            curTotalSize++;
-
             layout[propName] = {
               name: propName,
               type: ESymbolType.object | ESymbolType.array,

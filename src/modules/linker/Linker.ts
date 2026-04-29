@@ -154,7 +154,7 @@ export class Linker {
             const gJson: any = { name, address: addr, size, type: typeStr };
 
             if (sym) {
-                const details = this.printSymbolDetails(sym, 2, addr);
+                const details = this.printSymbolDetails(sym, 2);
                 txtOutput += details.txt;
                 Object.assign(gJson, details.json);
             }
@@ -201,7 +201,7 @@ export class Linker {
                         type: typeStr
                     };
 
-                    const details = this.printSymbolDetails(v, 4, offset);
+                    const details = this.printSymbolDetails(v, 4);
                     txtOutput += details.txt;
                     Object.assign(lJson, details.json);
 
