@@ -2,8 +2,8 @@
 
 import fs, { Dirent } from 'fs';
 import path = require('path');
-import { compiledFiles, CONInit } from './modules/compiler/framework';
-import { CompileResult, TsToConCompiler } from './modules/compiler/Compiler';
+import { CONInit } from './modules/compiler/framework';
+import { TsToConCompiler } from './modules/compiler/Compiler';
 import { Linker } from './modules/linker/Linker';
 import inquirer from 'inquirer';
 const fsExtra = require("fs-extra");
@@ -22,7 +22,6 @@ let objFolder = 'obj';
 let objFolderExplicitlySet = false;
 let output_file = '';
 let linkList: string[] = [];
-let linkerList: string[] = [];
 let files: string[] = [];
 let separate = false;
 let createInit = false;
@@ -515,28 +514,27 @@ async function Main() {
         }
     }
 
-    // STRICT MODE VALIDATION
+    checkForUpdates();
+
+    // STRICT MODE VALIDATION — exactly one of: setup, -c, -L, -C is required
     let modeCount = 0;
     if (initFunc) modeCount++;
     if (runLinker) modeCount++;
-    if (compile_only || (fileName !== '' || files.length > 0)) modeCount++;
+    if (compile_only) modeCount++;
     if (clean) modeCount++;
 
-    if (modeCount === 0 && !createInit) {
-        console.log(colorText('\nNo active mode detected!', 'red'));
-        console.log(colorText('Please specify an operation:', 'yellow'));
-        console.log(colorText('  -c / --compile   : Compile source files', 'cyan'));
-        console.log(colorText('  -L / --linker    : Run linker', 'cyan'));
-        console.log(colorText('  -C / --clean     : Clean build folders', 'cyan'));
+    if (modeCount === 0) {
+        console.log(colorText('\nNo mode specified. You must choose exactly one of:', 'red'));
         console.log(colorText('  setup            : Run setup wizard', 'cyan'));
+        console.log(colorText('  -c / --compile   : Compile source files to .tco', 'cyan'));
+        console.log(colorText('  -L / --linker    : Link .tco files into a .con', 'cyan'));
+        console.log(colorText('  -C / --clean     : Clean build folders', 'cyan'));
         console.log(helpText);
         process.exit(1);
     }
 
     if (modeCount > 1) {
-        console.log(colorText('\nError: Multiple conflicting modes selected!', 'red'));
-        console.log(colorText('Please select only ONE of the following:', 'yellow'));
-        console.log(colorText('  -c, -L, -C, or setup', 'cyan'));
+        console.log(colorText('\nError: Multiple conflicting modes specified — choose only one of: setup, -c, -L, -C', 'red'));
         process.exit(1);
     }
 
@@ -564,15 +562,10 @@ async function Main() {
     if (stack_size < 1024)
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
-    // Create the Linker context? No, just compiler first.
     const compiler = new TsToConCompiler({ lineDetail: line_print, mode: compile_mode });
-
-    let code = '';
-
     const initSys = new CONInit(stack_size, heap_page_size, heap_page_number, precompiled_modules, heap_page_size * heap_page_number, 0, accept_con_modules);
 
-    // --- LINK MODE (Explicit Linker call) ---
-    // --- LINK MODE (Explicit Linker call) ---
+    // --- LINK MODE ---
     if (runLinker) {
         // Collect input files from -i and -il
         const inputFiles: string[] = [];
@@ -598,8 +591,6 @@ async function Main() {
 
         if (fileName) inputFiles.push(fileName);
         if (files.length > 0) inputFiles.push(...files);
-        if (linkerList.length > 0) inputFiles.push(...linkerList);
-
         if (inputFiles.length === 0) {
             console.log(colorText('Error: No input files provided for linker (and \'obj\' folder is empty or missing). Use -i, -il, or -if.', 'red'));
             process.exit(1);
@@ -714,147 +705,6 @@ async function Main() {
         process.exit(0);
     }
 
-    // --- ORIGINAL SINGLE PASS MODE ---
-
-    if (fileName != '') {
-        const file = fs.readFileSync(fileName);
-
-        const result = compiler.compile(file.toString(), fileName);
-        if (result && result.context) initSys.markerDefines = [...new Set(result.context.headerDefines)];
-
-        for (let i = compiledFiles.size - 1; i >= 0; i--) {
-            const f = compiledFiles.get(Array.from(compiledFiles.keys())[i]);
-            // If we are using precompiled modules, don't append the source code of the system modules
-            // They are already included in the header via initSys
-            if (precompiled_modules && f.path.includes('precompile'))
-                continue;
-
-            code += f.code;
-        }
-
-        const outName = GetOutputName(fileName) + (GetOutputName(fileName).toLowerCase().endsWith('.con') ? '' : '.con');
-
-        console.log(' ');
-
-        if (compile_options & 4) {
-            console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
-            fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
-            headerWritten = true;
-
-            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${outName}`);
-            fs.writeFileSync(`${output_folder}/${outName}`, code);
-        } else {
-            let finalCode = code;
-            if (default_inclusion)
-                finalCode = `include GAME.CON\n\n` + initSys.BuildFullCodeFile(code);
-            else {
-                if (!(compile_options & 1))
-                    finalCode = initSys.BuildFullCodeFile(code);
-            }
-
-            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${outName}`);
-            fs.writeFileSync(`${output_folder}/${outName}`, finalCode);
-        }
-
-        if (createInit) linkList.push(outName);
-    }
-
-    if (files.length > 0) {
-        let result: CompileResult;
-        for (const f of files) {
-            const file = fs.readFileSync(f);
-
-            result = compiler.compile(file.toString(), f, result ? result.context : undefined);
-        }
-        if (result && result.context) initSys.markerDefines = [...new Set(result.context.headerDefines)];
-
-        // Sort compiled files by dependency
-        const sortedFiles: any[] = [];
-        const visited = new Set<string>();
-        const visiting = new Set<string>();
-        const fileMap = new Map<string, any>(); // basename -> ICompiledFile
-
-        // Build helper map
-        compiledFiles.forEach(f => {
-            const name = path.basename(f.path, '.ts');
-            fileMap.set(name, f);
-        });
-
-        const visit = (f: any) => {
-            const name = path.basename(f.path, '.ts');
-            if (visited.has(name)) return;
-            if (visiting.has(name)) {
-                console.log(colorText(`Warning: Circular dependency detected involving '${name}'`, 'yellow'));
-                return;
-            }
-            visiting.add(name);
-
-            if (f.dependency) {
-                for (const dep of f.dependency) {
-                    const depFile = fileMap.get(dep);
-                    if (depFile) {
-                        visit(depFile);
-                    }
-                }
-            }
-
-            visiting.delete(name);
-            visited.add(name);
-            sortedFiles.push(f);
-        };
-
-        compiledFiles.forEach(f => visit(f));
-
-        sortedFiles.forEach(c => {
-            if (c.options != 0)
-                return;
-            const name = GetOutputName(c.path);
-            console.log(`${colorText('Writing:', 'cyan')} ${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`);
-            fs.writeFileSync(`${output_folder}/${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`, c.code);
-
-            // Always push to linkList if we are creating init? 
-            // Currently only if compile_options & 4 (header).
-            // Wait, user said "if using with create_init".
-            // So I should populate it.
-            if (createInit) // Previously used compile_options & 4 check?
-                // Original code: if (compile_options & 4) linkList.push...
-                // But createInit IS the flag for it now.
-                // Wait, compile_options & 4 was "create header file".
-                // logic: "if (a == '--header' || a == '-h') compile_options |= 4 + 1;"
-                // And "if (createInit) CreateInit(linkList)"
-                // But wait, linkList logic was inside `else` block of `-1f`.
-                // User wants keys (files) to be added to inclusion list.
-                // If -ci is used, we generally want inputs to be in correct order.
-                // If I JUST compile, createInit is false?
-                // But user might use `-ci`.
-                // If `-ci` is set, I should populate linkList with these files.
-                // Previously line 617 checked `compile_options & 4`.
-                // But `-l` sets `link=true` (now `createInit=true`).
-                // The logic at 620 set `link=true` if `compile_options & 4`.
-                // So if header is requested, we also link?
-                // Let's preserve `createInit` logic.
-                // If `createInit` is true, we should add to `linkList`.
-                linkList.push(`${name}${name.toLowerCase().endsWith('.con') ? '' : '.con'}`);
-        });
-    }
-
-    if (createInit) {
-        console.log(colorText(`Creating Init Files...`, 'blue'));
-        CreateInit(linkList);
-        if (!headerWritten) {
-            console.log(`${colorText('Writing:', 'cyan')} header file: ${output_folder}/header.con`);
-            fs.writeFileSync(`${output_folder}/header.con`, initSys.BuildInitFile());
-        }
-    }
-
-    if (fileName == '' && files.length == 0 && !createInit && !runLinker)
-        console.log(`Nothing to do!\n${helpText}`);
-    else
-        console.log(colorText(`Compilation finished!`, 'green'));
-
-    checkForUpdates();
-
-    process.exit(0);
 }
 
 function CreateInit(outputFiles: string[]) {
