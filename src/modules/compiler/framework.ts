@@ -125,6 +125,12 @@ define STRINGSTACK 1024 //This is where the stack begins - 1023 and 1022 are use
 var rsbp 1024 REG_FLAGS
 var rssp 1023 REG_FLAGS
 
+//Fixed-point scratch registers (fast temporaries for FP sub-expressions)
+var rfx0 0 REG_FLAGS
+var rfx1 0 REG_FLAGS
+var rfx2 0 REG_FLAGS
+var rfx3 0 REG_FLAGS
+
 //ASCII conversion table
 string 900  
 string 901 !

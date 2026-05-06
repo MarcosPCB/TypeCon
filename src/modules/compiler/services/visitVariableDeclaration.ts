@@ -9,6 +9,11 @@ import { indent } from "../helper/indent";
 import { visitArrowFunctionExpression } from "./visitArrowFunctionExpression";
 import { createHash } from "crypto";
 import { subFunctionInit } from "./subFunctionInit";
+import { evaluateLiteralExpression } from "../helper/helpers";
+
+const FP_ALIAS_BITS: Record<string, 8 | 12 | 16 | 30> = {
+  FP8: 8, FP12: 12, FP16: 16, FP30: 30
+};
 
 export function visitVariableDeclaration(decl: VariableDeclaration, context: CompilerContext): string {
   const varName = decl.getName();
@@ -61,6 +66,12 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
     return code;
   }
 
+  // ─── Fixed-point type detection ──────────────────────────────────────────
+  // Use the explicit type annotation text (getTypeNode) rather than getAliasSymbol()
+  // because alias resolution via getType() is unreliable in module-scoped files.
+  const typeNodeText = decl.getTypeNode()?.getText();
+  const fpBits = typeNodeText ? FP_ALIAS_BITS[typeNodeText] : undefined;
+
   const init = decl.getInitializer();
   if (init && init.isKind(SyntaxKind.ObjectLiteralExpression)) {
     code += visitObjectLiteral(init as ObjectLiteralExpression, context);
@@ -97,7 +108,29 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
         subFunctionInit(init as ArrowFunction | FunctionExpression, context);
         code += `set ra ${context.subFunction.index * 100 + 0x10000}\n`;
         context.curExpr = ESymbolType.sub_function | ESymbolType.function;
-      } else code += visitExpression(init as Expression, context);
+      } else if (fpBits !== undefined) {
+        // FP variable: convert numeric literals to fixed-point at compile time
+        const litVal = evaluateLiteralExpression(init as Expression, context);
+        if (typeof litVal === 'number') {
+          code += `set ra ${Math.round(litVal * (1 << fpBits))}\n`;
+        } else {
+          code += visitExpression(init as Expression, context);
+        }
+        context.curExpr = ESymbolType.number | ESymbolType.fixed_point;
+        context.curFpBits = fpBits;
+      } else {
+        code += visitExpression(init as Expression, context);
+        // FP value assigned to a plain-integer variable: truncate via shiftr
+        if (fpBits === undefined && context.curFpBits !== 0) {
+          code += `shiftr ra ${context.curFpBits}\n`;
+          context.curFpBits = 0;
+        }
+      }
+    }
+
+    if (fpBits !== undefined) {
+      context.curExpr = ESymbolType.number | ESymbolType.fixed_point;
+      context.curFpBits = fpBits;
     }
 
     if (isGlobal) {
@@ -119,7 +152,8 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
         native_pointer: context.localVarNativePointer,
         native_pointer_index: context.localVarNativePointerIndexed,
         children: context.curSymRet ? context.curSymRet.children : undefined,
-        global: true
+        global: true,
+        fp_bits: fpBits
       });
 
       context.globalVarCount++;
@@ -136,6 +170,7 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
         native_pointer_index: context.localVarNativePointerIndexed,
         global: false,
         children: context.curSymRet ? context.curSymRet.children : undefined,
+        fp_bits: fpBits
       });
       context.localVarCount++;
     }

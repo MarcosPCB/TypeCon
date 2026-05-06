@@ -74,7 +74,8 @@ export enum ESymbolType {
   enum = 4096,
   constant = 8192,
   not_compiled = 65536,
-  sub_function = 131072 // Function or arrow function saved as reference/pointer
+  sub_function = 131072, // Function or arrow function saved as reference/pointer
+  fixed_point = 262144   // Value uses fixed-point representation; fp_bits gives the precision shift
 }
 
 /**
@@ -113,6 +114,9 @@ export interface SymbolDefinition {
   parent?: SymbolDefinition;
   parentFunc?: string; // Name of the function this symbol belongs to (for locals)
   parentClass?: string; // Name of the class this symbol belongs to
+  fp_bits?: 8 | 12 | 16 | 30;          // Fixed-point precision shift (undefined = plain integer)
+  returns_fp_bits?: 8 | 12 | 16 | 30;  // FP precision of return value (functions only)
+  param_fp_bits?: (8 | 12 | 16 | 30 | 0)[];  // FP precision per parameter (functions only)
 }
 
 export interface TypeAliasDefinition {
@@ -207,6 +211,8 @@ export interface CompilerContext {
   inSwitch: boolean;
   hasLocalVars: boolean;
   usingRD: boolean;
+  curFpBits: 0 | 8 | 12 | 16 | 30;  // FP precision of the value currently in ra/rd (0 = integer)
+  rfxAllocated: number;               // How many rfx0..rfx3 scratch registers are in use (0..4)
   project: Project;
   headerDefines: string[];
 }
@@ -319,6 +325,8 @@ export class TsToConCompiler {
       inSwitch: false,
       hasLocalVars: false,
       usingRD: false,
+      curFpBits: 0,
+      rfxAllocated: 0,
       project: this.project,
 
       globalAllocations: [],

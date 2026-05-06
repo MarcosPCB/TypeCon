@@ -7,6 +7,77 @@ import { CON_CONSTANT, CON_NATIVE, CON_NATIVE_GAMEVAR, CON_NATIVE_OBJECT, CON_NA
 namespace nocompile { }
 
 declare global {
+    // Fixed-point numeric types — 32-bit integers with an implicit binary scale factor.
+    // Use these to get automatic mulscale/divscale codegen for * and / operations.
+    type FP8 = number;   // Q23.8  — 1.0 = 256
+    type FP12 = number;   // Q19.12 — 1.0 = 4096
+    type FP16 = number;   // Q15.16 — 1.0 = 65536
+    type FP30 = number;   // Q1.30  — 1.0 = 1073741824, useful for unit-range values
+
+    // Fixed-point conversion helpers
+    function intToFP8(x: number): FP8;
+    function intToFP12(x: number): FP12;
+    function intToFP16(x: number): FP16;
+    function intToFP30(x: number): FP30;
+    function fp8ToInt(x: FP8): number;
+    function fp12ToInt(x: FP12): number;
+    function fp16ToInt(x: FP16): number;
+    function fp30ToInt(x: FP30): number;
+
+    // Raw CON fixed-point math (manual use)
+    function mulscale(a: number, b: number, shift: number): number;
+    function divscale(a: number, b: number, shift: number): number;
+    function scalevar(a: number, b: number, divisor: number): number;
+
+    // Math object — mirrors JavaScript's Math API backed by CON instructions.
+    // FP-aware: methods auto-detect argument precision at compile time.
+    interface Math {
+        /** Strip fraction → integer. FP arg auto-detected via curFpBits. */
+        floor(x: number): number;
+        ceil(x: number): number;
+        round(x: number): number;
+        trunc(x: number): number;
+        /** Absolute value; preserves FP precision of input. */
+        abs(x: number): number;
+        /** Square root; FP input keeps precision (result has n/2 fractional bits). */
+        sqrt(x: number): number;
+        /** Minimum; preserves FP precision. */
+        min(a: number, b: number): number;
+        /** Maximum; preserves FP precision. */
+        max(a: number, b: number): number;
+        /** CON clamp in [min,max]; preserves FP precision. */
+        clamp(x: number, min: number, max: number): number;
+        /** sin: BAM integer → FP16;  FP16 degrees → FP16. */
+        sin(angle: number): FP16;
+        /** cos: BAM integer → FP16;  FP16 degrees → FP16. */
+        cos(angle: number): FP16;
+        /** tan: BAM → FP16 (precompile);  FP16 degrees → FP16 (precompile). */
+        tan(angle: number): FP16;
+        /** CON getangle: vector (dy, dx) → BAM. */
+        atan2(dy: number, dx: number): number;
+        /** pow: integer base → integer;  FP base → FP (mulscale loop). */
+        pow(base: number, exp: number): number;
+        /** ln(x): integer x → FP16;  FP16 x → FP16. Approximation via MSB. */
+        log(x: number): FP16;
+        log2(x: number): FP16;
+        log10(x: number): FP16;
+        /** e^x via 5-term Taylor. x in FP16, result FP16. */
+        exp(x: FP16): FP16;
+        /** Rounded integer division. */
+        divr(a: number, b: number): number;
+        /** displayrand: 0–32767. */
+        random(): number;
+        /** displayrandvarvar: 0–(max-1). */
+        randomInt(max: number): number;
+        /** Degrees → BAM (0–2047). Integer or FP16 degrees accepted. */
+        toBAM(degrees: number): number;
+        toDeg(bam: number): number;
+        /** Integer degrees → FP16 radians. */
+        toRad(degrees: number): FP16;
+        /** FP16 radians → integer degrees. */
+        fromRad(radians: FP16): number;
+    }
+
     //Type for native functions
 
     /**
@@ -540,6 +611,12 @@ declare global {
      * @interface ISys
      */
     export interface ISys {
+        r0: CON_NATIVE_GAMEVAR<'r0', number>;
+        r1: CON_NATIVE_GAMEVAR<'r1', number>;
+        r2: CON_NATIVE_GAMEVAR<'r2', number>;
+        r3: CON_NATIVE_GAMEVAR<'r3', number>;
+        r4: CON_NATIVE_GAMEVAR<'r4', number>;
+        r5: CON_NATIVE_GAMEVAR<'r5', number>;
         /**
          * Accumulator register. Used for all kinds of operations. All results are stored in it.
          */
@@ -1384,7 +1461,7 @@ declare global {
     /** Other sprites in the game world */
     export const sprites: CActor[];
 
-    export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound';
+    export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound' | 'NewGame';
     export type TEventDE = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd';
     export type TEventI = 'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' | 'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10' | 'DoFire' | 'Fire' | 'PressedFire';
     export type TEvents = TEventPAE | TEventDE | TEventI;

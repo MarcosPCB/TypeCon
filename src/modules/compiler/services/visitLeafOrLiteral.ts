@@ -11,6 +11,7 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
   context.curSymRet = null;
 
   context.curExpr = ESymbolType.number;
+  context.curFpBits = 0;
 
   if (expr.isKind(SyntaxKind.Identifier)) {
     const name = expr.getText();
@@ -25,6 +26,9 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
 
       if (i.type & ESymbolType.array)
         context.curExpr |= ESymbolType.array
+
+      if (i.fp_bits)
+        context.curFpBits = i.fp_bits;
 
       return code;
     }
@@ -73,6 +77,9 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
 
       if (off.type & ESymbolType.sub_function)
         context.curExpr |= ESymbolType.sub_function | ESymbolType.function;
+
+      if (off.fp_bits)
+        context.curFpBits = off.fp_bits;
 
       if (off.heap)
         code += `set rf 1\n`;

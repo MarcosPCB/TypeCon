@@ -18,6 +18,7 @@ import { formatLineDetail } from "../helper/formatLineDetail";
 export function visitExpression(expr: Expression, context: CompilerContext, reg = 'ra', direct = false): string {
   let code = ''//`/* ${expr.getText()} */\n`;
   context.curExpr = ESymbolType.number;
+  context.curFpBits = 0;
   context.curSymRet = null;
 
   const val = evaluateLiteralExpression(expr, context);

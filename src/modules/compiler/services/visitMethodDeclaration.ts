@@ -97,11 +97,15 @@ export function visitMethodDeclaration(
   code += `  set ra rbp \n  state push \n  set rbp rsp\n  add rbp 1\n`;
   //}
 
+  const FP_ALIAS_BITS: Record<string, 8 | 12 | 16 | 30> = { FP8: 8, FP12: 12, FP16: 16, FP30: 30 };
+  const paramFpBitsArr: (8 | 12 | 16 | 30 | 0)[] = [];
+
   md.getParameters().forEach((p, i) => {
     const type = p.getType();
     let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
     let children: Record<string, SymbolDefinition>;
     let con = '';
+    let paramFpBits: 8 | 12 | 16 | 30 | undefined;
     switch (type.getText()) {
       case 'string':
       case 'boolean':
@@ -152,14 +156,24 @@ export function visitMethodDeclaration(
         if (t & ESymbolType.object)
           children = getObjectTypeLayout(tText, context);
     }
-    localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children };
+    const paramTypeText = p.getTypeNode()?.getText();
+    paramFpBits = paramTypeText ? FP_ALIAS_BITS[paramTypeText] : undefined;
+    if (paramFpBits !== undefined)
+      t = ESymbolType.number | ESymbolType.fixed_point;
+    paramFpBitsArr.push(paramFpBits ?? 0);
+    localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children, fp_bits: paramFpBits };
   });
+
+  const retTypeText = md.getReturnTypeNode()?.getText();
+  const retFpBits = retTypeText ? FP_ALIAS_BITS[retTypeText] : undefined;
 
   localCtx.symbolTable.set(mName, {
     name: `${className}_${mName}`,
     type: ESymbolType.function,
     offset: 0,
-    parentClass: className
+    parentClass: className,
+    param_fp_bits: paramFpBitsArr,
+    returns_fp_bits: retFpBits
   });
 
   localCtx.curFunc = localCtx.symbolTable.get(mName) as SymbolDefinition;

@@ -20,6 +20,9 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
     curFunc: undefined,
   };
 
+  const FP_ALIAS_BITS: Record<string, 8 | 12 | 16 | 30> = { FP8: 8, FP12: 12, FP16: 16, FP30: 30 };
+  const paramFpBitsArr: (8 | 12 | 16 | 30 | 0)[] = [];
+
   let code = `${context.options.lineDetail ? formatLineDetail(fd.getText()) : ''}\ndefstate ${localCtx.curModule ? `_${localCtx.curModule.name}_` : ''}${name}\n  set ra rbp \n  state push\n  set rbp rsp\n  add rbp 1\n`;
   fd.getParameters().forEach((p, i) => {
     const type = p.getType();
@@ -58,6 +61,10 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
 
       case 'constant':
       case 'number':
+      case 'FP8':
+      case 'FP12':
+      case 'FP16':
+      case 'FP30':
         break;
 
       case 'quote':
@@ -91,19 +98,26 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
 
         children = getObjectTypeLayout(tText, context);
     }
-    localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children };
+    const paramTypeText = p.getTypeNode()?.getText();
+    const paramFpBits = paramTypeText ? FP_ALIAS_BITS[paramTypeText] : undefined;
+    if (paramFpBits !== undefined)
+      t = ESymbolType.number | ESymbolType.fixed_point;
+    paramFpBitsArr.push(paramFpBits ?? 0);
+    localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children, fp_bits: paramFpBits };
   });
 
   context.symbolTable.set(name, {
     name: `${localCtx.curModule ? `_${localCtx.curModule.name}_` : ''}${name}`,
     type: ESymbolType.function,
-    offset: 0
+    offset: 0,
+    param_fp_bits: paramFpBitsArr
   });
 
   localCtx.symbolTable.set(name, {
     name: `${localCtx.curModule ? `_${localCtx.curModule.name}_` : ''}${name}`,
     type: ESymbolType.function,
-    offset: 0
+    offset: 0,
+    param_fp_bits: paramFpBitsArr
   });
 
   localCtx.curFunc = localCtx.symbolTable.get(name) as SymbolDefinition;
@@ -129,6 +143,13 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
       (localCtx.symbolTable.get(name) as SymbolDefinition).CON_code = (localCtx.symbolTable.get(name) as SymbolDefinition).name = args[0].getText().replace(/[`'"]/g, "");
       (context.symbolTable.get(name) as SymbolDefinition).CON_code = (context.symbolTable.get(name) as SymbolDefinition).name = args[0].getText().replace(/[`'"]/g, "");
     }
+  }
+
+  const retTypeText = fd.getReturnTypeNode()?.getText();
+  const retFpBits = retTypeText ? FP_ALIAS_BITS[retTypeText] : undefined;
+  if (retFpBits !== undefined) {
+    (localCtx.symbolTable.get(name) as SymbolDefinition).returns_fp_bits = retFpBits;
+    (context.symbolTable.get(name) as SymbolDefinition).returns_fp_bits = retFpBits;
   }
 
   const body = fd.getBody() as Block;

@@ -1,5 +1,5 @@
-import { BinaryExpression } from "ts-morph";
-import { CompilerContext, ESymbolType } from "../Compiler";
+import { BinaryExpression, SyntaxKind } from "ts-morph";
+import { CompilerContext, ESymbolType, SymbolDefinition } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
 import { evaluateLiteralExpression } from "../helper/helpers";
 import { visitExpression } from "./visitExpression";
@@ -24,7 +24,6 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
     debugger;
 
   const useRD = context.usingRD;
-  context.usingRD = true;
 
   if (opText.includes("=") && !['>=', '<=', '=='].includes(opText)) {
     // assignment
@@ -32,44 +31,71 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
     if (typeof valD === 'undefined')
       code += visitExpression(right, context,);
 
+    const rightFpBitsAssign = context.curFpBits;
+
+    // For plain `=`: if right side is FP but left side is a plain integer, truncate
+    if (opText === '=' && rightFpBitsAssign !== 0 && typeof valD === 'undefined') {
+      const leftText = left.isKind(SyntaxKind.Identifier) ? left.getText().trim() : null;
+      if (leftText) {
+        const leftSym = (context.symbolTable.get(leftText) ?? context.paramMap[leftText]) as SymbolDefinition | undefined;
+        if (leftSym && !leftSym.fp_bits && !(leftSym.type & ESymbolType.fixed_point)) {
+          code += `shiftr ra ${rightFpBitsAssign}\n`;
+          context.curFpBits = 0;
+        }
+      }
+    }
+
     if (opText != '=') {
       //code += `set rd ra\n`
       code += visitExpression(left, context, 'rd');
+      const leftFpBitsAssign = context.curFpBits;
+      const rhs = typeof valD !== 'undefined' ? Number(valD) : 'ra';
 
       switch (opText) {
         case '+=':
-          code += `add rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+          code += `add rd ${rhs}\n`;
           break;
         case "-=":
-          code += `sub rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+          code += `sub rd ${rhs}\n`;
           break;
         case "*=":
-          code += `mul rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+          if (leftFpBitsAssign !== 0 && rightFpBitsAssign !== 0) {
+            if (leftFpBitsAssign !== rightFpBitsAssign)
+              addDiagnostic(bin, context, 'warning', `FP precision mismatch in *=: FP${leftFpBitsAssign} vs FP${rightFpBitsAssign}`);
+            code += `mulscale rd rd ${rhs} ${leftFpBitsAssign}\n`;
+          } else {
+            code += `mul rd ${rhs}\n`;
+          }
           break;
         case "/=":
-          code += `div rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+          if (leftFpBitsAssign !== 0 && rightFpBitsAssign !== 0) {
+            if (leftFpBitsAssign !== rightFpBitsAssign)
+              addDiagnostic(bin, context, 'warning', `FP precision mismatch in /=: FP${leftFpBitsAssign} vs FP${rightFpBitsAssign}`);
+            code += `divscale rd rd ${rhs} ${leftFpBitsAssign}\n`;
+          } else {
+            code += `div rd ${rhs}\n`;
+          }
           break;
         case "%=":
-          code += `mod rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+          code += `mod rd ${rhs}\n`;
           break;
         case "&=":
-          code += `and rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+          code += `and rd ${rhs}\n`;
           break;
         case "|=":
-          code += `or rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+          code += `or rd ${rhs}\n`;
           break;
         case "^=":
-          code += `xor rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+          code += `xor rd ${rhs}\n`;
           break;
         case ">>=":
-          code += `shiftr rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+          code += `shiftr rd ${rhs}\n`;
           break;
         case "<<=":
-          code += `shiftl rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+          code += `shiftl rd ${rhs}\n`;
           break;
       }
-    } //else
-    //code += `set rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+    }
 
     code += storeLeftSideOfAssignment(left, context, `${opText != '=' ? 'rd' : typeof valD !== 'undefined' ? Number(valD) : 'ra'}`);
     context.usingRD = useRD;
@@ -77,11 +103,28 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
     return code;
   }
 
-  if (useRD)
-    code += `state pushd\n`;
+  // ── save the outer rd value (only exists when an outer binary already computed
+  //    its left side) then free rd so the left-side sub-expression can use it ──
+  let rfxSave: string | null = null;
+  if (useRD) {
+    if (context.rfxAllocated < 4) {
+      rfxSave = `rfx${context.rfxAllocated}`;
+      context.rfxAllocated++;
+      code += `set ${rfxSave} rd\n`;
+    } else {
+      code += `state pushd\n`;
+    }
+  }
+  // Left side: rd is free (outer value saved above); don't let inner exprs save unnecessarily
+  context.usingRD = false;
+
   code += context.options.lineDetail ? `// left side\n` : '';
   code += visitExpression(left, context, 'rd');
 
+  // Left side result is now in rd — mark it as occupied for the right-side visit
+  context.usingRD = true;
+
+  const leftFpBits = context.curFpBits;
   const isQuote = Boolean(context.curExpr & ESymbolType.quote);
   const isString = Boolean(context.curExpr & ESymbolType.string);
 
@@ -90,12 +133,13 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
     code += `set ra 0\n`;
   }
 
-  //code += `set rd ra\n`;
   code += context.options.lineDetail ? `// right side\n` : '';
   const valD = evaluateLiteralExpression(right, context);
 
   if (typeof valD === 'undefined')
     code += visitExpression(right, context);
+
+  const rightFpBits = context.curFpBits;
 
   if (isQuote && !(context.curExpr & ESymbolType.quote))
     code += `qputs 1022 %d\nqsprintf 1023 1022 ra\nset ra 1022\n`;
@@ -106,6 +150,11 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
   context.curExpr = isQuote ? ESymbolType.quote : ESymbolType.number;
   context.curExpr = isString ? ESymbolType.string : ESymbolType.number;
 
+  // Track result FP precision
+  let resultFpBits: 0 | 8 | 12 | 16 | 30 = 0;
+
+  const rhs = typeof valD !== 'undefined' ? String(Number(valD)) : 'ra';
+
   switch (opText) {
     case "+":
       if (isQuote)
@@ -113,63 +162,93 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
       else if (isString)
         code += `state pushr2\nset r0 rd\nset r1 ra\nstate _stringConcat\nstate popr2\nset ra rb\n`;
       else
-        code += `add rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+        code += `add rd ${rhs}\n`;
+      resultFpBits = leftFpBits;
       break;
     case "-":
-      code += `sub rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+      code += `sub rd ${rhs}\n`;
+      resultFpBits = leftFpBits;
       break;
     case "*":
-      code += `mul rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+      if (leftFpBits !== 0 && rightFpBits !== 0) {
+        if (leftFpBits !== rightFpBits)
+          addDiagnostic(bin, context, 'error', `FP precision mismatch: FP${leftFpBits} * FP${rightFpBits} — convert explicitly`);
+        code += `mulscale rd rd ${rhs} ${leftFpBits}\n`;
+        resultFpBits = leftFpBits;
+      } else if (leftFpBits !== 0 && rightFpBits === 0) {
+        code += `mul rd ${rhs}\n`;
+        resultFpBits = leftFpBits;
+      } else if (leftFpBits === 0 && rightFpBits !== 0) {
+        addDiagnostic(bin, context, 'error', `integer * FP${rightFpBits}: swap operands or cast left side to FP`);
+        code += `mul rd ${rhs}\n`;
+      } else {
+        code += `mul rd ${rhs}\n`;
+      }
       break;
     case "/":
-      code += `div rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+      if (leftFpBits !== 0 && rightFpBits !== 0) {
+        if (leftFpBits !== rightFpBits)
+          addDiagnostic(bin, context, 'error', `FP precision mismatch: FP${leftFpBits} / FP${rightFpBits} — convert explicitly`);
+        code += `divscale rd rd ${rhs} ${leftFpBits}\n`;
+        resultFpBits = leftFpBits;
+      } else if (leftFpBits !== 0 && rightFpBits === 0) {
+        code += `div rd ${rhs}\n`;
+        resultFpBits = leftFpBits;
+      } else if (leftFpBits === 0 && rightFpBits !== 0) {
+        addDiagnostic(bin, context, 'error', `integer / FP${rightFpBits}: cast left side to FP first`);
+        code += `div rd ${rhs}\n`;
+      } else {
+        code += `div rd ${rhs}\n`;
+      }
       break;
     case "%":
-      code += `mod rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+      code += `mod rd ${rhs}\n`;
       break;
     case "&":
-      code += `and rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+      code += `and rd ${rhs}\n`;
       break;
     case "|":
-      code += `or rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+      code += `or rd ${rhs}\n`;
       break;
     case "^":
-      code += `xor rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+      code += `xor rd ${rhs}\n`;
       break;
     case ">>":
-      code += `shiftr rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+      code += `shiftr rd ${rhs}\n`;
       break;
     case "<<":
-      code += `shiftl rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n`;
+      code += `shiftl rd ${rhs}\n`;
       break;
     case "<":
-      code += `set rb 0\nifl rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
+      code += `set rb 0\nifl rd ${rhs}\n  set rb 1\n`;
       break;
     case "<=":
-      code += `set rb 0\nifle rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
+      code += `set rb 0\nifle rd ${rhs}\n  set rb 1\n`;
       break;
     case ">":
-      code += `set rb 0\nifg rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
+      code += `set rb 0\nifg rd ${rhs}\n  set rb 1\n`;
       break;
     case ">=":
-      code += `set rb 0\nifge rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
+      code += `set rb 0\nifge rd ${rhs}\n  set rb 1\n`;
       break;
     case "==":
-      code += `set rb 0\nife rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
+      code += `set rb 0\nife rd ${rhs}\n  set rb 1\n`;
       break;
     case "!=":
-      code += `set rb 0\nifn rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
+      code += `set rb 0\nifn rd ${rhs}\n  set rb 1\n`;
       break;
     case "&&":
-      code += `set rb 0\nifand rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
+      code += `set rb 0\nifand rd ${rhs}\n  set rb 1\n`;
       break;
     case "||":
-      code += `set rb 0\nifeither rd ${typeof valD !== 'undefined' ? Number(valD) : 'ra'}\n  set rb 1\n`;
+      code += `set rb 0\nifeither rd ${rhs}\n  set rb 1\n`;
       break;
     default:
       addDiagnostic(bin, context, "error", `Unhandled operator "${opText}"`);
       code += `set ra 0\n`;
   }
+
+  context.curFpBits = resultFpBits;
 
   switch (opText) {
     case "+":
@@ -190,8 +269,13 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
       break;
   }
 
-  if (useRD && reg != 'rd')
+  if (rfxSave) {
+    context.rfxAllocated--;
+    if (reg !== 'rd')
+      code += `set rd ${rfxSave}\n`;
+  } else if (useRD && reg != 'rd') {
     code += `state popd\n`;
+  }
 
   context.usingRD = useRD;
 

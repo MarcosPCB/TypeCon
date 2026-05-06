@@ -60,7 +60,7 @@ export interface IVar {
     pointer: number,
     object_name?: string, //If object_name is _array, then it's an array
     object?: any, //If empty but object_name is defined, then it's the start of the object,
-                  //otherwise it's an array of objects, holding all the possibilities
+    //otherwise it's an array of objects, holding all the possibilities
     static?: true,
     size?: number, //For objects and arrays
     arg?: number,
@@ -94,7 +94,7 @@ export enum Names {
     JIBS6 = 2286
 }
 
-export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound';
+export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound' | 'NewGame';
 export type TEventDE = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd';
 export type TEventI = 'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' | 'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10' | 'DoFire' | 'Fire' | 'PressedFire';
 export type TEvents = TEventPAE | TEventDE | TEventI;
@@ -111,6 +111,7 @@ export const EventList: TEvents[] = [
     'PreGame',
     'PreActorDamage',
     'RecogSound',
+    'NewGame',
     'WeapKey1',
     'WeapKey2',
     'WeapKey3',

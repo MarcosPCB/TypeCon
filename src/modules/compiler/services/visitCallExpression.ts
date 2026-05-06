@@ -259,6 +259,7 @@ set rb ra
   if (nativeFn) {
     let argCode = '';
     let argsLen = 0;
+    let arg0FpBits = 0;
 
     if (nativeFn.type_belong)
       argsLen += 2;
@@ -309,6 +310,9 @@ set rb ra
         resolvedLiterals.push(null);
       }
 
+      if (i === 0 && (nativeFn.fp_aware_code || nativeFn.inherit_fp_bits))
+        arg0FpBits = context.curFpBits;
+
       if (expected & CON_NATIVE_FLAGS.OPTIONAL)
         optionalArgs++;
     }
@@ -325,8 +329,15 @@ set rb ra
     if (nativeFn.return_type == 'object')
       context.curExpr |= ESymbolType.object;
 
-    // For simple native functions (code is a string), concatenate the command with the arguments.
-    if (typeof nativeFn.code === "string") {
+    // Resolve the instruction string: fp_aware_code takes priority over code.
+    if (nativeFn.fp_aware_code) {
+      code += nativeFn.fp_aware_code(arg0FpBits) + "\n";
+      if (args.length > 0) {
+        code += `state popr${argsLen > 12 ? 'all' : argsLen}\n`;
+        context.localVarCount -= argsLen;
+      }
+    } else if (typeof nativeFn.code === "string") {
+      // For simple native functions (code is a string), concatenate the command with the arguments.
       code += nativeFn.code; // e.g., "rotatesprite "
       for (let i = 0; i < args.length; i++) {
         if (resolvedLiterals[i] !== null && resolvedLiterals[i] !== "") {
@@ -358,6 +369,14 @@ set rb ra
         context.localVarCount += nativeFn.return_size;
       }
     }
+
+    // Apply FP-bit tracking after the call.
+    if (nativeFn.inherit_fp_bits)
+      context.curFpBits = arg0FpBits as 0 | 8 | 12 | 16 | 30;
+    else if (nativeFn.returns_fp_bits)
+      context.curFpBits = nativeFn.returns_fp_bits;
+    else if (!nativeFn.fp_aware_code)
+      context.curFpBits = 0;
   } else {
     const fnName = fnNameRaw.startsWith("this.") ? fnNameRaw.substring(5) : fnNameRaw;
     const func = context.symbolTable.get(fnObj ? fnObj : fnName) as SymbolDefinition;
@@ -368,10 +387,11 @@ set rb ra
     }
 
     const isClass = Boolean(func.type & ESymbolType.class);
+    const isModule = Boolean(func.type & ESymbolType.module);
     const totalArgs = args.length + (isClass ? 1 : 0);
 
-    if (isClass && (!func.children || (func.children && !func.children[fnName]))) {
-      addDiagnostic(call, context, 'error', `Undefined method ${fnName} in class ${func.name}`)
+    if ((isClass || isModule) && (!func.children || (func.children && !func.children[fnName]))) {
+      addDiagnostic(call, context, 'error', `Undefined method ${fnName} in ${isModule ? 'module' : 'class'} ${func.name}`)
       return '';
     }
 
@@ -381,10 +401,25 @@ set rb ra
       context.localVarCount += totalArgs;
     }
 
+    const targetSym = (isClass || isModule) ? func.children[fnName] as SymbolDefinition : func;
+
     for (let i = 0; i < args.length; i++) {
       code += visitExpression(args[i] as Expression, context, `r${i}`);
-      //code += `set r${i} ra\n`;
       resolvedLiterals.push(null);
+      const actualFp = context.curFpBits;
+      const expectedFp = targetSym.param_fp_bits?.[i] ?? 0;
+      if (actualFp !== expectedFp) {
+        if (actualFp === 0 && expectedFp !== 0) {
+          addDiagnostic(call, context, 'warning', `Argument ${i}: integer auto-cast to FP${expectedFp}`);
+          code += `shiftl r${i} ${expectedFp}\n`;
+        } else if (actualFp !== 0 && expectedFp === 0) {
+          addDiagnostic(call, context, 'warning', `Argument ${i}: FP${actualFp} auto-cast to integer`);
+          code += `shiftr r${i} ${actualFp}\n`;
+        } else {
+          addDiagnostic(call, context, 'warning', `Argument ${i}: FP${actualFp} auto-coerced to FP${expectedFp}`);
+          code += actualFp < expectedFp ? `shiftl r${i} ${expectedFp - actualFp}\n` : `shiftr r${i} ${actualFp - expectedFp}\n`;
+        }
+      }
     }
 
     if (isClass)
@@ -393,13 +428,14 @@ set rb ra
     if (func.type & ESymbolType.sub_function) {
       code += `state pushsi\nset rsi rbp\nadd rsi ${func.offset}\nset rsi flat[rsi]\n`;
       code += `state _subFunctions_${context.subFunction.hash}\nstate popsi\n${(reg != 'rb' && func.returns) ? `set ${reg} rb\n` : ''}`;
-    } else code += `state ${isClass ? func.children[fnName].name : (func.CON_code ? func.CON_code : func.name)}\n${(reg != 'rb' && func.returns) ? `set ${reg} rb\n` : ''}`;
+    } else code += `state ${(isClass || isModule) ? func.children[fnName].name : (func.CON_code ? func.CON_code : func.name)}\n${(reg != 'rb' && targetSym.returns) ? `set ${reg} rb\n` : ''}`;
     if (totalArgs > 0) {
       code += `state popr${totalArgs > 12 ? 'all' : totalArgs}\n`;
       context.localVarCount -= totalArgs;
     }
 
-    context.curExpr = isClass ? (func.children[fnName] as SymbolDefinition).returns : func.returns;
+    context.curExpr = (isClass || isModule) ? (func.children[fnName] as SymbolDefinition).returns : func.returns;
+    context.curFpBits = targetSym.returns_fp_bits ?? 0;
   }
 
   if (nativeFn && nativeFn.returns) {
