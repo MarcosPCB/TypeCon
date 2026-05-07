@@ -29,48 +29,179 @@ declare global {
     function divscale(a: number, b: number, shift: number): number;
     function scalevar(a: number, b: number, divisor: number): number;
 
-    // Math object — mirrors JavaScript's Math API backed by CON instructions.
-    // FP-aware: methods auto-detect argument precision at compile time.
+    /**
+     * Math — animation and numeric utilities backed by CON instructions.
+     *
+     * All methods are FP-aware: the compiler detects the fixed-point precision
+     * of each argument at compile time and emits the appropriate instruction
+     * (e.g. `mulscale` instead of `mul` for FP×FP).
+     *
+     * **FP16 convention**: 1.0 = 65536, range roughly ±32767.
+     * **BAM convention**: full circle = 2048 units (0–2047).
+     */
     interface Math {
-        /** Strip fraction → integer. FP arg auto-detected via curFpBits. */
+        /**
+         * Strip the fractional part and return the largest integer ≤ x.
+         * FP precision is auto-detected from the call site; pass a plain
+         * integer to get a plain-integer result.
+         * @param x Value to floor.
+         * @returns Floored integer.
+         */
         floor(x: number): number;
+        /**
+         * Return the smallest integer ≥ x.
+         * @param x Value to ceil.
+         * @returns Ceiled integer.
+         */
         ceil(x: number): number;
+        /**
+         * Round x to the nearest integer (half rounds up).
+         * @param x Value to round.
+         * @returns Rounded integer.
+         */
         round(x: number): number;
+        /**
+         * Truncate toward zero (same as floor for positive values).
+         * @param x Value to truncate.
+         * @returns Truncated integer.
+         */
         trunc(x: number): number;
-        /** Absolute value; preserves FP precision of input. */
+        /**
+         * Absolute value. Preserves the FP precision of the input.
+         * @param x Input value (integer or FP).
+         * @returns |x| in the same precision as x.
+         */
         abs(x: number): number;
-        /** Square root; FP input keeps precision (result has n/2 fractional bits). */
+        /**
+         * Integer square root. For FP input the result keeps the same
+         * fractional bit width (result has n/2 fractional bits relative to
+         * the raw value — use with care for non-power-of-2 precisions).
+         * @param x Radicand (integer or FP).
+         * @returns floor(√x).
+         */
         sqrt(x: number): number;
-        /** Minimum; preserves FP precision. */
+        /**
+         * Return the smaller of two values. Preserves FP precision.
+         * @param a First value.
+         * @param b Second value.
+         * @returns min(a, b).
+         */
         min(a: number, b: number): number;
-        /** Maximum; preserves FP precision. */
+        /**
+         * Return the larger of two values. Preserves FP precision.
+         * @param a First value.
+         * @param b Second value.
+         * @returns max(a, b).
+         */
         max(a: number, b: number): number;
-        /** CON clamp in [min,max]; preserves FP precision. */
+        /**
+         * Clamp x to the closed interval [min, max]. Preserves FP precision.
+         * @param x Value to clamp.
+         * @param min Lower bound.
+         * @param max Upper bound.
+         * @returns x clamped to [min, max].
+         */
         clamp(x: number, min: number, max: number): number;
-        /** sin: BAM integer → FP16;  FP16 degrees → FP16. */
+        /**
+         * Sine from a BAM angle using the engine lookup table.
+         * Pass a plain integer BAM (0–2047) for an integer-degree call, or
+         * a FP16 degree value and the compiler converts via `toBAM` first.
+         * @param angle Angle in BAM units (integer) or degrees (FP16).
+         * @returns sin(angle) in FP16.
+         */
         sin(angle: number): FP16;
-        /** cos: BAM integer → FP16;  FP16 degrees → FP16. */
+        /**
+         * Cosine from a BAM angle using the engine lookup table.
+         * @param angle Angle in BAM units (integer) or degrees (FP16).
+         * @returns cos(angle) in FP16.
+         */
         cos(angle: number): FP16;
-        /** tan: BAM → FP16 (precompile);  FP16 degrees → FP16 (precompile). */
+        /**
+         * Tangent: `sin(bam) / cos(bam)` via precompile defstate.
+         * Pass a BAM integer or FP16 degrees; undefined near ±90°/270°.
+         * @param angle Angle in BAM units (integer) or degrees (FP16).
+         * @returns tan(angle) in FP16.
+         */
         tan(angle: number): FP16;
-        /** CON getangle: vector (dy, dx) → BAM. */
+        /**
+         * Arc-tangent: returns the BAM angle whose tangent is `dy/dx`.
+         * Wraps CON `getangle`.
+         * @param dy Vertical component.
+         * @param dx Horizontal component.
+         * @returns Angle in BAM units (0–2047).
+         */
         atan2(dy: number, dx: number): number;
-        /** pow: integer base → integer;  FP base → FP (mulscale loop). */
+        /**
+         * Exponentiation via repeated multiplication loop.
+         * - Integer base/exp → integer result.
+         * - FP16 base → uses mulscale per iteration, result in FP16.
+         * `exp ≤ 0` returns 1 (or 1.0 for FP).
+         * @param base Base value (integer or FP16).
+         * @param exp Exponent (non-negative integer).
+         * @returns base^exp.
+         */
         pow(base: number, exp: number): number;
-        /** ln(x): integer x → FP16;  FP16 x → FP16. Approximation via MSB. */
+        /**
+         * Natural logarithm approximation: `floor(log₂(x)) × ln(2)`.
+         * - Integer x → result in FP16 (ln(2) ≈ 45426 raw).
+         * - FP16 x → subtracts 16 bias bits before scaling.
+         * Accurate to the nearest power of two; x must be > 0.
+         * @param x Input (integer or raw FP16 integer).
+         * @returns Approximate ln(x) in FP16.
+         */
         log(x: number): FP16;
+        /**
+         * Base-2 logarithm approximation: `floor(log₂(x))` scaled to FP16.
+         * Each integer bit = 65536 in the result. x must be > 0.
+         * @param x Input (integer).
+         * @returns Approximate log₂(x) in FP16.
+         */
         log2(x: number): FP16;
+        /**
+         * Base-10 logarithm approximation: `floor(log₂(x)) × log₁₀(2)`.
+         * (log₁₀(2) ≈ 19729 raw). x must be > 0.
+         * @param x Input (integer).
+         * @returns Approximate log₁₀(x) in FP16.
+         */
         log10(x: number): FP16;
-        /** e^x via 5-term Taylor. x in FP16, result FP16. */
+        /**
+         * Natural exponential via 5-term Taylor series:
+         * `1 + x + x²/2 + x³/6 + x⁴/24 + x⁵/120`.
+         * Accurate for small |x|; diverges for |x| > ~1.5.
+         * @param x Exponent in FP16.
+         * @returns Approximate e^x in FP16.
+         */
         exp(x: FP16): FP16;
-        /** Rounded integer division. */
+        /**
+         * Rounded integer division: `round(a / b)`.
+         * @param a Dividend.
+         * @param b Divisor (must be non-zero).
+         * @returns Nearest integer quotient.
+         */
         divr(a: number, b: number): number;
-        /** displayrand: 0–32767. */
+        /**
+         * Pseudo-random integer in [0, 32767]. Wraps CON `displayrand`.
+         * @returns Random integer.
+         */
         random(): number;
-        /** displayrandvarvar: 0–(max-1). */
+        /**
+         * Pseudo-random integer in [0, max-1]. Wraps CON `displayrandvarvar`.
+         * @param max Upper bound (exclusive).
+         * @returns Random integer in [0, max-1].
+         */
         randomInt(max: number): number;
-        /** Degrees → BAM (0–2047). Integer or FP16 degrees accepted. */
+        /**
+         * Convert degrees to BAM angle units (0–2047 = full circle).
+         * Accepts integer or FP16 degrees.
+         * @param degrees Angle in degrees.
+         * @returns Angle in BAM units.
+         */
         toBAM(degrees: number): number;
+        /**
+         * Convert a BAM angle to integer degrees.
+         * @param bam Angle in BAM units (0–2047).
+         * @returns Angle in degrees.
+         */
         toDeg(bam: number): number;
         /** Integer degrees → FP16 radians. */
         toRad(degrees: number): FP16;
