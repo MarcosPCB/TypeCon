@@ -23,6 +23,8 @@ declare global {
     function fp12ToInt(x: FP12): number;
     function fp16ToInt(x: FP16): number;
     function fp30ToInt(x: FP30): number;
+    /** Return the raw 32-bit integer backing an FP16 value without any shifting. Use this when an API expects the 16.16 bit pattern directly (e.g. rotatesprite zoom). */
+    function fp16Raw(x: FP16): number;
 
     // Raw CON fixed-point math (manual use)
     function mulscale(a: number, b: number, shift: number): number;

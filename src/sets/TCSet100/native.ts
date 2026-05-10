@@ -1390,6 +1390,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     { name: 'fp12ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 12`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp16ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 16`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp30ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 30`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp16Raw',   code: (_a?: boolean) => `set rb r0`,               returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
 
     // ── Math object ───────────────────────────────────────────────────────────
     { name: 'floor', object_belong: ['Math'], returns: true, return_type: 'variable',

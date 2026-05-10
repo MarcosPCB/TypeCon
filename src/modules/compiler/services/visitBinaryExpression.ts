@@ -259,6 +259,8 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
     case "&":
     case "|":
     case "^":
+    case ">>":
+    case "<<":
       if (reg != 'rd')
         code += `set ${reg} rd\n`;
       break;

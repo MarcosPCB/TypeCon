@@ -379,7 +379,9 @@ export class TsToConCompiler {
           context.currentFile.dependency.push(modName);
           const prvFile = context.currentFile;
           const sCode = fs.readFileSync(resolved);
-          this.compile(sCode.toString(), resolved, context);
+          const includeResult = this.compile(sCode.toString(), resolved, context);
+          if (includeResult?.conOutput?.trim())
+            outputLines.push(includeResult.conOutput);
           context.currentFile = prvFile;
           context.diagnostics.length = 0;
         } catch (err) {
