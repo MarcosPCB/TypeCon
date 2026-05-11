@@ -329,6 +329,9 @@ set rb ra
     if (nativeFn.return_type == 'object')
       context.curExpr |= ESymbolType.object;
 
+    if (nativeFn.return_type == 'string')
+      context.curExpr |= ESymbolType.string;
+
     // Resolve the instruction string: fp_aware_code takes priority over code.
     if (nativeFn.fp_aware_code) {
       code += nativeFn.fp_aware_code(arg0FpBits) + "\n";

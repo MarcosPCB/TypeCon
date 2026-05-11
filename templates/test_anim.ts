@@ -2,70 +2,50 @@ import '../include/TCSet100/types';
 import { AnimUtils } from '../include/TCSet100/AnimUtils';
 
 class TestAnim extends CEvent {
-    constructor() { super('NewGame'); }
+    constructor() { super('InitComplete'); }
     public Append(): void {
-        let t: FP16 = 0.5;    // 32768
-        let a: FP16 = 0.0;    // 0
-        let b: FP16 = 1.0;    // 65536
+        let t: FP16 = 0.5;   // 32768
+        let a: FP16 = 0.0;   // 0
+        let b: FP16 = 1.0;   // 65536
 
-        // Interpolation
-        let lv:  FP16 = AnimUtils.lerp(a, b, t);             // 32768  (0.5)
-        PrintValue(lv);   // expect 32768
+        // ── Interpolation ─────────────────────────────────────────────────
+        checkFpEq("lerp(0,1,0.5)", 32768, AnimUtils.lerp(a, b, t));
 
-        // Smooth steps — all return 0.5 at t=0.5
-        let ss:  FP16 = AnimUtils.smoothstep(t);              // 32768
-        let se:  FP16 = AnimUtils.smootherstep(t);            // 32768
-        PrintValue(ss);   // expect 32768
-        PrintValue(se);   // expect 32768
+        // ── Smooth steps ─────────────────────────────────────────────────
+        checkFpEq("smoothstep(0.5)",    32768, AnimUtils.smoothstep(t));
+        checkFpEq("smootherstep(0.5)",  32768, AnimUtils.smootherstep(t));
 
-        // Quadratic ease
-        let q1:  FP16 = AnimUtils.easeInQuad(t);              // 16384  (0.25)
-        let q2:  FP16 = AnimUtils.easeOutQuad(t);             // 49152  (0.75)
-        let q3:  FP16 = AnimUtils.easeInOutQuad(t);           // 32768  (0.5)
-        PrintValue(q1);   // expect 16384
-        PrintValue(q2);   // expect 49152
-        PrintValue(q3);   // expect 32768
+        // ── Quadratic ease ────────────────────────────────────────────────
+        checkFpEq("easeInQuad(0.5)",    16384, AnimUtils.easeInQuad(t));
+        checkFpEq("easeOutQuad(0.5)",   49152, AnimUtils.easeOutQuad(t));
+        checkFpEq("easeInOutQuad(0.5)", 32768, AnimUtils.easeInOutQuad(t));
 
-        // Cubic ease
-        let c1:  FP16 = AnimUtils.easeInCubic(t);             // 8192   (0.125)
-        let c2:  FP16 = AnimUtils.easeOutCubic(t);            // 57344  (0.875)
-        PrintValue(c1);   // expect 8192
-        PrintValue(c2);   // expect 57344
+        // ── Cubic ease ────────────────────────────────────────────────────
+        checkFpEq("easeInCubic(0.5)",   8192,  AnimUtils.easeInCubic(t));
+        checkFpEq("easeOutCubic(0.5)",  57344, AnimUtils.easeOutCubic(t));
 
-        // Quintic ease
-        let p1:  FP16 = AnimUtils.easeInQuint(t);             // 2048   (0.03125)
-        let p2:  FP16 = AnimUtils.easeOutQuint(t);            // 63488  (0.96875)
-        PrintValue(p1);   // expect 2048
-        PrintValue(p2);   // expect 63488
+        // ── Quintic ease ──────────────────────────────────────────────────
+        checkFpEq("easeInQuint(0.5)",   2048,  AnimUtils.easeInQuint(t));
+        checkFpEq("easeOutQuint(0.5)",  63488, AnimUtils.easeOutQuint(t));
 
-        // Sine ease (BAM-based, loses sub-degree precision)
-        let s1:  FP16 = AnimUtils.easeInSine(t);              // ~17471
-        let s2:  FP16 = AnimUtils.easeOutSine(t);             // ~48064
-        let s3:  FP16 = AnimUtils.easeInOutSine(t);           // ~32768
-        PrintValue(s1);   // expect ~17471
-        PrintValue(s2);   // expect ~48064
-        PrintValue(s3);   // expect ~32768
+        // ── Sine ease (BAM-based, ~1 BAM precision) ───────────────────────
+        checkFpEq("easeInSine(0.5)",    17471, AnimUtils.easeInSine(t));
+        checkFpEq("easeOutSine(0.5)",   48064, AnimUtils.easeOutSine(t));
+        checkFpEq("easeInOutSine(0.5)", 32768, AnimUtils.easeInOutSine(t));
 
-        // Power ease (arbitrary exponent)
-        let ep1: FP16 = AnimUtils.easeInPow(t, 4);            // 4096   (0.0625)
-        let ep2: FP16 = AnimUtils.easeOutPow(t, 4);           // 61440  (0.9375)
-        PrintValue(ep1);  // expect 4096
-        PrintValue(ep2);  // expect 61440
+        // ── Power ease ────────────────────────────────────────────────────
+        checkFpEq("easeInPow(0.5,4)",   4096,  AnimUtils.easeInPow(t, 4));
+        checkFpEq("easeOutPow(0.5,4)",  61440, AnimUtils.easeOutPow(t, 4));
 
-        // Bezier quadratic
-        let bz:  FP16 = AnimUtils.bezierQuad(a, b, b, t);    // 49152  (0.75)
-        PrintValue(bz);   // expect 49152
+        // ── Bezier quadratic ──────────────────────────────────────────────
+        checkFpEq("bezierQuad(0,1,1,0.5)", 49152, AnimUtils.bezierQuad(a, b, b, t));
 
-        // Oscillation
-        let pp:  number = AnimUtils.pingPong(100, 60);        // 40
-        let osc: FP16   = AnimUtils.oscillateFP(100, 60);    // ~43690 (≈0.667)
-        PrintValue(pp);   // expect 40
-        PrintValue(osc);  // expect ~43690
+        // ── Oscillation ───────────────────────────────────────────────────
+        checkEq("pingPong(100,60)",       40, AnimUtils.pingPong(100, 60));
+        checkFpEq("oscillateFP(100,60)", 43690, AnimUtils.oscillateFP(100, 60));
 
-        // Utilities
-        let app: number = AnimUtils.approach(20, 100, 5);    // 25
-        let pls: number = AnimUtils.pulse(100, 60, 20);      // 0 (phase 40 >= duty 20)
-        PrintValue(app);  // expect 25
-        PrintValue(pls);  // expect 0
+        // ── Utilities ─────────────────────────────────────────────────────
+        checkEq("approach(20,100,5)", 25, AnimUtils.approach(20, 100, 5));
+        checkEq("pulse(100,60,20)",    0, AnimUtils.pulse(100, 60, 20));
     }
 }

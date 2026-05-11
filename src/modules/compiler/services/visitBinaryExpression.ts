@@ -141,11 +141,17 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
 
   const rightFpBits = context.curFpBits;
 
-  if (isQuote && !(context.curExpr & ESymbolType.quote))
-    code += `qputs 1022 %d\nqsprintf 1023 1022 ra\nset ra 1022\n`;
+  if (isQuote && !(context.curExpr & ESymbolType.quote)) {
+    if (rightFpBits !== 0)
+      code += `state pushr2\nset r0 ra\nstate _convertFP2String\nset r0 rb\nstate _convertString2Quote\nstate popr2\nset ra rb\n`;
+    else
+      code += `qputs 1022 %d\nqsprintf 1023 1022 ra\nset ra 1022\n`;
+  }
 
-  if (isString && !(context.curExpr & ESymbolType.string))
-    code += `state pushr1\nset r0 ra\nstate _convertInt2String\nstate popr1\nset ra rb\n`
+  if (isString && !(context.curExpr & ESymbolType.string)) {
+    const toStr = rightFpBits !== 0 ? `_convertFP2String` : `_convertInt2String`;
+    code += `state pushr1\nset r0 ra\nstate ${toStr}\nstate popr1\nset ra rb\n`;
+  }
 
   context.curExpr = isQuote ? ESymbolType.quote : ESymbolType.number;
   context.curExpr = isString ? ESymbolType.string : ESymbolType.number;
@@ -160,7 +166,7 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
       if (isQuote)
         code += `qstrcat rd ra\n`;
       else if (isString)
-        code += `state pushr2\nset r0 rd\nset r1 ra\nstate _stringConcat\nstate popr2\nset ra rb\n`;
+        code += `state pushr2\nset r0 rd\nset r1 ra\nstate _stringConcat\nstate popr2\nset rd rb\n`;
       else
         code += `add rd ${rhs}\n`;
       resultFpBits = leftFpBits;

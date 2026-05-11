@@ -1391,6 +1391,13 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     { name: 'fp16ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 16`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp30ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 30`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp16Raw',   code: (_a?: boolean) => `set rb r0`,               returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp16ToString', code: (_a?: boolean) => `state _convertFP2String`, returns: true, return_type: 'string', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp16FromString', code: (_a?: boolean) => `state _stringToFP16`, returns: true, return_type: 'variable', returns_fp_bits: 16, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'strLen', code: (_a?: boolean) => `set rb flat[r0]`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'charCodeAt', code: (_a?: boolean) => `set ri r0\nadd ri r1\nadd ri 1\nset rb flat[ri]`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'PrintString', code: (_a?: boolean) => `state _convertString2Quote\nqstrcpy 996 rb\necho 996`, returns: false, return_type: null, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'checkEq',   code: (_a?: boolean) => `state _checkEq`,   returns: false, return_type: null, arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'checkFpEq', code: (_a?: boolean) => `state _checkFpEq`, returns: false, return_type: null, arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
 
     // ── Math object ───────────────────────────────────────────────────────────
     { name: 'floor', object_belong: ['Math'], returns: true, return_type: 'variable',

@@ -25,6 +25,20 @@ declare global {
     function fp30ToInt(x: FP30): number;
     /** Return the raw 32-bit integer backing an FP16 value without any shifting. Use this when an API expects the 16.16 bit pattern directly (e.g. rotatesprite zoom). */
     function fp16Raw(x: FP16): number;
+    /** Convert an FP16 value to a decimal string with 4 fractional digits, e.g. fp16ToString(intToFP16(1) + 32768) → "1.5000". Returns a heap-allocated TypeCON string. */
+    function fp16ToString(x: FP16): string;
+    /** Parse a decimal string like "1.5000" or "-160.0000" into an FP16 integer. Inverse of fp16ToString. */
+    function fp16FromString(s: string): FP16;
+    /** Return the number of characters in a heap-allocated TypeCON string. */
+    function strLen(s: string): number;
+    /** Return the char code of character at index i in a heap-allocated TypeCON string (0-based). */
+    function charCodeAt(s: string, i: number): number;
+    /** Print a heap-allocated TypeCON string to the OSD (in-game console). */
+    function PrintString(s: string): void;
+    /** Assert integer equality and print "label: exp=X got=Y [PASS/FAIL]" to the OSD. */
+    function checkEq(label: string, expected: number, actual: number): void;
+    /** Assert FP16 equality and print "label: exp=X.XXXX got=Y.YYYY [PASS/FAIL]" to the OSD. */
+    function checkFpEq(label: string, expected: FP16, actual: FP16): void;
 
     // Raw CON fixed-point math (manual use)
     function mulscale(a: number, b: number, shift: number): number;
@@ -1594,7 +1608,7 @@ declare global {
     /** Other sprites in the game world */
     export const sprites: CActor[];
 
-    export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound' | 'NewGame';
+    export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound' | 'NewGame' | 'InitComplete';
     export type TEventDE = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd';
     export type TEventI = 'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' | 'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10' | 'DoFire' | 'Fire' | 'PressedFire';
     export type TEvents = TEventPAE | TEventDE | TEventI;
