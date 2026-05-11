@@ -375,7 +375,7 @@ set rb ra
       context.curFpBits = arg0FpBits as 0 | 8 | 12 | 16 | 30;
     else if (nativeFn.returns_fp_bits)
       context.curFpBits = nativeFn.returns_fp_bits;
-    else if (!nativeFn.fp_aware_code)
+    else
       context.curFpBits = 0;
   } else {
     const fnName = fnNameRaw.startsWith("this.") ? fnNameRaw.substring(5) : fnNameRaw;
