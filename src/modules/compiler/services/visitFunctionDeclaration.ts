@@ -153,6 +153,10 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
   }
 
   const body = fd.getBody() as Block;
+  if (!body) {
+    // Ambient declaration (no body): symbol registered above; emit nothing.
+    return '';
+  }
   if (body) {
     const params = Object.keys(localCtx.paramMap).length;
 
