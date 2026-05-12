@@ -75,3 +75,25 @@ function _stringToFP16(s: string): FP16 {
     }
     return fp;
 }
+
+// _checkEq: r0=label(string), r1=expected(int), r2=actual(int)
+function _checkEq(label: string, expected: number, actual: number): void {
+    let msg: string = label + ": exp=" + expected + " got=" + actual;
+    if (actual == expected) {
+        msg = msg + " [PASS]";
+    } else {
+        msg = msg + " [FAIL]";
+    }
+    PrintString(msg);
+}
+
+// _checkFpEq: r0=label(string), r1=expected(FP16), r2=actual(FP16)
+function _checkFpEq(label: string, expected: FP16, actual: FP16): void {
+    let msg: string = label + ": exp=" + fp16ToString(expected) + " got=" + fp16ToString(actual);
+    if (actual == expected) {
+        msg = msg + " [PASS]";
+    } else {
+        msg = msg + " [FAIL]";
+    }
+    PrintString(msg);
+}
