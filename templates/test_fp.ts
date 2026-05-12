@@ -80,8 +80,8 @@ class TestFP extends CEvent {
         let msg1: string = "zoom=" + zoom;
         let msg2: string = "half=" + half;
         let msg3: string = "cx=" + cx + " cy=" + cy;
-        console.debug(msg1);
-        console.debug(msg2);
-        console.debug(msg3);
+        console.log(msg1);
+        console.log(msg2);
+        console.log(msg3);
     }
 }
