@@ -760,7 +760,7 @@ defstate _printFlatStr
     add r0 rc
 
     whilen ra r0 {
-        al flat[r0]
+        al flat[ra]
         add ra 1
     }
 

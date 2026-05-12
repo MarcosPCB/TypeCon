@@ -33,8 +33,6 @@ declare global {
     function strLen(s: string): number;
     /** Return the char code of character at index i in a heap-allocated TypeCON string (0-based). */
     function charCodeAt(s: string, i: number): number;
-    /** Print a heap-allocated TypeCON string to the OSD (in-game console). */
-    function PrintString(s: string): void;
     /** Assert integer equality and print "label: exp=X got=Y [PASS/FAIL]" to the OSD. */
     function checkEq(label: string, expected: number, actual: number): void;
     /** Assert FP16 equality and print "label: exp=X.XXXX got=Y.YYYY [PASS/FAIL]" to the OSD. */

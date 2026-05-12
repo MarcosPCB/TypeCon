@@ -1,7 +1,7 @@
 namespace noread { }
 
 // Fixed-point numeric types (also declared globally in types.ts)
-export type FP8  = number;
+export type FP8 = number;
 export type FP12 = number;
 export type FP16 = number;
 export type FP30 = number;
@@ -1375,142 +1375,197 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
         ]
     },
     // ─── Fixed-point math primitives ────────────────────────────────────────
-    { name: 'mulscale', code: 'mulscale rb', returns: true, return_type: 'variable',
-      arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
-    { name: 'divscale', code: 'divscale rb', returns: true, return_type: 'variable',
-      arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
-    { name: 'scalevar', code: 'scalevar rb', returns: true, return_type: 'variable',
-      arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'mulscale', code: 'mulscale rb', returns: true, return_type: 'variable',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+    {
+        name: 'divscale', code: 'divscale rb', returns: true, return_type: 'variable',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+    {
+        name: 'scalevar', code: 'scalevar rb', returns: true, return_type: 'variable',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
     // ─── int ↔ FP conversion helpers ─────────────────────────────────────────
-    { name: 'intToFP8',  code: (_a?: boolean) => `set rb r0\nshiftl rb 8`,  returns: true, return_type: 'variable', returns_fp_bits: 8,  arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'intToFP8', code: (_a?: boolean) => `set rb r0\nshiftl rb 8`, returns: true, return_type: 'variable', returns_fp_bits: 8, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'intToFP12', code: (_a?: boolean) => `set rb r0\nshiftl rb 12`, returns: true, return_type: 'variable', returns_fp_bits: 12, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'intToFP16', code: (_a?: boolean) => `set rb r0\nshiftl rb 16`, returns: true, return_type: 'variable', returns_fp_bits: 16, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'intToFP30', code: (_a?: boolean) => `set rb r0\nshiftl rb 30`, returns: true, return_type: 'variable', returns_fp_bits: 30, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
-    { name: 'fp8ToInt',  code: (_a?: boolean) => `set rb r0\nshiftr rb 8`,  returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp8ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 8`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp12ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 12`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp16ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 16`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp30ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 30`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
-    { name: 'fp16Raw',   code: (_a?: boolean) => `set rb r0`,               returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp16Raw', code: (_a?: boolean) => `set rb r0`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp16ToString', code: (_a?: boolean) => `state _convertFP2String`, returns: true, return_type: 'string', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp16FromString', code: (_a?: boolean) => `state _stringToFP16`, returns: true, return_type: 'variable', returns_fp_bits: 16, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'strLen', code: (_a?: boolean) => `set rb flat[r0]`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'charCodeAt', code: (_a?: boolean) => `set ri r0\nadd ri r1\nadd ri 1\nset rb flat[ri]`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
-    { name: 'PrintString', code: (_a?: boolean) => `state _convertString2Quote\nqstrcpy 996 rb\necho 996`, returns: false, return_type: null, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
-    { name: 'checkEq',   code: (_a?: boolean) => `state _checkEq`,   returns: false, return_type: null, arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'checkEq', code: (_a?: boolean) => `state _checkEq`, returns: false, return_type: null, arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'checkFpEq', code: (_a?: boolean) => `state _checkFpEq`, returns: false, return_type: null, arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
 
     // ── Math object ───────────────────────────────────────────────────────────
-    { name: 'floor', object_belong: ['Math'], returns: true, return_type: 'variable',
-      fp_aware_code: (n) => n !== 0 ? `shiftr r0 ${n}\nset rb r0` : `set rb r0`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'floor', object_belong: ['Math'], returns: true, return_type: 'variable',
+        fp_aware_code: (n) => n !== 0 ? `shiftr r0 ${n}\nset rb r0` : `set rb r0`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'ceil', object_belong: ['Math'], returns: true, return_type: 'variable',
-      fp_aware_code: (n) => n !== 0 ? `add r0 ${(1 << n) - 1}\nshiftr r0 ${n}\nset rb r0` : `set rb r0`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'ceil', object_belong: ['Math'], returns: true, return_type: 'variable',
+        fp_aware_code: (n) => n !== 0 ? `add r0 ${(1 << n) - 1}\nshiftr r0 ${n}\nset rb r0` : `set rb r0`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'round', object_belong: ['Math'], returns: true, return_type: 'variable',
-      fp_aware_code: (n) => n !== 0 ? `add r0 ${1 << (n - 1)}\nshiftr r0 ${n}\nset rb r0` : `set rb r0`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'round', object_belong: ['Math'], returns: true, return_type: 'variable',
+        fp_aware_code: (n) => n !== 0 ? `add r0 ${1 << (n - 1)}\nshiftr r0 ${n}\nset rb r0` : `set rb r0`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'trunc', object_belong: ['Math'], returns: true, return_type: 'variable',
-      fp_aware_code: (n) => n !== 0 ? `shiftr r0 ${n}\nset rb r0` : `set rb r0`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'trunc', object_belong: ['Math'], returns: true, return_type: 'variable',
+        fp_aware_code: (n) => n !== 0 ? `shiftr r0 ${n}\nset rb r0` : `set rb r0`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'abs', object_belong: ['Math'], returns: true, return_type: 'variable',
-      code: (_a?: boolean) => `set rb r0\nabs rb`,
-      inherit_fp_bits: true,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'abs', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `set rb r0\nabs rb`,
+        inherit_fp_bits: true,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'sqrt', object_belong: ['Math'], returns: true, return_type: 'variable',
-      fp_aware_code: (n) => n !== 0 ? `sqrt r0 rb\nshiftl rb ${n >> 1}` : `sqrt r0 rb`,
-      inherit_fp_bits: true,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'sqrt', object_belong: ['Math'], returns: true, return_type: 'variable',
+        fp_aware_code: (n) => n !== 0 ? `sqrt r0 rb\nshiftl rb ${n >> 1}` : `sqrt r0 rb`,
+        inherit_fp_bits: true,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'min', object_belong: ['Math'], returns: true, return_type: 'variable',
-      code: (_a?: boolean) => `set rb r0\nifg rb r1\n  set rb r1`,
-      inherit_fp_bits: true,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'min', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `set rb r0\nifg rb r1\n  set rb r1`,
+        inherit_fp_bits: true,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'max', object_belong: ['Math'], returns: true, return_type: 'variable',
-      code: (_a?: boolean) => `set rb r0\nifl rb r1\n  set rb r1`,
-      inherit_fp_bits: true,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'max', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `set rb r0\nifl rb r1\n  set rb r1`,
+        inherit_fp_bits: true,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'clamp', object_belong: ['Math'], returns: true, return_type: 'variable',
-      code: (_a?: boolean) => `set rb r0\nclamp rb r1 r2`,
-      inherit_fp_bits: true,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'clamp', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `set rb r0\nclamp rb r1 r2`,
+        inherit_fp_bits: true,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'sin', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
-      fp_aware_code: (n) => n !== 0
-        ? `shiftr r0 ${n}\nmul r0 2048\ndiv r0 360\nsin rb r0\nshiftl rb 2`
-        : `sin rb r0\nshiftl rb 2`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'sin', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
+        fp_aware_code: (n) => n !== 0
+            ? `shiftr r0 ${n}\nmul r0 2048\ndiv r0 360\nsin rb r0\nshiftl rb 2`
+            : `sin rb r0\nshiftl rb 2`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'cos', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
-      fp_aware_code: (n) => n !== 0
-        ? `shiftr r0 ${n}\nmul r0 2048\ndiv r0 360\ncos rb r0\nshiftl rb 2`
-        : `cos rb r0\nshiftl rb 2`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'cos', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
+        fp_aware_code: (n) => n !== 0
+            ? `shiftr r0 ${n}\nmul r0 2048\ndiv r0 360\ncos rb r0\nshiftl rb 2`
+            : `cos rb r0\nshiftl rb 2`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'tan', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
-      fp_aware_code: (n) => n !== 0 ? `state _Math_tanFP` : `state _Math_tan`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'tan', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
+        fp_aware_code: (n) => n !== 0 ? `state _Math_tanFP` : `state _Math_tan`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'atan2', object_belong: ['Math'], returns: true, return_type: 'variable',
-      code: (_a?: boolean) => `getangle rb r0 r1`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'atan2', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `getangle rb r0 r1`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'pow', object_belong: ['Math'], returns: true, return_type: 'variable',
-      fp_aware_code: (n) => n !== 0 ? `state _Math_powFP` : `state _Math_pow`,
-      inherit_fp_bits: true,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'pow', object_belong: ['Math'], returns: true, return_type: 'variable',
+        fp_aware_code: (n) => n !== 0 ? `state _Math_powFP` : `state _Math_pow`,
+        inherit_fp_bits: true,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'log', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
-      fp_aware_code: (n) => n !== 0 ? `state _Math_logFP` : `state _Math_log`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'log', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
+        fp_aware_code: (n) => n !== 0 ? `state _Math_logFP` : `state _Math_log`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'log2', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
-      code: (_a?: boolean) => `state _Math_log2`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'log2', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
+        code: (_a?: boolean) => `state _Math_log2`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'log10', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
-      code: (_a?: boolean) => `state _Math_log10`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'log10', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
+        code: (_a?: boolean) => `state _Math_log10`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'exp', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
-      code: (_a?: boolean) => `state _Math_exp`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'exp', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
+        code: (_a?: boolean) => `state _Math_exp`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'random', object_belong: ['Math'], returns: true, return_type: 'variable',
-      code: (_a?: boolean) => `displayrand rb`,
-      arguments: [] },
+    {
+        name: 'random', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `displayrand rb`,
+        arguments: []
+    },
 
-    { name: 'randomInt', object_belong: ['Math'], returns: true, return_type: 'variable',
-      code: (_a?: boolean) => `displayrandvarvar rb r0`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'randomInt', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `displayrandvarvar rb r0`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'divr', object_belong: ['Math'], returns: true, return_type: 'variable',
-      code: (_a?: boolean) => `set rb r0\ndivr rb r1`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'divr', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `set rb r0\ndivr rb r1`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'toBAM', object_belong: ['Math'], returns: true, return_type: 'variable',
-      fp_aware_code: (n) => n !== 0
-        ? `set rb r0\nshiftr rb ${n}\nmul rb 2048\ndiv rb 360`
-        : `set rb r0\nmul rb 2048\ndiv rb 360`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'toBAM', object_belong: ['Math'], returns: true, return_type: 'variable',
+        fp_aware_code: (n) => n !== 0
+            ? `set rb r0\nshiftr rb ${n}\nmul rb 2048\ndiv rb 360`
+            : `set rb r0\nmul rb 2048\ndiv rb 360`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'toDeg', object_belong: ['Math'], returns: true, return_type: 'variable',
-      code: (_a?: boolean) => `set rb r0\nmul rb 360\ndiv rb 2048`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'toDeg', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `set rb r0\nmul rb 360\ndiv rb 2048`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'toRad', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
-      code: (_a?: boolean) => `set rb r0\nmul rb 1144`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    {
+        name: 'toRad', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
+        code: (_a?: boolean) => `set rb r0\nmul rb 1144`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
 
-    { name: 'fromRad', object_belong: ['Math'], returns: true, return_type: 'variable',
-      code: (_a?: boolean) => `set rb r0\ndiv rb 1144`,
-      arguments: [CON_NATIVE_FLAGS.VARIABLE] }
+    {
+        name: 'fromRad', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `set rb r0\ndiv rb 1144`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    }
 ]
 
 const nativeTag: CON_NATIVE_VAR[] = [

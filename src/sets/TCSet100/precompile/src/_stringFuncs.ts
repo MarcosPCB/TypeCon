@@ -53,7 +53,7 @@ function _checkEq(label: string, expected: number, actual: number): void {
     } else {
         msg = msg + " [FAIL]";
     }
-    PrintString(msg);
+    console.debug(msg);
 }
 
 // _checkFpEq: r0=label(string), r1=expected(FP16), r2=actual(FP16)
@@ -64,5 +64,5 @@ function _checkFpEq(label: string, expected: FP16, actual: FP16): void {
     } else {
         msg = msg + " [FAIL]";
     }
-    PrintString(msg);
+    console.debug(msg);
 }
