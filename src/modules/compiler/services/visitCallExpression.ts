@@ -293,20 +293,49 @@ set rb ra
         //code += `set r${j} ra\n`;
         resolvedLiterals.push(null);
       } else if (expected & CON_NATIVE_FLAGS.VARIABLE) {
-        // For VARIABLE, generate code normally.
+        // Protect r0..r(i-1): expression evaluation uses r0 as an intermediate and
+        // will clobber already-set argument registers when computing argument i >= 1.
+        if (i > 0) {
+          const n = i <= 12 ? i : 'all';
+          code += `state pushr${n}\n`;
+          context.localVarCount += typeof n === 'number' ? n : 24;
+        }
         code += visitExpression(args[i] as Expression, context, `r${i}`);
-        //code += `set r${j} ra\n`;
+        if (i > 0) {
+          const n = i <= 12 ? i : 'all';
+          code += `state popr${n}\n`;
+          context.localVarCount -= typeof n === 'number' ? n : 24;
+        }
         resolvedLiterals.push(null);
       } else if (expected & CON_NATIVE_FLAGS.FUNCTION) {
         // For FUNCTION, generate code normally and keep it at argCode
         argCode += visitExpression(args[i] as Expression, context);
         resolvedLiterals.push(null);
       } else if (expected & (CON_NATIVE_FLAGS.OBJECT | CON_NATIVE_FLAGS.ARRAY)) {
+        if (i > 0) {
+          const n = i <= 12 ? i : 'all';
+          code += `state pushr${n}\n`;
+          context.localVarCount += typeof n === 'number' ? n : 24;
+        }
         code += visitExpression(args[i] as Expression, context, `r${i}`);
+        if (i > 0) {
+          const n = i <= 12 ? i : 'all';
+          code += `state popr${n}\n`;
+          context.localVarCount -= typeof n === 'number' ? n : 24;
+        }
         resolvedLiterals.push(null);
       } else {
+        if (i > 0) {
+          const n = i <= 12 ? i : 'all';
+          code += `state pushr${n}\n`;
+          context.localVarCount += typeof n === 'number' ? n : 24;
+        }
         code += visitExpression(args[i] as Expression, context, `r${i}`);
-        //code += `set r${j} ra\n`;
+        if (i > 0) {
+          const n = i <= 12 ? i : 'all';
+          code += `state popr${n}\n`;
+          context.localVarCount -= typeof n === 'number' ? n : 24;
+        }
         resolvedLiterals.push(null);
       }
 
