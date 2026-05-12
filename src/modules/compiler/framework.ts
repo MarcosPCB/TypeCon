@@ -750,14 +750,18 @@ defstate _printFlatStr
     state push
     state pushc
 
+    qputs 1022 FLAT STRING AT %d
+    qsprintf 1023 1022 r0
+    echo 1023
+    
     set rc flat[r0] //length
     set ra r0
     add r0 1
     add r0 rc
 
-    whilen r0 ra {
+    whilen ra r0 {
         al flat[r0]
-        sub r0 1
+        add ra 1
     }
 
     state popc
@@ -774,12 +778,13 @@ defstate _stringConcat
 
     set rc ra
     add rc rd
-    state pushr2
+    state pushr3
     set r1 r0
     set r0 rc
     add r0 1
+    set r2 2
     state realloc
-    state popr2
+    state popr3
     setarray flat[rb] rc
     set ri rb
     add ri ra
@@ -933,7 +938,7 @@ defstate _convertFP2String
         mul rfx0 10
         mul ra 65536
         sub rfx0 ra
-        abs rfx0 ra
+        abs rfx0
 
         ife rsi 4
             exit
