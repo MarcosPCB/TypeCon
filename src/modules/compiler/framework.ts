@@ -669,7 +669,7 @@ defstate realloc
     set _HEAPj ra
     state pop
 
-    copy flat[_HEAPi] flat[rb] _HEAPj
+    copy flat[r1] flat[rb] _HEAPj
 
     //This deals with stack memory
     ifge r1 ${stackSize} {
@@ -796,9 +796,6 @@ defstate _stringConcat
     state popc
     state popd
     state pop
-
-    set r0 rb
-    state _printFlatStr
 ends
 
 defstate _convertInt2String
