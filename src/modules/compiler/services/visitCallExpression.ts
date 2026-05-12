@@ -298,13 +298,11 @@ set rb ra
         if (i > 0) {
           const n = i <= 12 ? i : 'all';
           code += `state pushr${n}\n`;
-          context.localVarCount += typeof n === 'number' ? n : 24;
         }
         code += visitExpression(args[i] as Expression, context, `r${i}`);
         if (i > 0) {
           const n = i <= 12 ? i : 'all';
           code += `state popr${n}\n`;
-          context.localVarCount -= typeof n === 'number' ? n : 24;
         }
         resolvedLiterals.push(null);
       } else if (expected & CON_NATIVE_FLAGS.FUNCTION) {
@@ -315,26 +313,22 @@ set rb ra
         if (i > 0) {
           const n = i <= 12 ? i : 'all';
           code += `state pushr${n}\n`;
-          context.localVarCount += typeof n === 'number' ? n : 24;
         }
         code += visitExpression(args[i] as Expression, context, `r${i}`);
         if (i > 0) {
           const n = i <= 12 ? i : 'all';
           code += `state popr${n}\n`;
-          context.localVarCount -= typeof n === 'number' ? n : 24;
         }
         resolvedLiterals.push(null);
       } else {
         if (i > 0) {
           const n = i <= 12 ? i : 'all';
           code += `state pushr${n}\n`;
-          context.localVarCount += typeof n === 'number' ? n : 24;
         }
         code += visitExpression(args[i] as Expression, context, `r${i}`);
         if (i > 0) {
           const n = i <= 12 ? i : 'all';
           code += `state popr${n}\n`;
-          context.localVarCount -= typeof n === 'number' ? n : 24;
         }
         resolvedLiterals.push(null);
       }
