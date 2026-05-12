@@ -746,6 +746,24 @@ defstate pow
     set rb r0
 ends
 
+defstate _printFlatStr
+    state push
+    state pushc
+
+    set rc flat[r0] //length
+    set ra r0
+    add r0 1
+    add r0 rc
+
+    whilen r0 ra {
+        al flat[r0]
+        sub r0 1
+    }
+
+    state popc
+    state pop
+ends
+
 defstate _stringConcat
     state push
     state pushd
@@ -773,6 +791,9 @@ defstate _stringConcat
     state popc
     state popd
     state pop
+
+    set r0 rb
+    state _printFlatStr
 ends
 
 defstate _convertInt2String
@@ -872,6 +893,8 @@ defstate _convertFP2String
         add rc 1
     }
 
+    abs ra
+
     set rfx0 ra
     div ra 65536
 
@@ -910,6 +933,7 @@ defstate _convertFP2String
         mul rfx0 10
         mul ra 65536
         sub rfx0 ra
+        abs rfx0 ra
 
         ife rsi 4
             exit
@@ -957,6 +981,22 @@ defstate _convertString2Quote
     //Set rssp quote to the first letter of the string
     add ri flat[ra]
     sub ri 32
+
+    state push
+    ifl ri 900
+        set ra 1
+    ifg ri 994
+        set ra 1
+
+    ife ra 1 {
+        qputs 1022 ERROR: %d is not a valid ASCII character
+        qsprintf 1023 1022 ri
+        echo 1023
+        clamp ri 900 994
+    }
+
+    state pop
+
     qstrcpy rssp ri
 
     //rd serves as a flag for when there's a whitespace
@@ -990,13 +1030,22 @@ defstate _convertString2Quote
             exit
 
         sub ri 32
-        ifl ri 900 {
+
+        state push
+        ifl ri 900
+            set ra 1
+        ifg ri 994
+            set ra 1
+
+        ife ra 1 {
             qputs 1022 ERROR: %d is not a valid ASCII character
             qsprintf 1023 1022 ri
             echo 1023
-            al ri
-            exit
+            clamp ri 900 994
         }
+
+        state pop
+
         qstrcat rssp ri
 
         add rc 1
