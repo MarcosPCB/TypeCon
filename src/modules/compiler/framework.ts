@@ -926,25 +926,34 @@ defstate _convertFP2String
     add rc 1
 
     // Fractional part
-    set rsi 0
-    whilen rfx0 0 {
-        set ra rfx0
-        mul ra 10
-        divr ra 65536
-        
-        set rd ra
-        add rd 48 //48 = '0'
+    ife rfx0 0 {
+        set rd 48 //48 = '0'
         state pushd
-        add rc 1
-        add rsi 1
-        
-        mul rfx0 10
-        mul ra 65536
-        sub rfx0 ra
-        abs rfx0
+        state pushd
+        state pushd
+        state pushd
+        add rc 4
+    } else {
+        set rsi 0
+        whilen rfx0 0 {
+            set ra rfx0
+            mul ra 10
+            divr ra 65536
+            
+            set rd ra
+            add rd 48 //48 = '0'
+            state pushd
+            add rc 1
+            add rsi 1
+            
+            mul rfx0 10
+            mul ra 65536
+            sub rfx0 ra
+            abs rfx0
 
-        ife rsi 4
-            exit
+            ife rsi 4
+                exit
+        }
     }
 
     state pushr1
@@ -958,9 +967,9 @@ defstate _convertFP2String
     add ri rc //Move to the end of the string
 
     whilen rc 0 {
-        sub ri 1
         state popd
         setarray flat[ri] rd
+        sub ri 1
         sub rc 1
     }
 
