@@ -901,17 +901,23 @@ defstate _convertFP2String
     div ra 65536
 
     // Integral part
-    mul ra 65536
-    sub rfx0 ra
-    div ra 65536
-    
-    whilen ra 0 {
-        set rd ra
-        mod rd 10
-        add rd 48 //48 = '0'
+    ife ra 0 {
+        set rd 48 //48 = '0'
         state pushd
         add rc 1
-        div ra 10
+    } else {
+        mul ra 65536
+        sub rfx0 ra
+        div ra 65536
+    
+        whilen ra 0 {
+            set rd ra
+            mod rd 10
+            add rd 48 //48 = '0'
+            state pushd
+            add rc 1
+            div ra 10
+        }
     }
 
     // Dot
@@ -949,9 +955,10 @@ defstate _convertFP2String
 
     set ri rb
     setarray flat[ri] rc
+    add ri rc //Move to the end of the string
 
     whilen rc 0 {
-        add ri 1
+        sub ri 1
         state popd
         setarray flat[ri] rd
         sub rc 1
