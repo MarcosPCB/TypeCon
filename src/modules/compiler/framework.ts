@@ -834,6 +834,109 @@ defstate _convertInt2String
     
 ends
 
+defstate _convertFP2String
+    state push
+    set ra r0
+
+    ife ra 0 {
+        state pushr1
+        set r0 2
+        state alloc
+        state popr1
+        setarray flat[rb] 1
+        add rb 1
+        setarray flat[rb] 48
+        add rb 1
+        setarray flat[rb] 46
+        add rb 1
+        setarray flat[rb] 48
+        add rb 1
+        setarray flat[rb] 48
+        add rb 1
+        setarray flat[rb] 48
+        add rb 1
+        setarray flat[rb] 48
+        sub rb 6
+        state pop
+        terminate
+    }
+
+    state pushc
+    state pushd
+    set rc 0
+
+    set rd 0
+    ifl ra 0 {
+        set rd 1 //Flag it as a negative number
+        state pushd
+        add rc 1
+    }
+
+    set rfx0 ra
+    div ra 65536
+
+    // Integral part
+    mul ra 65536
+    sub rfx0 ra
+    div ra 65536
+    
+    whilen ra 0 {
+        set rd ra
+        mod rd 10
+        add rd 48 //48 = '0'
+        state pushd
+        add rc 1
+        div ra 10
+    }
+
+    // Dot
+    set rd 46
+    state pushd
+    add rc 1
+
+    // Fractional part
+    set rsi 0
+    whilen rfx0 0 {
+        set ra rfx0
+        mul ra 10
+        divr ra 65536
+        
+        set rd ra
+        add rd 48 //48 = '0'
+        state pushd
+        add rc 1
+        add rsi 1
+        
+        mul rfx0 10
+        mul ra 65536
+        sub rfx0 ra
+
+        ife rsi 4
+            exit
+    }
+
+    state pushr1
+    set r0 rc
+    add r0 1
+    state alloc
+    state popr1
+
+    set ri rb
+    setarray flat[ri] rc
+
+    whilen rc 0 {
+        add ri 1
+        state popd
+        setarray flat[ri] rd
+        sub rc 1
+    }
+
+    state popd
+    state popc
+    state pop
+    
+ends
+
 defstate _convertString2Quote
     state push
     state pushd
