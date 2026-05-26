@@ -1,5 +1,29 @@
 # Changelog
 
+## [v0.8.0]
+
+### Added
+- **FP11, FP14, FP30 precision types**: New fixed-point types alongside FP16 — FP11 (BAM angles, 1.0 = 2048), FP14 (sin/cos values, 1.0 = 16384), FP30 (unit range, 1.0 = 1073741824).
+- **Typed sin/cos/tan**: `Math.sin` and `Math.cos` now accept `FP11` angles and return `FP14`; `Math.tan` gains three dispatch variants for raw BAM, FP11, and FP16 degree inputs.
+- **FP conversion helpers**: `intToFP11/14/30`, `fp11/14/30ToInt`, `fp11/14/30Raw`, `fp11/14/30ToString` added to the standard library.
+- **FP toString defstates**: `_convertFP11ToString`, `_convertFP14ToString`, `_convertFP30ToString` in the VM framework (convert to FP16 scale then delegate to `_convertFP2String`).
+- **`RotateSpriteF`**: Full-precision `rotatesprite` variant — x/y as normalized FP16 [0.0–1.0] screen coordinates (mapped to 20971520×13107200 FULL16 space), angle as FP11, `ROTATESPRITE_FULL16` set automatically.
+- **`ScreenTextF`**: Full-precision `screentext` variant — same normalized x/y convention, block and character angles as FP11, `ROTATESPRITE_FULL16` set automatically.
+
+### Changed
+- `FP_ALIAS_BITS` updated throughout the compiler (Compiler.ts, all visitor services) to recognise the four valid precisions: 11, 14, 16, 30.
+- Branded intersection FP types (e.g. `number & { __brand }`) no longer trigger spurious "Undeclared type alias" warnings.
+
+### Removed
+- Removed `FP8` and `FP12` precision types — only FP11, FP14, FP16, and FP30 are supported.
+
+### Fixed
+- Fixed `_convertFP2String` crash when value is a round number (missing `0000` fractional part).
+- Fixed `_convertFP2String` ignoring integral part of 0 and returning an inverted string.
+- Fixed `state realloc` bad data copy (wrong source memory address).
+- Fixed `_printFlatStr` logging incorrect memory location.
+- Fixed `_convertString2Quote` missing boundary checks for invalid quote indices.
+
 ## [v0.7.0]
 
 ### Added
