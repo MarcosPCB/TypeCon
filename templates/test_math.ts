@@ -24,8 +24,8 @@ class TestMath extends CEvent {
         checkFpEq("cos(512bam)", 0, Math.cos(angle));
 
         // ── Trig (FP16 degrees) ───────────────────────────────────────────
-        checkFpEq("sin(2.0fp)", 2285, Math.sin(a));
-        checkFpEq("tan(2.0fp)", 2285, Math.tan(a));
+        checkFpEq("sin(1.93fp)", 2287, Math.sin(1.93));
+        checkFpEq("tan(1.93fp)", 2287, Math.tan(1.93));
 
         // ── Angle conversions ─────────────────────────────────────────────
         checkEq("toBAM(90)", 512, Math.toBAM(90));

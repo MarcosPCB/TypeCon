@@ -398,7 +398,7 @@ set rb ra
 
     // Apply FP-bit tracking after the call.
     if (nativeFn.inherit_fp_bits)
-      context.curFpBits = arg0FpBits as 0 | 8 | 12 | 16 | 30;
+      context.curFpBits = arg0FpBits as 0 | 11 | 14 | 16 | 30;
     else if (nativeFn.returns_fp_bits)
       context.curFpBits = nativeFn.returns_fp_bits;
     else

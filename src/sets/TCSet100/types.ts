@@ -9,24 +9,39 @@ namespace nocompile { }
 declare global {
     // Fixed-point numeric types — 32-bit integers with an implicit binary scale factor.
     // Use these to get automatic mulscale/divscale codegen for * and / operations.
-    type FP8 = number;   // Q23.8  — 1.0 = 256
-    type FP12 = number;   // Q19.12 — 1.0 = 4096
-    type FP16 = number;   // Q15.16 — 1.0 = 65536
-    type FP30 = number;   // Q1.30  — 1.0 = 1073741824, useful for unit-range values
+    /**
+     * Constant type. Only literals are accepted
+     */
+    type FP11 = number & { __brandConstant?: never }; // Q20.11 — 1.0 = 2048, BUILD engine BAM angles (0–2047)
+    type FP14 = number & { __brandConstant?: never };  // Q17.14 — 1.0 = 16384, BUILD engine sin/cos values (−16384..16384)
+    type FP16 = number & { __brandConstant?: never };  // Q15.16 — 1.0 = 65536
+    type FP30 = number & { __brandConstant?: never };  // Q1.30  — 1.0 = 1073741824, useful for unit-range values
 
     // Fixed-point conversion helpers
-    function intToFP8(x: number): FP8;
-    function intToFP12(x: number): FP12;
+    function intToFP11(x: number): FP11;
+    function intToFP14(x: number): FP14;
     function intToFP16(x: number): FP16;
     function intToFP30(x: number): FP30;
-    function fp8ToInt(x: FP8): number;
-    function fp12ToInt(x: FP12): number;
+    function fp11ToInt(x: FP11): number;
+    function fp14ToInt(x: FP14): number;
     function fp16ToInt(x: FP16): number;
     function fp30ToInt(x: FP30): number;
+    /** Return the raw integer backing an FP11 value (BAM angle bits). */
+    function fp11Raw(x: FP11): number;
+    /** Return the raw integer backing an FP14 value (sin/cos bits). */
+    function fp14Raw(x: FP14): number;
     /** Return the raw 32-bit integer backing an FP16 value without any shifting. Use this when an API expects the 16.16 bit pattern directly (e.g. rotatesprite zoom). */
     function fp16Raw(x: FP16): number;
+    /** Return the raw integer backing an FP30 value. */
+    function fp30Raw(x: FP30): number;
+    /** Convert an FP11 value to a decimal string. */
+    function fp11ToString(x: FP11): string;
+    /** Convert an FP14 value to a decimal string. */
+    function fp14ToString(x: FP14): string;
     /** Convert an FP16 value to a decimal string with 4 fractional digits, e.g. fp16ToString(intToFP16(1) + 32768) → "1.5000". Returns a heap-allocated TypeCON string. */
     function fp16ToString(x: FP16): string;
+    /** Convert an FP30 value to a decimal string (approximated via FP16). */
+    function fp30ToString(x: FP30): string;
     /** Parse a decimal string like "1.5000" or "-160.0000" into an FP16 integer. Inverse of fp16ToString. */
     function fp16FromString(s: string): FP16;
     /** Return the number of characters in a heap-allocated TypeCON string. */
@@ -118,25 +133,25 @@ declare global {
         clamp(x: number, min: number, max: number): number;
         /**
          * Sine from a BAM angle using the engine lookup table.
-         * Pass a plain integer BAM (0–2047) for an integer-degree call, or
-         * a FP16 degree value and the compiler converts via `toBAM` first.
-         * @param angle Angle in BAM units (integer) or degrees (FP16).
-         * @returns sin(angle) in FP16.
+         * Pass an FP11 BAM angle (1.0 = 2048 = full circle) or a plain BAM integer (0–2047).
+         * @param angle Angle in FP11 BAM units or plain BAM integer.
+         * @returns sin(angle) in FP14 (1.0 = 16384).
          */
-        sin(angle: number): FP16;
+        sin(angle: FP11): FP14;
         /**
          * Cosine from a BAM angle using the engine lookup table.
-         * @param angle Angle in BAM units (integer) or degrees (FP16).
-         * @returns cos(angle) in FP16.
+         * Pass an FP11 BAM angle (1.0 = 2048 = full circle) or a plain BAM integer (0–2047).
+         * @param angle Angle in FP11 BAM units or plain BAM integer.
+         * @returns cos(angle) in FP14 (1.0 = 16384).
          */
-        cos(angle: number): FP16;
+        cos(angle: FP11): FP14;
         /**
          * Tangent: `sin(bam) / cos(bam)` via precompile defstate.
-         * Pass a BAM integer or FP16 degrees; undefined near ±90°/270°.
-         * @param angle Angle in BAM units (integer) or degrees (FP16).
-         * @returns tan(angle) in FP16.
+         * Pass an FP11 BAM angle or a plain BAM integer; undefined near ±90°/270°.
+         * @param angle Angle in FP11 BAM units or plain BAM integer.
+         * @returns tan(angle) in FP14 (1.0 = 16384).
          */
-        tan(angle: number): FP16;
+        tan(angle: FP11): FP14;
         /**
          * Arc-tangent: returns the BAM angle whose tangent is `dy/dx`.
          * Wraps CON `getangle`.
@@ -890,6 +905,8 @@ declare global {
      * Constant type. Only literals are accepted
      */
     export type constant = number & { __brandConstant?: never };
+
+
 
     /** 
      * Returns a pointer for thhe specified label

@@ -1,8 +1,8 @@
 namespace noread { }
 
 // Fixed-point numeric types (also declared globally in types.ts)
-export type FP8 = number;
-export type FP12 = number;
+export type FP11 = number;
+export type FP14 = number;
 export type FP16 = number;
 export type FP30 = number;
 
@@ -79,7 +79,7 @@ export interface CON_NATIVE_FUNCTION {
     inherit_fp_bits?: boolean,
     returns: boolean,
     return_type: 'variable' | 'string' | 'pointer' | 'array' | 'object' | 'heap' | null,
-    returns_fp_bits?: 8 | 12 | 16 | 30,
+    returns_fp_bits?: 11 | 14 | 16 | 30,
     returnable?: any,
     return_size?: number,
     arguments: CON_NATIVE_FLAGS[],
@@ -1388,16 +1388,22 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
         arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
     // ─── int ↔ FP conversion helpers ─────────────────────────────────────────
-    { name: 'intToFP8', code: (_a?: boolean) => `set rb r0\nshiftl rb 8`, returns: true, return_type: 'variable', returns_fp_bits: 8, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
-    { name: 'intToFP12', code: (_a?: boolean) => `set rb r0\nshiftl rb 12`, returns: true, return_type: 'variable', returns_fp_bits: 12, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'intToFP11', code: (_a?: boolean) => `set rb r0\nshiftl rb 11`, returns: true, return_type: 'variable', returns_fp_bits: 11, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'intToFP14', code: (_a?: boolean) => `set rb r0\nshiftl rb 14`, returns: true, return_type: 'variable', returns_fp_bits: 14, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'intToFP16', code: (_a?: boolean) => `set rb r0\nshiftl rb 16`, returns: true, return_type: 'variable', returns_fp_bits: 16, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'intToFP30', code: (_a?: boolean) => `set rb r0\nshiftl rb 30`, returns: true, return_type: 'variable', returns_fp_bits: 30, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
-    { name: 'fp8ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 8`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
-    { name: 'fp12ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 12`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp11ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 11`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp14ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 14`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp16ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 16`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp30ToInt', code: (_a?: boolean) => `set rb r0\nshiftr rb 30`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp11Raw', code: (_a?: boolean) => `set rb r0`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp14Raw', code: (_a?: boolean) => `set rb r0`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp16Raw', code: (_a?: boolean) => `set rb r0`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp30Raw', code: (_a?: boolean) => `set rb r0`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp11ToString', code: (_a?: boolean) => `state _convertFP11ToString`, returns: true, return_type: 'string', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp14ToString', code: (_a?: boolean) => `state _convertFP14ToString`, returns: true, return_type: 'string', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp16ToString', code: (_a?: boolean) => `state _convertFP2String`, returns: true, return_type: 'string', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
+    { name: 'fp30ToString', code: (_a?: boolean) => `state _convertFP30ToString`, returns: true, return_type: 'string', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'fp16FromString', code: (_a?: boolean) => `state _stringToFP16`, returns: true, return_type: 'variable', returns_fp_bits: 16, arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'strLen', code: (_a?: boolean) => `set rb flat[r0]`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE] },
     { name: 'charCodeAt', code: (_a?: boolean) => `set ri r0\nadd ri r1\nadd ri 1\nset rb flat[ri]`, returns: true, return_type: 'variable', arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE] },
@@ -1465,24 +1471,28 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     },
 
     {
-        name: 'sin', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
-        fp_aware_code: (n) => n !== 0
-            ? `shiftr r0 ${n}\nmul r0 2048\ndiv r0 360\nsin rb r0\nshiftl rb 2`
-            : `sin rb r0\nshiftl rb 2`,
+        name: 'sin', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 14,
+        fp_aware_code: (n) => n === 11
+            ? `shiftr r0 11\nsin rb r0`
+            : n !== 0
+            ? `shiftr r0 ${n}\nmul r0 2048\ndiv r0 360\nsin rb r0`
+            : `sin rb r0`,
         arguments: [CON_NATIVE_FLAGS.VARIABLE]
     },
 
     {
-        name: 'cos', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
-        fp_aware_code: (n) => n !== 0
-            ? `shiftr r0 ${n}\nmul r0 2048\ndiv r0 360\ncos rb r0\nshiftl rb 2`
-            : `cos rb r0\nshiftl rb 2`,
+        name: 'cos', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 14,
+        fp_aware_code: (n) => n === 11
+            ? `shiftr r0 11\ncos rb r0`
+            : n !== 0
+            ? `shiftr r0 ${n}\nmul r0 2048\ndiv r0 360\ncos rb r0`
+            : `cos rb r0`,
         arguments: [CON_NATIVE_FLAGS.VARIABLE]
     },
 
     {
-        name: 'tan', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 16,
-        fp_aware_code: (n) => n !== 0 ? `state _Math_tanFP` : `state _Math_tan`,
+        name: 'tan', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 14,
+        fp_aware_code: (n) => n === 11 ? `state _Math_tanFP11` : n !== 0 ? `state _Math_tanFP` : `state _Math_tan`,
         arguments: [CON_NATIVE_FLAGS.VARIABLE]
     },
 

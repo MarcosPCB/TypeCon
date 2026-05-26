@@ -821,7 +821,7 @@ defstate _convertInt2String
 
     set rd 0
     ifl ra 0 {
-        set rd 1 //Flag it as a negative number
+        set rd 45 //Flag it as a negative number
         state pushd
         add rc 1
     }
@@ -890,7 +890,7 @@ defstate _convertFP2String
 
     set rd 0
     ifl ra 0 {
-        set rd 1 //Flag it as a negative number
+        set rd 45 //Flag it as a negative number
         state pushd
         add rc 1
     }
@@ -976,7 +976,22 @@ defstate _convertFP2String
     state popd
     state popc
     state pop
-    
+
+ends
+
+defstate _convertFP11ToString
+    shiftl r0 5
+    state _convertFP2String
+ends
+
+defstate _convertFP14ToString
+    shiftl r0 2
+    state _convertFP2String
+ends
+
+defstate _convertFP30ToString
+    shiftr r0 14
+    state _convertFP2String
 ends
 
 defstate _convertString2Quote

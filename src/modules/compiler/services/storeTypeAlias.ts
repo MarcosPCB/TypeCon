@@ -17,7 +17,8 @@ export function storeTypeAlias(ta: TypeAliasDeclaration, context: CompilerContex
       if (typeNode.getKind() == SyntaxKind.NumberKeyword
         || typeNode.getKind() == SyntaxKind.StringKeyword
         || typeNode.getKind() == SyntaxKind.StringLiteral
-        || typeNode.getKind() == SyntaxKind.UnionType)
+        || typeNode.getKind() == SyntaxKind.UnionType
+        || typeNode.getKind() == SyntaxKind.IntersectionType)
         return;
     }
     addDiagnostic(ta, context, "warning", `Type alias ${aliasName} is not a literal type.`);

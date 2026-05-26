@@ -20,8 +20,8 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
     curFunc: undefined,
   };
 
-  const FP_ALIAS_BITS: Record<string, 8 | 12 | 16 | 30> = { FP8: 8, FP12: 12, FP16: 16, FP30: 30 };
-  const paramFpBitsArr: (8 | 12 | 16 | 30 | 0)[] = [];
+  const FP_ALIAS_BITS: Record<string, 11 | 14 | 16 | 30> = { FP11: 11, FP14: 14, FP16: 16, FP30: 30 };
+  const paramFpBitsArr: (11 | 14 | 16 | 30 | 0)[] = [];
 
   let code = `${context.options.lineDetail ? formatLineDetail(fd.getText()) : ''}\ndefstate ${localCtx.curModule ? `_${localCtx.curModule.name}_` : ''}${name}\n  set ra rbp \n  state push\n  set rbp rsp\n  add rbp 1\n`;
   fd.getParameters().forEach((p, i) => {
@@ -61,8 +61,8 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
 
       case 'constant':
       case 'number':
-      case 'FP8':
-      case 'FP12':
+      case 'FP11':
+      case 'FP14':
       case 'FP16':
       case 'FP30':
         break;
@@ -81,7 +81,10 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
         t = ESymbolType.array;
         break;
 
-      default:
+      default: {
+        const paramSrcType = p.getTypeNode()?.getText();
+        if (paramSrcType && FP_ALIAS_BITS[paramSrcType] !== undefined) break;
+
         let tText = type.getText();
 
         if (type.getText().endsWith('[]')) {
@@ -97,6 +100,7 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
         }
 
         children = getObjectTypeLayout(tText, context);
+      }
     }
     const paramTypeText = p.getTypeNode()?.getText();
     const paramFpBits = paramTypeText ? FP_ALIAS_BITS[paramTypeText] : undefined;

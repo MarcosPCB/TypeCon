@@ -157,7 +157,7 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
   context.curExpr = isString ? ESymbolType.string : ESymbolType.number;
 
   // Track result FP precision
-  let resultFpBits: 0 | 8 | 12 | 16 | 30 = 0;
+  let resultFpBits: 0 | 11 | 14 | 16 | 30 = 0;
 
   const rhs = typeof valD !== 'undefined' ? String(Number(valD)) : 'ra';
 

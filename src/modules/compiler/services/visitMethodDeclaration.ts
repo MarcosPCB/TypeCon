@@ -97,15 +97,15 @@ export function visitMethodDeclaration(
   code += `  set ra rbp \n  state push \n  set rbp rsp\n  add rbp 1\n`;
   //}
 
-  const FP_ALIAS_BITS: Record<string, 8 | 12 | 16 | 30> = { FP8: 8, FP12: 12, FP16: 16, FP30: 30 };
-  const paramFpBitsArr: (8 | 12 | 16 | 30 | 0)[] = [];
+  const FP_ALIAS_BITS: Record<string, 11 | 14 | 16 | 30> = { FP11: 11, FP14: 14, FP16: 16, FP30: 30 };
+  const paramFpBitsArr: (11 | 14 | 16 | 30 | 0)[] = [];
 
   md.getParameters().forEach((p, i) => {
     const type = p.getType();
     let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
     let children: Record<string, SymbolDefinition>;
     let con = '';
-    let paramFpBits: 8 | 12 | 16 | 30 | undefined;
+    let paramFpBits: 11 | 14 | 16 | 30 | undefined;
     switch (type.getText()) {
       case 'string':
       case 'boolean':
@@ -131,7 +131,10 @@ export function visitMethodDeclaration(
         t |= ESymbolType.array
         break;
 
-      default:
+      default: {
+        const paramSrcType = p.getTypeNode()?.getText();
+        if (paramSrcType && FP_ALIAS_BITS[paramSrcType] !== undefined) break;
+
         let tText = type.getText();
 
         if (type.getText().endsWith('[]')) {
@@ -155,6 +158,7 @@ export function visitMethodDeclaration(
 
         if (t & ESymbolType.object)
           children = getObjectTypeLayout(tText, context);
+      }
     }
     const paramTypeText = p.getTypeNode()?.getText();
     paramFpBits = paramTypeText ? FP_ALIAS_BITS[paramTypeText] : undefined;

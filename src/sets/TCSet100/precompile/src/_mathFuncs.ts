@@ -75,17 +75,24 @@ function _Math_exp(x: FP16): FP16 {
     return result;
 }
 
-function _Math_tan(bam: number): FP16 {
-    let s: FP16 = Math.sin(bam);
-    let c: FP16 = Math.cos(bam);
+function _Math_tan(bam: number): FP14 {
+    let s: FP14 = Math.sin(bam);
+    let c: FP14 = Math.cos(bam);
     return s / c;
 }
 
-function _Math_tanFP(degrees: FP16): FP16 {
+function _Math_tanFP11(bam: FP11): FP14 {
+    let b: number = fp11ToInt(bam);
+    let s: FP14 = Math.sin(b);
+    let c: FP14 = Math.cos(b);
+    return s / c;
+}
+
+function _Math_tanFP(degrees: FP16): FP14 {
     let deg: number = fp16ToInt(degrees);
     let bam: number = deg * 2048;
     bam = bam / 360;
-    let s: FP16 = Math.sin(bam);
-    let c: FP16 = Math.cos(bam);
+    let s: FP14 = Math.sin(bam);
+    let c: FP14 = Math.cos(bam);
     return s / c;
 }

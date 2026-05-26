@@ -11,8 +11,8 @@ import { createHash } from "crypto";
 import { subFunctionInit } from "./subFunctionInit";
 import { evaluateLiteralExpression } from "../helper/helpers";
 
-const FP_ALIAS_BITS: Record<string, 8 | 12 | 16 | 30> = {
-  FP8: 8, FP12: 12, FP16: 16, FP30: 30
+const FP_ALIAS_BITS: Record<string, 11 | 14 | 16 | 30> = {
+  FP11: 11, FP14: 14, FP16: 16, FP30: 30
 };
 
 export function visitVariableDeclaration(decl: VariableDeclaration, context: CompilerContext): string {
