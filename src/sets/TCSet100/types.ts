@@ -1670,6 +1670,23 @@ declare global {
          */
         public RotateSprite(x: number, y: number, scale: number, ang: number, picnum: number, shade: number, pal: number, orientation: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
         /**
+         * Full-precision variant of RotateSprite. Accepts normalized screen coordinates,
+         * sub-degree angles. Automatically sets ROTATESPRITE_FULL16 in orientation.
+         * @param x X position normalized [0.0, 1.0] — 0.0 = left edge, 1.0 = right edge (20971520 FULL16 units).
+         * @param y Y position normalized [0.0, 1.0] — 0.0 = top edge, 1.0 = bottom edge (13107200 FULL16 units).
+         * @param scale Zoom factor in FP16 (65536 = 1×).
+         * @param ang Angle in FP11 BAM (1.0 = 2048 = full circle).
+         * @param picnum Tile number.
+         * @param shade Shade value.
+         * @param pal Palette index.
+         * @param orientation Orientation flags (ROTATESPRITE_FULL16 is added automatically).
+         * @param x0 Clip rectangle left.
+         * @param y0 Clip rectangle top.
+         * @param x1 Clip rectangle right.
+         * @param y1 Clip rectangle bottom.
+         */
+        public RotateSpriteF(x: FP16, y: FP16, scale: FP16, ang: FP11, picnum: number, shade: number, pal: number, orientation: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
+        /**
          * Displays a sprite onto the screen. An easier method to use.
          * @param pos - the object containg the position of the sprite. See {@link pos2}
          * @param picnum - the tile number of the sprite.
@@ -1706,6 +1723,31 @@ declare global {
          * @param y1 the window y1 value
          */
         public ScreenText(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
+        /**
+         * Full-precision variant of ScreenText. Accepts normalized screen coordinates,
+         * sub-degree angles. Automatically sets ROTATESPRITE_FULL16 in orientation.
+         * @param picnum Tile number of the font.
+         * @param x X position normalized [0.0, 1.0] — 0.0 = left edge, 1.0 = right edge (20971520 FULL16 units).
+         * @param y Y position normalized [0.0, 1.0] — 0.0 = top edge, 1.0 = bottom edge (13107200 FULL16 units).
+         * @param scale Scale factor in FP16 (65536 = 1×).
+         * @param block_ang Angle of the entire text block in FP11 BAM.
+         * @param character_ang Angle of each character in FP11 BAM.
+         * @param quote Quote number.
+         * @param shade Shade value.
+         * @param pal Palette index.
+         * @param orientation Orientation flags (ROTATESPRITE_FULL16 is added automatically).
+         * @param alpha Alpha value.
+         * @param xspace Space between words.
+         * @param yline Space between lines.
+         * @param xbetween X space between characters.
+         * @param ybetween Y space between characters.
+         * @param flags Text flags.
+         * @param x0 Clip rectangle left.
+         * @param y0 Clip rectangle top.
+         * @param x1 Clip rectangle right.
+         * @param y1 Clip rectangle bottom.
+         */
+        public ScreenTextF(picnum: number, x: FP16, y: FP16, scale: FP16, block_ang: FP11, character_ang: FP11, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<void>;
 
         public QuoteDimension(picnum: number, x: number, y: number, scale: number, block_ang: number, character_ang: number, quote: quote, shade: number, pal: number, orientation: number, alpha: number, xspace: number, yline: number, xbetween: number, ybetween: number, flags: number, x0: number, y0: number, x1: number, y1: number): CON_NATIVE<vec2>;
 

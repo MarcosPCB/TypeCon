@@ -639,6 +639,28 @@ set RETURN rd`;
         ]
     },
     {
+        // Full-precision variant: x/y/scale as FP16, ang as FP11.
+        // Auto-sets ROTATESPRITE_FULL16 (2048) in orientation.
+        name: 'RotateSpriteF',
+        code: (_a?: boolean) => `mul r0 320\nmul r1 200\nshiftr r3 11\nor r7 2048\nrotatesprite r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11`,
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE, // x: FP16
+            CON_NATIVE_FLAGS.VARIABLE, // y: FP16
+            CON_NATIVE_FLAGS.VARIABLE, // scale: FP16
+            CON_NATIVE_FLAGS.VARIABLE, // ang: FP11 (stripped to raw BAM)
+            CON_NATIVE_FLAGS.VARIABLE, // picnum
+            CON_NATIVE_FLAGS.VARIABLE, // shade
+            CON_NATIVE_FLAGS.VARIABLE, // pal
+            CON_NATIVE_FLAGS.VARIABLE, // orientation (ROTATESPRITE_FULL16 auto-set)
+            CON_NATIVE_FLAGS.VARIABLE, // x0
+            CON_NATIVE_FLAGS.VARIABLE, // y0
+            CON_NATIVE_FLAGS.VARIABLE, // x1
+            CON_NATIVE_FLAGS.VARIABLE, // y1
+        ]
+    },
+    {
         name: 'DrawSprite',
         returns: false,
         return_type: null,
@@ -708,6 +730,36 @@ state pop
             CON_NATIVE_FLAGS.VARIABLE,
             CON_NATIVE_FLAGS.VARIABLE,
             CON_NATIVE_FLAGS.VARIABLE,
+        ]
+    },
+    {
+        // Full-precision variant: x/y/scale as FP16, block_ang/character_ang as FP11.
+        // Auto-sets ROTATESPRITE_FULL16 (2048) in orientation.
+        name: 'ScreenTextF',
+        code: (_a?: boolean) => `mul r1 320\nmul r2 200\nshiftr r4 11\nshiftr r5 11\nor r9 2048\nscreentext r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19`,
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE, // picnum
+            CON_NATIVE_FLAGS.VARIABLE, // x: FP16
+            CON_NATIVE_FLAGS.VARIABLE, // y: FP16
+            CON_NATIVE_FLAGS.VARIABLE, // scale: FP16
+            CON_NATIVE_FLAGS.VARIABLE, // block_ang: FP11 (stripped to raw BAM)
+            CON_NATIVE_FLAGS.VARIABLE, // character_ang: FP11 (stripped to raw BAM)
+            CON_NATIVE_FLAGS.VARIABLE, // quote
+            CON_NATIVE_FLAGS.VARIABLE, // shade
+            CON_NATIVE_FLAGS.VARIABLE, // pal
+            CON_NATIVE_FLAGS.VARIABLE, // orientation (ROTATESPRITE_FULL16 auto-set)
+            CON_NATIVE_FLAGS.VARIABLE, // alpha
+            CON_NATIVE_FLAGS.VARIABLE, // xspace
+            CON_NATIVE_FLAGS.VARIABLE, // yline
+            CON_NATIVE_FLAGS.VARIABLE, // xbetween
+            CON_NATIVE_FLAGS.VARIABLE, // ybetween
+            CON_NATIVE_FLAGS.VARIABLE, // flags
+            CON_NATIVE_FLAGS.VARIABLE, // x0
+            CON_NATIVE_FLAGS.VARIABLE, // y0
+            CON_NATIVE_FLAGS.VARIABLE, // x1
+            CON_NATIVE_FLAGS.VARIABLE, // y1
         ]
     },
     {
