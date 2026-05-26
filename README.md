@@ -270,9 +270,9 @@ TypeCON ships with several templates under `templates/`:
 
 Compile any template to verify your setup:
 ```bash
-node dist/main.js -c -i templates/test_math.ts
-node dist/main.js -c -i templates/test_anim.ts
-node dist/main.js -c -i templates/test_fp.ts
+tcc -c -i templates/test_math.ts
+tcc -c -i templates/test_anim.ts
+tcc -c -i templates/test_fp.ts
 ```
 
 ---
