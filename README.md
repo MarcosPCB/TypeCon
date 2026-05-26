@@ -172,6 +172,50 @@ this.ScreenTextF(
 
 ---
 
+## 🔗 Compile & Link Workflow
+
+TypeCON works with two build stages: **compile** each TypeScript file independently into a `.tco` intermediate object, then **link** the objects together into a single `.con` file.
+
+### Step 1 — Compile each file to `.tco`
+
+```bash
+tcc -c -il templates/AssaultTrooper.ts templates/BattleLord.ts
+```
+
+This produces `obj/AssaultTrooper.tco` and `obj/BattleLord.tco`.  
+Each `.tco` file is a self-contained JSON bundle containing:
+- The compiled CON code with `__PLACEHOLDER__` tokens for unresolved globals.
+- A symbol table snapshot (actors, functions, enums, globals).
+- A relocation table so the linker can patch addresses after merging.
+
+### Step 2 — Link the objects into a final `.con`
+
+```bash
+tcc -L -di -o eduke.con
+```
+
+This produces `compiled/eduke.con` with:
+- The VM framework header (registers, stack, heap, GC) prepended once.
+- Default inclusion of GAME.CON file (-di flag)
+- All `flat[]` global slots assigned and placeholders patched.
+- Both actors' `defstate` and `useractor` blocks merged in topological order.
+
+### Typical project layout after building
+
+```
+project/
+├── src/
+│   ├── AssaultTrooper.ts
+│   └── BattleLord.ts
+├── obj/
+│   ├── AssaultTrooper.tco   ← compiler output
+│   └── BattleLord.tco       ← compiler output
+└── compiled/
+    └── my_mod.con           ← linker output, drop into your EDuke32 mod folder
+```
+
+---
+
 ## 🚥 CLI Parameters
 
 ### Project Setup
