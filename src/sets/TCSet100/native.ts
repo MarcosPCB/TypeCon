@@ -1685,27 +1685,103 @@ export const nativeVars_Walls: CON_NATIVE_VAR[] = [
         code: '',
         init: 0,
         object: nativePos
-    }
-]
-
-export const nativeVars_Sectors: CON_NATIVE_VAR[] = [
+    },
     {
-        name: 'ceiling',
+        name: 'point2',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'point2',
+        init: 0
+    },
+    {
+        name: 'nextWall',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'nextwall',
+        init: -1
+    },
+    {
+        name: 'nextSector',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'nextsector',
+        init: -1
+    },
+    {
+        name: 'cstat',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'cstat',
+        init: 0
+    },
+    {
+        name: 'picnum',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'picnum',
+        init: 0
+    },
+    {
+        name: 'overpicnum',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'overpicnum',
+        init: 0
+    },
+    {
+        name: 'shade',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'shade',
+        init: 0
+    },
+    {
+        name: 'pal',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'pal',
+        init: 0
+    },
+    {
+        name: 'texRepeat',
         var_type: CON_NATIVE_TYPE.object,
         type: CON_NATIVE_FLAGS.OBJECT,
-        readonly: true,
-        init: 0,
+        readonly: false,
         code: '',
+        init: 0,
         object: [
-            {
-                name: 'z',
-                var_type: CON_NATIVE_TYPE.native,
-                type: CON_NATIVE_FLAGS.VARIABLE,
-                readonly: false,
-                init: 0,
-                code: `ceilingz`
-            }
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xrepeat', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yrepeat', init: 0 },
         ]
+    },
+    {
+        name: 'texPan',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xpanning', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'ypanning', init: 0 },
+        ]
+    },
+    {
+        name: 'tags',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: nativeTag
     },
     {
         name: 'extra',
@@ -1713,6 +1789,108 @@ export const nativeVars_Sectors: CON_NATIVE_VAR[] = [
         type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'extra',
+        init: 0
+    },
+    {
+        name: 'ang',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'ang',
+        init: 0
+    },
+    {
+        name: 'blend',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'blend',
+        init: 0
+    },
+]
+
+function nativeSectorFace(prefix: 'ceiling' | 'floor'): CON_NATIVE_VAR[] {
+    return [
+        { name: 'z',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: `${prefix}z` },
+        { name: 'picnum', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: `${prefix}picnum` },
+        { name: 'shade',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: `${prefix}shade` },
+        { name: 'pal',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: `${prefix}pal` },
+        { name: 'xPan',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: `${prefix}xpanning` },
+        { name: 'yPan',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: `${prefix}ypanning` },
+        { name: 'slope',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: `${prefix}slope` },
+        { name: 'stat',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: `${prefix}stat` },
+        { name: 'bunch',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: `${prefix}bunch` },
+        { name: 'zGoal',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: `${prefix}zgoal` },
+        { name: 'zVel',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: `${prefix}zvel` },
+    ];
+}
+
+export const nativeVars_Sectors: CON_NATIVE_VAR[] = [
+    {
+        name: 'ceiling',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: nativeSectorFace('ceiling')
+    },
+    {
+        name: 'floor',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: nativeSectorFace('floor')
+    },
+    {
+        name: 'visibility',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'visibility',
+        init: 0
+    },
+    {
+        name: 'fogPal',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'fogpal',
+        init: 0
+    },
+    {
+        name: 'tags',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: nativeTag
+    },
+    {
+        name: 'extra',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'extra',
+        init: 0
+    },
+    {
+        name: 'wallPtr',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: true,
+        code: 'wallptr',
+        init: 0
+    },
+    {
+        name: 'wallNum',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: true,
+        code: 'wallnum',
         init: 0
     },
     {
@@ -1758,6 +1936,22 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
         type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'htg_t 5',
+        init: 0,
+    },
+    {
+        name: 'curCount',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'htg_t 0',
+        init: 0,
+    },
+    {
+        name: 'curActionCount',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'htg_t 2',
         init: 0,
     },
     {
@@ -1827,11 +2021,16 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
     },
     {
         name: 'vel',
-        var_type: CON_NATIVE_TYPE.native,
-        type: CON_NATIVE_FLAGS.VARIABLE,
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
         readonly: false,
-        code: 'xvel',
-        init: 0
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xvel', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yvel', init: 0 },
+            { name: 'z', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'zvel', init: 0 },
+        ]
     },
     {
         name: 'ang',
@@ -1891,7 +2090,233 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
         readonly: false,
         init: 0,
         code: 'pal'
-    }
+    },
+    {
+        name: 'shade',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'shade',
+        init: 0
+    },
+    {
+        name: 'cstat',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'cstat',
+        init: 0
+    },
+    {
+        name: 'statnum',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'statnum',
+        init: 0
+    },
+    {
+        name: 'clipDist',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'clipdist',
+        init: 0
+    },
+    {
+        name: 'owner',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'owner',
+        init: -1
+    },
+    {
+        name: 'repeat',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xrepeat', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yrepeat', init: 0 },
+        ]
+    },
+    {
+        name: 'offset',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xoffset', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yoffset', init: 0 },
+        ]
+    },
+    {
+        name: 'prevPos',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'htbposx', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'htbposy', init: 0 },
+            { name: 'z', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'htbposz', init: 0 },
+        ]
+    },
+    {
+        name: 'htCeilingZ',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: true,
+        code: 'htceilingz',
+        init: 0
+    },
+    {
+        name: 'htFloorZ',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: true,
+        code: 'htfloorz',
+        init: 0
+    },
+    {
+        name: 'htActorStayPut',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'htactorstayput',
+        init: 0
+    },
+    {
+        name: 'htAng',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'htang',
+        init: 0
+    },
+    {
+        name: 'htLastVX',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'htlastvx',
+        init: 0
+    },
+    {
+        name: 'htLastVY',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'htlastvy',
+        init: 0
+    },
+    {
+        name: 'htMovFlag',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'htmovflag',
+        init: 0
+    },
+    {
+        name: 'htTempAng',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'httempang',
+        init: 0
+    },
+    {
+        name: 'htTimeToSleep',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'httimetosleep',
+        init: 0
+    },
+    {
+        name: 'hitType',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'stayPutSector', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'htactorstayput', init: 0 },
+            { name: 'lastAngle',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'htang',          init: 0 },
+            { name: 'lastVelX',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'htlastvx',       init: 0 },
+            { name: 'lastVelY',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'htlastvy',       init: 0 },
+            { name: 'moveFlag',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'htmovflag',      init: 0 },
+            { name: 'tempAngle',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'httempang',      init: 0 },
+            { name: 'timeToSleep',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'httimetosleep',  init: 0 },
+            { name: 'ceilingZ',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true,  code: 'htceilingz',     init: 0 },
+            { name: 'floorZ',        var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true,  code: 'htfloorz',       init: 0 },
+        ]
+    },
+    {
+        name: 'hitInfo',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'wall',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'htg_t 6', init: -1 },
+            { name: 'sector', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'htg_t 7', init: -1 },
+            { name: 'sprite', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'htg_t 8', init: -1 },
+        ]
+    },
+    {
+        name: 'pitch',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        override_code: true,
+        code: ['getspriteext[ri].pitch ra\n', 'setspriteext[ri].pitch ra\n'] as any
+    },
+    {
+        name: 'roll',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        override_code: true,
+        code: ['getspriteext[ri].roll ra\n', 'setspriteext[ri].roll ra\n'] as any
+    },
+    {
+        name: 'angOff',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        override_code: true,
+        code: ['getspriteext[ri].angoff ra\n', 'setspriteext[ri].angoff ra\n'] as any
+    },
+    {
+        name: 'alpha',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        override_code: true,
+        code: ['getspriteext[ri].alpha ra\n', 'setspriteext[ri].alpha ra\n'] as any
+    },
+    {
+        name: 'mdFlags',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        override_code: true,
+        code: ['getspriteext[ri].mdflags ra\n', 'setspriteext[ri].mdflags ra\n'] as any
+    },
 ];
 
 export const nativeVars_Players: CON_NATIVE_VAR[] = [
@@ -2132,17 +2557,607 @@ export const nativeVars_Players: CON_NATIVE_VAR[] = [
         init: 0
     },
     {
-        name: 'verticalAngle',
+        name: 'verticalAngleOff',
         var_type: CON_NATIVE_TYPE.native,
         type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'horizoff',
         init: 0
-    }
+    },
+    {
+        name: 'health',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'max_player_health',
+        init: 100
+    },
+    {
+        name: 'shieldAmount',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'shield_amount',
+        init: 0
+    },
+    {
+        name: 'jetpackAmount',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'jetpack_amount',
+        init: 0
+    },
+    {
+        name: 'scubaAmount',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'scuba_amount',
+        init: 0
+    },
+    {
+        name: 'steroidsAmount',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'steroids_amount',
+        init: 0
+    },
+    {
+        name: 'lastWeapon',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'last_weapon',
+        init: 0
+    },
+    {
+        name: 'weaponPos',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'weapon_pos',
+        init: 0
+    },
+    {
+        name: 'kickbackPic',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'kickback_pic',
+        init: 0
+    },
+    {
+        name: 'weaponSwitch',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'weapon_switch',
+        init: 0
+    },
+    {
+        name: 'zoom',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'zoom',
+        init: 512
+    },
+    {
+        name: 'bobCounter',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'bobcounter',
+        init: 0
+    },
+    {
+        name: 'onGround',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'on_ground',
+        init: 0
+    },
+    {
+        name: 'onLadder',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'on_ladder',
+        init: 0
+    },
+    {
+        name: 'jumping',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'jumping_toggle',
+        init: 0
+    },
+    {
+        name: 'crouching',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'crouch_toggle',
+        init: 0
+    },
+    {
+        name: 'god',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'god',
+        init: 0
+    },
+    {
+        name: 'dead',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'dead_flag',
+        init: 0
+    },
+    {
+        name: 'actorsKilled',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'actors_killed',
+        init: 0
+    },
+    {
+        name: 'secretRooms',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'secret_rooms',
+        init: 0
+    },
+    {
+        name: 'totalKills',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'total_kills',
+        init: 0
+    },
+    {
+        name: 'spriteIndex',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: true,
+        code: 'i',
+        init: 0
+    },
+    {
+        name: 'fta',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'fta',
+        init: 0
+    },
+    {
+        name: 'ftq',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        code: 'ftq',
+        init: 0
+    },
+    {
+        name: 'frags',
+        var_type: CON_NATIVE_TYPE.array,
+        type: CON_NATIVE_FLAGS.ARRAY,
+        readonly: false,
+        code: 'frags rsi',
+        init: 0
+    },
+    {
+        name: 'invAmount',
+        var_type: CON_NATIVE_TYPE.array,
+        type: CON_NATIVE_FLAGS.ARRAY,
+        readonly: false,
+        code: 'inv_amount rsi',
+        init: 0
+    },
+    {
+        name: 'resources',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'health',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'max_player_health', init: 100 },
+            { name: 'shield',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'shield_amount',     init: 0 },
+            { name: 'jetpack',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'jetpack_amount',    init: 0 },
+            { name: 'scuba',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'scuba_amount',      init: 0 },
+            { name: 'steroids', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'steroids_amount',   init: 0 },
+            { name: 'amounts',  var_type: CON_NATIVE_TYPE.array,  type: CON_NATIVE_FLAGS.ARRAY,    readonly: false, code: 'inv_amount rsi',    init: 0 },
+        ]
+    },
+    {
+        name: 'status',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'onGround',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'on_ground',      init: 0 },
+            { name: 'onLadder',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'on_ladder',      init: 0 },
+            { name: 'jumping',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'jumping_toggle', init: 0 },
+            { name: 'crouching', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'crouch_toggle',  init: 0 },
+            { name: 'god',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'god',            init: 0 },
+            { name: 'dead',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'dead_flag',      init: 0 },
+        ]
+    },
+    {
+        name: 'stats',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'actorsKilled', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'actors_killed', init: 0 },
+            { name: 'secretRooms',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'secret_rooms',  init: 0 },
+            { name: 'totalKills',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'total_kills',   init: 0 },
+        ]
+    },
+]
+
+export const nativeVars_Projectiles: CON_NATIVE_VAR[] = [
+    { name: 'vel',        var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'vel',        init: 0 },
+    { name: 'velMult',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'velmult',    init: 0 },
+    { name: 'bounces',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'bounces',    init: 0 },
+    { name: 'bSound',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'bsound',     init: 0 },
+    { name: 'iSound',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'isound',     init: 0 },
+    { name: 'sound',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'sound',      init: 0 },
+    { name: 'range',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'range',      init: 0 },
+    { name: 'drop',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'drop',       init: 0 },
+    { name: 'hitRadius',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'hitradius',  init: 0 },
+    { name: 'offset',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'offset',     init: 0 },
+    { name: 'trail',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'trail',      init: 0 },
+    { name: 'tnum',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tnum',       init: 0 },
+    { name: 'tOffset',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'toffset',    init: 0 },
+    { name: 'txRepeat',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'txrepeat',   init: 0 },
+    { name: 'tyRepeat',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tyrepeat',   init: 0 },
+    { name: 'sxRepeat',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'sxrepeat',   init: 0 },
+    { name: 'syRepeat',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'syrepeat',   init: 0 },
+    {
+        name: 'trailRepeat',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'txrepeat', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tyrepeat', init: 0 },
+        ]
+    },
+    {
+        name: 'spriteRepeat',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'sxrepeat', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'syrepeat', init: 0 },
+        ]
+    },
+    { name: 'shade',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'shade',      init: 0 },
+    { name: 'pal',        var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'pal',        init: 0 },
+    { name: 'cstat',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cstat',      init: 0 },
+    { name: 'clipDist',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'clipdist',   init: 0 },
+    { name: 'decal',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'decal',      init: 0 },
+    { name: 'extra',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'extra',      init: 0 },
+    { name: 'extraRand',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'extra_rand', init: 0 },
+    { name: 'userdata',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'userdata',   init: 0 },
+    { name: 'flashColor', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'flashcolor', init: 0 },
+    { name: 'spawns',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'spawns',     init: 0 },
+    { name: 'worksLike',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'workslike',  init: 0 },
+    { name: 'xRepeat',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xrepeat',    init: 0 },
+    { name: 'yRepeat',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yrepeat',    init: 0 },
+    {
+        name: 'physics',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'vel',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'vel',      init: 0 },
+            { name: 'velMult',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'velmult',  init: 0 },
+            { name: 'drop',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'drop',     init: 0 },
+            { name: 'range',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'range',    init: 0 },
+            { name: 'bounces',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'bounces',  init: 0 },
+            { name: 'offset',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'offset',   init: 0 },
+            { name: 'clipDist', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'clipdist', init: 0 },
+        ]
+    },
+    {
+        name: 'audio',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'fire',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'isound', init: 0 },
+            { name: 'bounce', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'bsound', init: 0 },
+            { name: 'impact', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'sound',  init: 0 },
+        ]
+    },
+    {
+        name: 'trailConfig',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'enabled',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'trail',    init: 0 },
+            { name: 'sprite',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tnum',     init: 0 },
+            { name: 'offset',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'toffset',  init: 0 },
+            { name: 'txRepeat', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'txrepeat', init: 0 },
+            { name: 'tyRepeat', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tyrepeat', init: 0 },
+            { name: 'sxRepeat', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'sxrepeat', init: 0 },
+            { name: 'syRepeat', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'syrepeat', init: 0 },
+        ]
+    },
+    {
+        name: 'appearance',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'shade',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'shade',   init: 0 },
+            { name: 'pal',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'pal',     init: 0 },
+            { name: 'cstat',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cstat',   init: 0 },
+            { name: 'xRepeat', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xrepeat', init: 0 },
+            { name: 'yRepeat', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yrepeat', init: 0 },
+        ]
+    },
+    {
+        name: 'effect',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'hitRadius',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'hitradius',  init: 0 },
+            { name: 'decal',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'decal',      init: 0 },
+            { name: 'flashColor', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'flashcolor', init: 0 },
+            { name: 'extra',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'extra',      init: 0 },
+            { name: 'extraRand',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'extra_rand', init: 0 },
+            { name: 'spawns',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'spawns',     init: 0 },
+        ]
+    },
+]
+
+export const nativeVars_TSprites: CON_NATIVE_VAR[] = [
+    {
+        name: 'pos',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: nativePos
+    },
+    {
+        name: 'vel',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xvel', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yvel', init: 0 },
+            { name: 'z', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'zvel', init: 0 },
+        ]
+    },
+    {
+        name: 'repeat',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xrepeat', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yrepeat', init: 0 },
+        ]
+    },
+    {
+        name: 'offset',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xoffset', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yoffset', init: 0 },
+        ]
+    },
+    { name: 'ang',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'ang',      init: 0 },
+    { name: 'picnum',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'picnum',   init: 0 },
+    { name: 'shade',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'shade',    init: 0 },
+    { name: 'pal',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'pal',      init: 0 },
+    { name: 'cstat',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cstat',    init: 0 },
+    { name: 'owner',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'owner',    init: -1 },
+    { name: 'statnum',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'statnum',  init: 0 },
+    { name: 'sectnum',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'sectnum',  init: 0 },
+    { name: 'extra',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'extra',    init: 0 },
+    { name: 'clipDist', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'clipdist', init: 0 },
+    { name: 'blend',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true,  code: 'blend',    init: 0 },
+    {
+        name: 'tags',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: nativeTag
+    },
+]
+
+export const nativeVars_UserDef: CON_NATIVE_VAR[] = [
+    { name: 'brightness',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'brightness',   init: 0 },
+    { name: 'god',          var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'god',          init: 0 },
+    { name: 'levelNum',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'level_number', init: 0 },
+    { name: 'volumeNum',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'volume_number',init: 0 },
+    { name: 'multiMode',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'multimode',    init: 0 },
+    { name: 'numPlayers',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true,  code: 'numplayers',   init: 1 },
+    { name: 'musicEpisode', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'music_episode',init: 0 },
+    { name: 'musicLevel',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'music_level',  init: 0 },
+    { name: 'playerSkill',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'player_skill', init: 0 },
+    { name: 'cameraDist',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cameradist',   init: 0 },
+    { name: 'cameraClock',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cameraclock',  init: 0 },
+    { name: 'scrollMode',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'scrollmode',   init: 0 },
+    { name: 'screenSize',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'screensize',   init: 0 },
+    { name: 'coop',         var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'coop',         init: 0 },
+    { name: 'returnData',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.ARRAY,    readonly: false, code: 'return rsi',   init: 0 },
+    {
+        name: 'level',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'number',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'level_number',  init: 0 },
+            { name: 'volume',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'volume_number', init: 0 },
+            { name: 'skill',        var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'player_skill',  init: 0 },
+            { name: 'musicEpisode', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'music_episode', init: 0 },
+            { name: 'musicLevel',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'music_level',   init: 0 },
+        ]
+    },
+    {
+        name: 'screen',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'brightness', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'brightness', init: 0 },
+            { name: 'size',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'screensize', init: 0 },
+            { name: 'scrollMode', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'scrollmode', init: 0 },
+        ]
+    },
+    {
+        name: 'camera',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'dist',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cameradist',  init: 0 },
+            { name: 'clock', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cameraclock', init: 0 },
+        ]
+    },
+    {
+        name: 'multi',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'mode',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'multimode',  init: 0 },
+            { name: 'numPlayers', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true,  code: 'numplayers', init: 1 },
+            { name: 'coop',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'coop',       init: 0 },
+        ]
+    },
+]
+
+export const nativeVars_Input: CON_NATIVE_VAR[] = [
+    { name: 'fvel',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'fvel',    init: 0 },
+    { name: 'svel',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'svel',    init: 0 },
+    { name: 'avel',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'avel',    init: 0 },
+    { name: 'horz',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'horz',    init: 0 },
+    { name: 'bits',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'bits',    init: 0 },
+    { name: 'extBits',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'extbits', init: 0 },
+    // friendly aliases
+    { name: 'forwardVel', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'fvel',    init: 0 },
+    { name: 'strafeVel',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'svel',    init: 0 },
+    { name: 'turnVel',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'avel',    init: 0 },
+    { name: 'lookUp',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'horz',    init: 0 },
+    { name: 'buttons',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'bits',    init: 0 },
+    { name: 'extButtons', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'extbits', init: 0 },
+    {
+        name: 'motion',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: false,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'forward', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'fvel', init: 0 },
+            { name: 'strafe',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'svel', init: 0 },
+            { name: 'turn',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'avel', init: 0 },
+            { name: 'lookUp',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'horz', init: 0 },
+        ]
+    },
+]
+
+export const nativeVars_TileData: CON_NATIVE_VAR[] = [
+    { name: 'xsize',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'xsize',      init: 0 },
+    { name: 'ysize',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'ysize',      init: 0 },
+    { name: 'xOffset',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'xoffset',    init: 0 },
+    { name: 'yOffset',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'yoffset',    init: 0 },
+    { name: 'animFrames', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'animframes', init: 0 },
+    { name: 'animSpeed',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'animspeed',  init: 0 },
+    { name: 'animType',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'animtype',   init: 0 },
+    { name: 'gameFlags',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'gameflags',  init: 0 },
+    { name: 'alpha',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'alpha',      init: 0 },
+    {
+        name: 'size',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: true,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'xsize', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'ysize', init: 0 },
+        ]
+    },
+    {
+        name: 'offset',
+        var_type: CON_NATIVE_TYPE.object,
+        type: CON_NATIVE_FLAGS.OBJECT,
+        readonly: true,
+        code: '',
+        init: 0,
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'xoffset', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'yoffset', init: 0 },
+        ]
+    },
+]
+
+export const nativeVars_PalData: CON_NATIVE_VAR[] = [
+    { name: 'noFloorPal', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true, code: 'nofloorpal', init: 0 },
 ]
 
 export const nativeVarsList = ['sprites', 'sectors', 'walls', 'projectiles',
-    'players', 'tiledata', 'tsprites', 'paldata', 'userdef'];
+    'players', 'tiledata', 'tsprites', 'paldata', 'userdef', 'input'];
 
 export type pointer = void;
 

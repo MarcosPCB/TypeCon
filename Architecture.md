@@ -158,7 +158,54 @@ The compiler maps TypeScript function calls to native CON commands using the `na
 - **Flags**: `CON_NATIVE_FLAGS` (e.g., `LABEL`, `VARIABLE`, `ACTOR`) tell the compiler how to resolve each argument before generating the CON instruction.
 
 ### Native Objects & Properties
-Native variables (like `sprite`, `wall`, `sector`) are defined in `nativeVarsList`. Member access on these (e.g., `sprite[i].xvel`) is transpiled using native CON accessors like `geta[ri].xvel` or `seta[ri].xvel`, with `ri` typically holding the index.
+
+TypeCON exposes ten engine struct arrays as global read/write objects.
+Each maps directly to a CON `get/set<op>[ri].<field>` pair, with `ri` holding the index
+set by the preceding `visitExpression` call on the array index.
+
+| TS global | CON op | Interface | Description |
+|---|---|---|---|
+| `sprites[]` | `a` | `CActor` | All sprites/actors in the map |
+| `sectors[]` | `sector` | `CSector` | All sectors (ceiling/floor as `ISectorBase`) |
+| `walls[]` | `wall` | `CWall` | All walls |
+| `players[]` | `p` | `CPlayer` | All player slots |
+| `projectiles[]` | `projectile` | `IProjectile` | Per-tile projectile definitions |
+| `tsprites[]` | `tspr` | `ITSprite` | Renderer draw list (current frame only) |
+| `userdef[]` | `userdef` | `IUserDef` | Global game settings |
+| `input[]` | `input` | `IInput` | Per-player raw input state |
+| `tiledata[]` | `tiledata` | `ITileData` | Per-tile art metadata (read-only) |
+| `paldata[]` | `paldata` | `IPalData` | Per-palette flags (read-only) |
+
+Member access like `projectiles[i].vel` compiles to `getprojectile[ri].vel ra`.
+Assignment like `projectiles[i].vel = 512` compiles to `setprojectile[ri].vel ra`.
+
+All ten names are excluded from symbol-table lookup in `visitMemberExpression.ts` (line 24)
+so they bypass the local-variable path and fall directly into the CON accessor switch.
+
+#### Sub-object groupings
+
+Many structs expose both flat properties and logical sub-objects that alias the same CON field.
+Sub-objects are a TypeScript-side convenience — they compile identically to the flat version:
+
+```
+projectiles[i].audio.fire   → getprojectile[ri].isound ra
+projectiles[i].iSound       → getprojectile[ri].isound ra   (same)
+
+input[i].motion.forward     → getinput[ri].fvel ra
+input[i].forwardVel         → getinput[ri].fvel ra           (same)
+
+sprites[i].hitType.ceilingZ → geta[ri].htceilingz ra
+sprites[i].hitInfo.wall     → geta[ri].htg_t 6 ra
+```
+
+Sub-objects are entries with `type: CON_NATIVE_FLAGS.OBJECT` in a `nativeVars_*` array and
+an `object: CON_NATIVE_VAR[]` child array in `src/sets/TCSet100/native.ts`.
+`visitMemberExpression` recurses into this child array on nested property access.
+
+#### Naming convention
+
+- **`C` prefix** = Class (can be `extend`ed by user code): `CActor`, `CEvent`, `CPlayer`, `CSector`, `CWall`
+- **`I` prefix** = Interface (struct shape only, used as a type annotation): `ISectorBase`, `IProjectile`, `ITSprite`, `IUserDef`, `ITileData`, `IPalData`, `IInput`
 
 ---
 
@@ -185,3 +232,53 @@ The `DN3D` module brings native Duke Nukem 3D constants and structures into the 
 - **ENames**: A massive enumeration mapping classic tile/sprite names (like `DUKECAR`, `PIGCOP`, `EGG`) to their internal engine IDs.
 - **Native Constants**: Defines standard game values like `shrunkDoneCount` or `thawTime` as `CON_CONSTANT` types, allowing the compiler to treat them as literals during transpilation.
 - **Native States**: It includes declarations for native engine states that can be called from TypeScript while being linked to the original game logic.
+
+---
+
+## 13. Fixed-Point Arithmetic
+
+TypeCON maps four fixed-point numeric types to plain TypeScript `number` intersections.
+The compiler detects the declared type at the call site and automatically emits
+`mulscale`/`divscale` instead of `mul`/`div` so precision is preserved.
+
+### Precision types
+
+| Type | Scale | 1.0 = | Typical use |
+|---|---|---|---|
+| `FP11` | Q20.11 | 2048 | BUILD engine BAM angles (0–2047 = full circle) |
+| `FP14` | Q17.14 | 16384 | Engine sin/cos return values (−1.0 … 1.0) |
+| `FP16` | Q15.16 | 65536 | General fixed-point math, zoom, coordinates |
+| `FP30` | Q1.30 | 1073741824 | Unit-range values requiring high precision |
+
+These are branded intersection types (`number & { __brand }`) — they are plain integers
+at runtime; the brand is erased and exists only for compile-time type checking.
+
+### Automatic code generation
+
+The compiler reads the declared variable type via `FP_ALIAS_BITS` in
+`visitVariableDeclaration.ts` and propagates `fpBits` through every sub-expression:
+
+| TypeScript | CON output |
+|---|---|
+| `let a: FP16 = b * c` (both FP16) | `mulscale rd rd rhs 16` |
+| `let a: FP16 = b / c` (both FP16) | `divscale rd rd rhs 16` |
+| `let a: FP16 = b * c` (b=FP16, c=int) | `mul rd rhs` (scale preserved) |
+| `let a: number = b * c` (both int) | `mul rd rhs` |
+
+Mixing precisions (e.g. `FP16 * FP11`) raises a compile-time error.
+
+### Conversion helpers
+
+```typescript
+intToFP16(x)        // shift left 16 bits
+fp16ToInt(x)        // shift right 16 bits
+fp16Raw(x)          // return raw integer (no shift — for APIs expecting 16.16 pattern)
+fp16ToString(x)     // "1.5000" format via _convertFP2String defstate
+fp16FromString(s)   // parse "1.5000" back to FP16
+// Same pattern: FP11, FP14, FP30
+```
+
+### Manual override
+
+Use `mulscale(a, b, shift)` and `divscale(a, b, shift)` for manual cross-precision math
+when the automatic path is insufficient.

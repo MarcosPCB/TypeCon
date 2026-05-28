@@ -1275,8 +1275,8 @@ declare global {
         public curActionFrame: CON_NATIVE<number>;
         /** The current move pointer */
         public curMove: CON_NATIVE<number>;
-        /** The current velocity */
-        public vel: CON_NATIVE<number>;
+        /** The current velocity {x: xvel, y: yvel, z: zvel} */
+        public vel: CON_NATIVE<vec3>;
         /** The current actor's angle */
         public ang: CON_NATIVE<number>;
         /** The current position */
@@ -1285,6 +1285,58 @@ declare global {
         public curAI: CON_NATIVE<number>;
         /** The current palette used by the actor */
         public pal: CON_NATIVE<number>;
+        /** Shade/brightness */
+        public shade: CON_NATIVE<number>;
+        /** Condition status flags */
+        public cstat: CON_NATIVE<number>;
+        /** Sprite status number */
+        public statnum: CON_NATIVE<number>;
+        /** Clipping distance */
+        public clipDist: CON_NATIVE<number>;
+        /** Owner sprite index */
+        public owner: CON_NATIVE<number>;
+        /** Repeat scaling {x: xrepeat, y: yrepeat} */
+        public repeat: CON_NATIVE<vec2>;
+        /** Texture offset {x: xoffset, y: yoffset} */
+        public offset: CON_NATIVE<vec2>;
+        /** Previous position {x: htbposx, y: htbposy, z: htbposz} */
+        public prevPos: CON_NATIVE<vec3>;
+        /** Ceiling collision Z */
+        public htCeilingZ: CON_NATIVE<number>;
+        /** Floor collision Z */
+        public htFloorZ: CON_NATIVE<number>;
+        /** Actor stay-put sector */
+        public htActorStayPut: CON_NATIVE<number>;
+        /** Actor angle (httype) */
+        public htAng: CON_NATIVE<number>;
+        /** Last X velocity */
+        public htLastVX: CON_NATIVE<number>;
+        /** Last Y velocity */
+        public htLastVY: CON_NATIVE<number>;
+        /** Movement flags */
+        public htMovFlag: CON_NATIVE<number>;
+        /** Temporary angle */
+        public htTempAng: CON_NATIVE<number>;
+        /** Time until actor sleeps */
+        public htTimeToSleep: CON_NATIVE<number>;
+        /** httype fields grouped: stayPutSector, lastAngle, lastVelX/Y, moveFlag, tempAngle, timeToSleep, ceilingZ, floorZ */
+        public hitType: CON_NATIVE<{ stayPutSector: number; lastAngle: number; lastVelX: number; lastVelY: number; moveFlag: number; tempAngle: number; timeToSleep: number; readonly ceilingZ: number; readonly floorZ: number; }>;
+        /** Projectile hit results: wall, sector, sprite (htg_t 6-8) */
+        public hitInfo: CON_NATIVE<{ wall: number; sector: number; sprite: number; }>;
+        /** Times the actor has looped through the current action (htg_t 0) */
+        public curCount: CON_NATIVE<number>;
+        /** Times the current action has executed (htg_t 2) */
+        public curActionCount: CON_NATIVE<number>;
+        /** Pitch rotation (spriteext) */
+        public pitch: CON_NATIVE<number>;
+        /** Roll rotation (spriteext) */
+        public roll: CON_NATIVE<number>;
+        /** Angular offset (spriteext) */
+        public angOff: CON_NATIVE<number>;
+        /** Alpha transparency (spriteext) */
+        public alpha: CON_NATIVE<number>;
+        /** Model display flags (spriteext) */
+        public mdFlags: CON_NATIVE<number>;
         /** The current sector object */
         public curSector: CON_NATIVE<CSector>;
         /** The current sector ID */
@@ -1761,17 +1813,44 @@ declare global {
         protected Prepend(): void | number;
     }
 
-    export interface CSectorBase {
+    /**
+     * Base class for `EVENT_PROCESSINPUT` handlers.
+     * Extend this class and implement `Append()` to run code during the engine's
+     * input-processing event. Inside `Append()`, access player input via `input.field`
+     * (singleton — resolves to `myconnectindex`) or `input[i].field` for a specific slot.
+     */
+    export class CInput {
+        protected Append(): void;
+        protected Prepend(): void;
+    }
+
+    /**
+     * Properties shared by a sector's ceiling and floor surfaces.
+     * Accessed via `sectors[i].ceiling.xxx` or `sectors[i].floor.xxx`.
+     */
+    export interface ISectorBase {
+        /** Z height of the surface in world units */
         z: CON_NATIVE<number>;
+        /** Tile number used to draw the surface */
         picnum: CON_NATIVE<number>;
+        /** Slope value — 0 = flat, positive/negative = angled */
         slope: CON_NATIVE<number>;
+        /** Shade level (−128 bright … 127 dark) */
         shade: CON_NATIVE<number>;
+        /** Palette lookup index */
         pal: CON_NATIVE<number>;
+        /** Texture panning on the X axis */
         xPan: CON_NATIVE<number>;
+        /** Texture panning on the Y axis */
         yPan: CON_NATIVE<number>;
-        zGoal: CON_NATIVE<number>;
+        /** Parallax/sky bunch index */
         bunch: CON_NATIVE<number>;
+        /** Surface status flags (bit-field) */
         stat: CON_NATIVE<number>;
+        /** Target Z height for ceiling/floor movement (interpolation target) */
+        zGoal: CON_NATIVE<number>;
+        /** Z velocity for moving ceiling/floor surfaces */
+        zVel: CON_NATIVE<number>;
     }
 
     export class CWall {
@@ -1807,8 +1886,8 @@ declare global {
         public wallPtr: CON_NATIVE<number>;
         public wallNum: CON_NATIVE<number>;
 
-        public ceiling: CON_NATIVE<CSectorBase>;
-        public floor: CON_NATIVE<CSectorBase>;
+        public ceiling: CON_NATIVE<ISectorBase>;
+        public floor: CON_NATIVE<ISectorBase>;
 
         public visibility: CON_NATIVE<number>;
         public fogPal: CON_NATIVE<number>;
@@ -2824,6 +2903,41 @@ declare global {
         public wackedbyactor: CON_NATIVE<number>;
         public walkingSndToggle: CON_NATIVE<number>;
 
+        /** Maximum player health */
+        public health: CON_NATIVE<number>;
+        /** Shield amount */
+        public shieldAmount: CON_NATIVE<number>;
+        /** Jetpack fuel amount */
+        public jetpackAmount: CON_NATIVE<number>;
+        /** Scuba gear amount */
+        public scubaAmount: CON_NATIVE<number>;
+        /** Steroids amount */
+        public steroidsAmount: CON_NATIVE<number>;
+        /** Weapon animation frame */
+        public kickbackPic: CON_NATIVE<number>;
+        /** Whether player is on a ladder */
+        public onLadder: CON_NATIVE<boolean>;
+        /** Whether player is jumping */
+        public jumping: CON_NATIVE<boolean>;
+        /** Whether player is crouching */
+        public crouching: CON_NATIVE<boolean>;
+        /** God mode flag */
+        public god: CON_NATIVE<boolean>;
+        /** Dead flag */
+        public dead: CON_NATIVE<boolean>;
+        /** Total kills */
+        public totalKills: CON_NATIVE<number>;
+        /** Player's sprite index */
+        public spriteIndex: CON_NATIVE<number>;
+        /** Inventory amounts (indexed array) */
+        public invAmount: CON_NATIVE<number[]>;
+        /** Grouped consumable resources: health, shield, jetpack, scuba, steroids, amounts[] */
+        public resources: CON_NATIVE<{ health: number; shield: number; jetpack: number; scuba: number; steroids: number; amounts: number[]; }>;
+        /** Grouped movement/state flags: onGround, onLadder, jumping, crouching, god, dead */
+        public status: CON_NATIVE<{ onGround: boolean; onLadder: boolean; jumping: boolean; crouching: boolean; god: boolean; dead: boolean; }>;
+        /** Level statistics: actorsKilled, secretRooms, totalKills */
+        public stats: CON_NATIVE<{ actorsKilled: number; secretRooms: number; totalKills: number; }>;
+
         constructor(
             picnum: constant,
             health: constant
@@ -2835,4 +2949,252 @@ declare global {
     }
 
     const players: CPlayer[];
+
+    /**
+     * Projectile type definition — one entry per projectile type (indexed by picnum).
+     * Read and write via `projectiles[picnum].xxx`.
+     */
+    export interface IProjectile {
+        /** Base travel speed of the projectile */
+        vel: CON_NATIVE<number>;
+        /** Speed multiplier applied each frame */
+        velMult: CON_NATIVE<number>;
+        /** Number of times the projectile can bounce before disappearing */
+        bounces: CON_NATIVE<number>;
+        /** Sound played when the projectile bounces */
+        bSound: CON_NATIVE<number>;
+        /** Sound played when the projectile is first fired */
+        iSound: CON_NATIVE<number>;
+        /** Sound played on impact / explosion */
+        sound: CON_NATIVE<number>;
+        /** Maximum travel distance before the projectile expires */
+        range: CON_NATIVE<number>;
+        /** Gravity drop applied per frame (0 = no gravity) */
+        drop: CON_NATIVE<number>;
+        /** Explosion hit radius for radial damage */
+        hitRadius: CON_NATIVE<number>;
+        /** Launch offset from the owner sprite */
+        offset: CON_NATIVE<number>;
+        /** Tile number of the trail sprite (0 = none) */
+        trail: CON_NATIVE<number>;
+        /** Tile number of the trail sprite type */
+        tnum: CON_NATIVE<number>;
+        /** Offset between successive trail sprites */
+        tOffset: CON_NATIVE<number>;
+        /** Trail sprite X repeat scale */
+        txRepeat: CON_NATIVE<number>;
+        /** Trail sprite Y repeat scale */
+        tyRepeat: CON_NATIVE<number>;
+        /** Projectile sprite X repeat scale */
+        sxRepeat: CON_NATIVE<number>;
+        /** Projectile sprite Y repeat scale */
+        syRepeat: CON_NATIVE<number>;
+        /** Shade applied to the projectile sprite */
+        shade: CON_NATIVE<number>;
+        /** Palette index applied to the projectile sprite */
+        pal: CON_NATIVE<number>;
+        /** Sprite status flags (cstat bit-field) */
+        cstat: CON_NATIVE<number>;
+        /** Collision clip distance */
+        clipDist: CON_NATIVE<number>;
+        /** Decal tile spawned on wall impact */
+        decal: CON_NATIVE<number>;
+        /** Extra damage value */
+        extra: CON_NATIVE<number>;
+        /** Random extra damage range added to `extra` */
+        extraRand: CON_NATIVE<number>;
+        /** User-defined data field */
+        userdata: CON_NATIVE<number>;
+        /** RGB flash color on impact (packed 0xRRGGBB) */
+        flashColor: CON_NATIVE<number>;
+        /** Tile spawned on impact */
+        spawns: CON_NATIVE<number>;
+        /** Tile number of another projectile this one behaves like */
+        worksLike: CON_NATIVE<number>;
+        /** X repeat scale of the projectile sprite */
+        xRepeat: CON_NATIVE<number>;
+        /** Y repeat scale of the projectile sprite */
+        yRepeat: CON_NATIVE<number>;
+        /** Trail sprite repeat grouped: `x` = txRepeat, `y` = tyRepeat */
+        trailRepeat: CON_NATIVE<vec2>;
+        /** Projectile sprite repeat grouped: `x` = sxRepeat, `y` = syRepeat */
+        spriteRepeat: CON_NATIVE<vec2>;
+        /** Flight physics grouped: vel, velMult, drop, range, bounces, offset, clipDist */
+        physics: CON_NATIVE<{ vel: number; velMult: number; drop: number; range: number; bounces: number; offset: number; clipDist: number; }>;
+        /** Sounds grouped: fire (iSound), bounce (bSound), impact (sound) */
+        audio: CON_NATIVE<{ fire: number; bounce: number; impact: number; }>;
+        /** Trail sprite config grouped: enabled, sprite, offset, txRepeat, tyRepeat, sxRepeat, syRepeat */
+        trailConfig: CON_NATIVE<{ enabled: number; sprite: number; offset: number; txRepeat: number; tyRepeat: number; sxRepeat: number; syRepeat: number; }>;
+        /** Visual appearance grouped: shade, pal, cstat, xRepeat, yRepeat */
+        appearance: CON_NATIVE<{ shade: number; pal: number; cstat: number; xRepeat: number; yRepeat: number; }>;
+        /** Impact effects grouped: hitRadius, decal, flashColor, extra, extraRand, spawns */
+        effect: CON_NATIVE<{ hitRadius: number; decal: number; flashColor: number; extra: number; extraRand: number; spawns: number; }>;
+    }
+
+    /**
+     * Temporary sprite — a draw-list entry built each frame by the renderer.
+     * Read-only during `DisplayRest` / `DisplayView` events via `tsprites[i].xxx`.
+     * Changes only affect rendering for the current frame; they are not persistent.
+     */
+    export interface ITSprite {
+        /** World position `{x, y, z}` */
+        pos: CON_NATIVE<vec3>;
+        /** Velocity `{x: xvel, y: yvel, z: zvel}` */
+        vel: CON_NATIVE<vec3>;
+        /** Sprite repeat scale `{x: xrepeat, y: yrepeat}` */
+        repeat: CON_NATIVE<vec2>;
+        /** Sprite texture offset `{x: xoffset, y: yoffset}` */
+        offset: CON_NATIVE<vec2>;
+        /** Sprite angle in BUILD angle units (0–2047) */
+        ang: CON_NATIVE<number>;
+        /** Tile number used to draw the sprite */
+        picnum: CON_NATIVE<number>;
+        /** Shade level (−128 bright … 127 dark) */
+        shade: CON_NATIVE<number>;
+        /** Palette lookup index */
+        pal: CON_NATIVE<number>;
+        /** Sprite status flags (cstat bit-field) */
+        cstat: CON_NATIVE<number>;
+        /** Sprite index of the owning actor */
+        owner: CON_NATIVE<number>;
+        /** Status list the sprite belongs to */
+        statnum: CON_NATIVE<number>;
+        /** Sector the sprite is currently in */
+        sectnum: CON_NATIVE<number>;
+        /** Extra / health value */
+        extra: CON_NATIVE<number>;
+        /** Collision clip distance */
+        clipDist: CON_NATIVE<number>;
+        /** Translucency blend mode (0 = solid) */
+        blend: CON_NATIVE<number>;
+        /** Lotag and hitag `{lotag, hitag}` */
+        tags: CON_NATIVE<tag>;
+    }
+
+    /**
+     * Global game settings and state accessible from CON scripts.
+     * Indexed by player ID — `userdef[0]` or `userdef[THISACTOR]` for the current player.
+     */
+    export interface IUserDef {
+        /** Screen brightness (0–15) */
+        brightness: CON_NATIVE<number>;
+        /** God mode active for this player (1 = on) */
+        god: CON_NATIVE<number>;
+        /** Current level number (0-based within the episode) */
+        levelNum: CON_NATIVE<number>;
+        /** Current episode / volume number (0-based) */
+        volumeNum: CON_NATIVE<number>;
+        /** Multiplayer mode (0 = deathmatch, 1 = co-op, etc.) */
+        multiMode: CON_NATIVE<number>;
+        /** Number of connected players (read-only) */
+        readonly numPlayers: CON_NATIVE<number>;
+        /** Episode number for the currently playing music track */
+        musicEpisode: CON_NATIVE<number>;
+        /** Level number for the currently playing music track */
+        musicLevel: CON_NATIVE<number>;
+        /** Difficulty skill level (0 = easiest) */
+        playerSkill: CON_NATIVE<number>;
+        /** Camera distance for the over-shoulder view */
+        cameraDist: CON_NATIVE<number>;
+        /** Camera clock — timing reference for the camera system */
+        cameraClock: CON_NATIVE<number>;
+        /** Auto-map scroll mode */
+        scrollMode: CON_NATIVE<number>;
+        /** HUD screen size setting (0 = full, higher = smaller) */
+        screenSize: CON_NATIVE<number>;
+        /** Co-op mode flag (1 = co-op active) */
+        coop: CON_NATIVE<number>;
+        /** General-purpose return value array used by events (CON `return` field, indices 0–8) */
+        returnData: CON_NATIVE<number[]>;
+        /** Level info grouped: `number`, `volume`, `skill`, `musicEpisode`, `musicLevel` */
+        level: CON_NATIVE<{ number: number; volume: number; skill: number; musicEpisode: number; musicLevel: number; }>;
+        /** Screen settings grouped: `brightness`, `size`, `scrollMode` */
+        screen: CON_NATIVE<{ brightness: number; size: number; scrollMode: number; }>;
+        /** Camera settings grouped: `dist`, `clock` */
+        camera: CON_NATIVE<{ dist: number; clock: number; }>;
+        /** Multiplayer settings grouped: `mode`, `numPlayers` (read-only), `coop` */
+        multi: CON_NATIVE<{ mode: number; readonly numPlayers: number; coop: number; }>;
+    }
+
+    /**
+     * Read-only tile/texture metadata for a given tile number.
+     * Access via `tiledata[picnum].xxx`.
+     * All properties are read-only — tile dimensions are engine-managed.
+     */
+    export interface ITileData {
+        /** Tile width in pixels */
+        readonly xsize: CON_NATIVE<number>;
+        /** Tile height in pixels */
+        readonly ysize: CON_NATIVE<number>;
+        /** Texture X anchor offset */
+        readonly xOffset: CON_NATIVE<number>;
+        /** Texture Y anchor offset */
+        readonly yOffset: CON_NATIVE<number>;
+        /** Number of animation frames */
+        readonly animFrames: CON_NATIVE<number>;
+        /** Animation playback speed */
+        readonly animSpeed: CON_NATIVE<number>;
+        /** Animation type (0 = none, 1 = oscillate, 2 = forward loop) */
+        readonly animType: CON_NATIVE<number>;
+        /** Engine game flags for this tile */
+        readonly gameFlags: CON_NATIVE<number>;
+        /** Per-tile alpha override (0 = opaque, 255 = transparent) */
+        readonly alpha: CON_NATIVE<number>;
+        /** Tile dimensions grouped: `x` = xsize, `y` = ysize */
+        readonly size: CON_NATIVE<vec2>;
+        /** Tile anchor offset grouped: `x` = xOffset, `y` = yOffset */
+        readonly offset: CON_NATIVE<vec2>;
+    }
+
+    /**
+     * Palette metadata for a given palette index.
+     * Access via `paldata[palIndex].xxx`. All properties are read-only.
+     */
+    export interface IPalData {
+        /** 1 if this palette is not applied to floor/ceiling surfaces */
+        readonly noFloorPal: CON_NATIVE<number>;
+    }
+
+    /**
+     * Raw player input captured for the current game tic.
+     * Indexed by player ID — `input[0]` or `input[THISACTOR]` for the current player.
+     * Values reflect button presses and analog movement from the input device.
+     */
+    export interface IInput {
+        /** Forward/backward movement velocity (raw CON name: `fvel`) */
+        fvel: CON_NATIVE<number>;
+        /** Left/right strafe velocity (raw CON name: `svel`) */
+        svel: CON_NATIVE<number>;
+        /** Turning angular velocity (raw CON name: `avel`) */
+        avel: CON_NATIVE<number>;
+        /** Vertical look (horizon) velocity (raw CON name: `horz`) */
+        horz: CON_NATIVE<number>;
+        /** Bitmask of currently pressed action buttons (raw CON name: `bits`) */
+        bits: CON_NATIVE<number>;
+        /** Extended button bitmask for additional bindings (raw CON name: `extbits`) */
+        extBits: CON_NATIVE<number>;
+        /** Forward/backward movement velocity — friendly alias for `fvel` */
+        forwardVel: CON_NATIVE<number>;
+        /** Left/right strafe velocity — friendly alias for `svel` */
+        strafeVel: CON_NATIVE<number>;
+        /** Turning angular velocity — friendly alias for `avel` */
+        turnVel: CON_NATIVE<number>;
+        /** Vertical look (horizon) velocity — friendly alias for `horz` */
+        lookUp: CON_NATIVE<number>;
+        /** Primary action button bitmask — friendly alias for `bits` */
+        buttons: CON_NATIVE<number>;
+        /** Extended button bitmask — friendly alias for `extBits` */
+        extButtons: CON_NATIVE<number>;
+        /** Movement axes grouped: `forward` (fvel), `strafe` (svel), `turn` (avel), `lookUp` (horz) */
+        motion: CON_NATIVE<{ forward: number; strafe: number; turn: number; lookUp: number; }>;
+    }
+
+    export const projectiles: IProjectile[];
+    export const tsprites: ITSprite[];
+    export const tiledata: ITileData[];
+    export const paldata: IPalData[];
+    export const userdef: IUserDef[] & IUserDef;
+    export const input: IInput[] & IInput;
+    /** Shorthand for `players[THISACTOR]` — the player connected to the current actor. Only meaningful inside a `CActor`. */
+    export const player: CPlayer;
 }

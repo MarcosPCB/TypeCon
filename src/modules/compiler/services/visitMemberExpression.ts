@@ -3,6 +3,7 @@ import { CompilerContext, SegmentIdentifier, SegmentIndex, SegmentProperty, Memb
 import { addDiagnostic } from "./addDiagnostic";
 import { CON_NATIVE_VAR, CON_NATIVE_FLAGS, CON_NATIVE_TYPE, nativeVars_Players } from "../../../sets/TCSet100/native";
 import { nativeVars_Sprites, nativeVars_Sectors, nativeVars_Walls } from "../../../sets/TCSet100/native";
+import { nativeVars_Projectiles, nativeVars_TSprites, nativeVars_UserDef, nativeVars_Input, nativeVars_TileData, nativeVars_PalData } from "../../../sets/TCSet100/native";
 import { unrollMemberExpression } from "./unrollMemberExpression";
 import { visitExpression } from "./visitExpression";
 import { FindLabel } from "./actorHelper";
@@ -20,7 +21,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
   // Handle the object
   const obj = segments[0] as SegmentIdentifier;
   let sym: SymbolDefinition | EnumDefinition | null = null;
-  if (obj.kind == 'identifier' && ['sprites', 'sectors', 'walls', 'players', 'EMoveFlags'].indexOf(obj.name) == -1) {
+  if (obj.kind == 'identifier' && ['sprites', 'sectors', 'walls', 'players', 'player', 'projectiles', 'tsprites', 'userdef', 'input', 'tiledata', 'paldata', 'EMoveFlags'].indexOf(obj.name) == -1) {
     const eSym = context.symbolTable.get(obj.name);
 
     code += context.options.symbolPrint ? `/*Symbol ${JSON.stringify(eSym, undefined, 2)}*/\n` : '';
@@ -206,6 +207,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
         return code;
 
       default: //sprites, sectors, walls or other enums
+        let singletonNoIndex = false;
         if (obj.kind != 'this') {
           //Check if it's a enum
           const e = context.symbolTable.get(obj.name);
@@ -219,9 +221,18 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
             return code;
           }
 
-          if (segments[1].kind != 'index' && (sym && !(sym as SymbolDefinition).native_pointer_index)) {
-            addDiagnostic(expr, context, "error", `Missing index for ${obj.name}: ${expr.getText()}`);
-            return "set ra 0\n";
+          if (segments[1].kind != 'index') {
+            if (obj.name === 'userdef' || obj.name === 'input' || obj.name === 'player') {
+              singletonNoIndex = true;
+              code += obj.name === 'userdef'
+                ? `set ri 0\n`
+                : obj.name === 'player'
+                  ? `set ri THISACTOR\n`
+                  : `set ri myconnectindex\n`;
+            } else if (sym && !(sym as SymbolDefinition).native_pointer_index) {
+              addDiagnostic(expr, context, "error", `Missing index for ${obj.name}: ${expr.getText()}`);
+              return "set ra 0\n";
+            }
           }
           if (segments[1].kind == 'index') {
             if (assignment)
@@ -251,7 +262,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
         sym = sym as SymbolDefinition;
 
-        let seg = segments[obj.kind == 'this' || (sym && sym.native_pointer_index) ? 1 : 2] as SegmentProperty;
+        let seg = segments[singletonNoIndex || obj.kind == 'this' || (sym && sym.native_pointer_index) ? 1 : 2] as SegmentProperty;
         let op = '';
 
         if (sym && sym.native_pointer) {
@@ -378,7 +389,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
           let nativeVar: CON_NATIVE_VAR[];
 
-          currSegIndex = obj.kind === 'this' ? 2 : 3;
+          currSegIndex = singletonNoIndex || obj.kind === 'this' ? 2 : 3;
 
           switch (obj.name) {
             case 'sprites':
@@ -397,8 +408,39 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
               break;
 
             case 'players':
+            case 'player':
               nativeVar = nativeVars_Players;
               op = 'p';
+              break;
+
+            case 'projectiles':
+              nativeVar = nativeVars_Projectiles;
+              op = 'projectile';
+              break;
+
+            case 'tsprites':
+              nativeVar = nativeVars_TSprites;
+              op = 'tspr';
+              break;
+
+            case 'userdef':
+              nativeVar = nativeVars_UserDef;
+              op = 'userdef';
+              break;
+
+            case 'input':
+              nativeVar = nativeVars_Input;
+              op = 'input';
+              break;
+
+            case 'tiledata':
+              nativeVar = nativeVars_TileData;
+              op = 'tiledata';
+              break;
+
+            case 'paldata':
+              nativeVar = nativeVars_PalData;
+              op = 'paldata';
               break;
 
             default:
@@ -533,7 +575,9 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
             code += `${assignment ? 'set' : 'get'}${op}[${obj.kind === 'this' ? 'THISACTOR' : 'ri'}].`;
             code += `${nVar.code} ${reg}\n`;
           } else if (nVar.type == CON_NATIVE_FLAGS.VARIABLE) {
-            if (nVar.var_type == CON_NATIVE_TYPE.native) {
+            if (nVar.override_code) {
+              code += (nVar.code as unknown as string[])[assignment ? 1 : 0];
+            } else if (nVar.var_type == CON_NATIVE_TYPE.native) {
               if (!overriden)
                 code += `${assignment ? 'set' : 'get'}${op}[${obj.kind === 'this' ? 'THISACTOR' : 'ri'}].`;
 

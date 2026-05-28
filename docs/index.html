@@ -142,6 +142,13 @@
             <li>
                 <a href="#interface-reference">Interface Reference</a>
                 <ul>
+                    <li><a href="#ISectorBase">ISectorBase</a></li>
+                    <li><a href="#ITSprite">ITSprite</a></li>
+                    <li><a href="#IInput">IInput</a></li>
+                    <li><a href="#IProjectile">IProjectile</a></li>
+                    <li><a href="#IUserDef">IUserDef</a></li>
+                    <li><a href="#ITileData">ITileData</a></li>
+                    <li><a href="#IPalData">IPalData</a></li>
                     <li><a href="#IFont">IFont</a></li>
                     <li><a href="#ISys">ISys</a></li>
                     <li><a href="#IWeapon00">IWeapon00 (Mighty Foot)</a></li>
@@ -170,6 +177,9 @@
                     <li><a href="#EOperateFlags">EOperateFlags</a></li>
                 </ul>
             </li>
+            <li><a href="#fixed-point">Fixed-Point System</a></li>
+            <li><a href="#math-module">Math Module</a></li>
+            <li><a href="#anim-module">AnimUtils Module</a></li>
             <li><a href="Architecture.md">Technical Architecture</a></li>
             <li><a href="../CHANGELOG.md">Changelog</a></li>
         </ul>
@@ -181,7 +191,7 @@
 
         <div id="introduction" class="section">
             <h2>Introduction</h2>
-            <p><strong>TypeCON Compiler ALPHA Version 0.7.0</strong></p>
+            <p><strong>TypeCON Compiler ALPHA Version 0.8.1</strong></p>
             <p>Welcome to the TypeScript to Build Engine CON Compiler! This tool leverages the power of TypeScript to
                 simplify the process of creating or modifying Duke Nukem 3D mods and developing games with the Build
                 Engine. By writing TypeScript code, you can produce CON files that adhere to the Build Engine's
@@ -865,6 +875,26 @@ class displayRest extends CEvent {
                     <td>tag</td>
                     <td>The Lotag and Hitag of the sprite</td>
                 </tr>
+                <tr>
+                    <td>curCount</td>
+                    <td>number</td>
+                    <td>Times the actor has looped through the current action (htg_t 0)</td>
+                </tr>
+                <tr>
+                    <td>curActionCount</td>
+                    <td>number</td>
+                    <td>Times the current action has executed (htg_t 2)</td>
+                </tr>
+                <tr>
+                    <td>hitType</td>
+                    <td>{ stayPutSector, lastAngle, lastVelX, lastVelY, moveFlag, tempAngle, timeToSleep, readonly ceilingZ, readonly floorZ }</td>
+                    <td>Grouped ht-type fields — aliases the individual flat htActorStayPut / htAng / htLastVX … properties</td>
+                </tr>
+                <tr>
+                    <td>hitInfo</td>
+                    <td>{ wall, sector, sprite }</td>
+                    <td>Last projectile hit result (htg_t 6–8): wall index, sector index, sprite index</td>
+                </tr>
             </table>
             <h4>Methods</h4>
             <table>
@@ -1445,13 +1475,13 @@ class displayRest extends CEvent {
             </tr>
             <tr>
                 <td>ceiling</td>
-                <td>CSectorBase</td>
-                <td></td>
+                <td><a href="#ISectorBase">ISectorBase</a></td>
+                <td>Ceiling face properties</td>
             </tr>
             <tr>
                 <td>floor</td>
-                <td>CSectorBase</td>
-                <td></td>
+                <td><a href="#ISectorBase">ISectorBase</a></td>
+                <td>Floor face properties</td>
             </tr>
             <tr>
                 <td>visibility</td>
@@ -1644,6 +1674,153 @@ class displayRest extends CEvent {
                     </td>
                     <td>void</td>
                 </tr>
+            </table>
+
+            <h3 id="ISectorBase">ISectorBase</h3>
+            <p>Shape of the ceiling and floor face objects on <code>CSector</code>. Accessed via <code>sectors[i].ceiling.*</code> and <code>sectors[i].floor.*</code>.</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>z</td><td>number</td><td>Z height of the surface in world units</td></tr>
+                <tr><td>picnum</td><td>number</td><td>Tile number used to draw the surface</td></tr>
+                <tr><td>slope</td><td>number</td><td>Slope value — 0 = flat, positive/negative = angled</td></tr>
+                <tr><td>shade</td><td>number</td><td>Shade level (−128 bright … 127 dark)</td></tr>
+                <tr><td>pal</td><td>number</td><td>Palette lookup index</td></tr>
+                <tr><td>xPan</td><td>number</td><td>Texture panning on the X axis</td></tr>
+                <tr><td>yPan</td><td>number</td><td>Texture panning on the Y axis</td></tr>
+                <tr><td>bunch</td><td>number</td><td>Parallax/sky bunch index</td></tr>
+                <tr><td>stat</td><td>number</td><td>Surface status flags (bit-field)</td></tr>
+                <tr><td>zGoal</td><td>number</td><td>Target Z height for ceiling/floor movement (interpolation target)</td></tr>
+                <tr><td>zVel</td><td>number</td><td>Z velocity for moving ceiling/floor surfaces</td></tr>
+            </table>
+
+            <h3 id="ITSprite">ITSprite</h3>
+            <p>Temporary sprite — a draw-list entry built each frame by the renderer. Valid only during <code>DisplayRest</code> / <code>DisplayView</code> events via <code>tsprites[i].*</code>. Changes only affect rendering for the current frame.</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>pos</td><td>vec3</td><td>World position {x, y, z}</td></tr>
+                <tr><td>vel</td><td>vec3</td><td>Velocity {x: xvel, y: yvel, z: zvel}</td></tr>
+                <tr><td>repeat</td><td>vec2</td><td>Sprite repeat scale {x: xrepeat, y: yrepeat}</td></tr>
+                <tr><td>offset</td><td>vec2</td><td>Sprite texture offset {x: xoffset, y: yoffset}</td></tr>
+                <tr><td>ang</td><td>number</td><td>Sprite angle in BUILD units (0–2047)</td></tr>
+                <tr><td>picnum</td><td>number</td><td>Tile number used to draw the sprite</td></tr>
+                <tr><td>shade</td><td>number</td><td>Shade level (−128 bright … 127 dark)</td></tr>
+                <tr><td>pal</td><td>number</td><td>Palette lookup index</td></tr>
+                <tr><td>cstat</td><td>number</td><td>Sprite status flags (cstat bit-field)</td></tr>
+                <tr><td>owner</td><td>number</td><td>Sprite index of the owning actor</td></tr>
+                <tr><td>statnum</td><td>number</td><td>Status list the sprite belongs to</td></tr>
+                <tr><td>sectnum</td><td>number</td><td>Sector the sprite is currently in</td></tr>
+                <tr><td>extra</td><td>number</td><td>Extra / health value</td></tr>
+                <tr><td>clipDist</td><td>number</td><td>Collision clip distance</td></tr>
+                <tr><td>blend</td><td>number</td><td>Translucency blend mode (0 = solid)</td></tr>
+                <tr><td>tags</td><td>tag</td><td>Lotag and hitag {lotag, hitag}</td></tr>
+            </table>
+
+            <h3 id="IInput">IInput</h3>
+            <p>Per-player raw input state. Accessed via <code>input[i].*</code>. Each field has both the original CON name and a friendly alias — they compile to identical CON code.</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>fvel / forwardVel</td><td>number</td><td>Forward/backward movement velocity</td></tr>
+                <tr><td>svel / strafeVel</td><td>number</td><td>Left/right strafe velocity</td></tr>
+                <tr><td>avel / turnVel</td><td>number</td><td>Turning angular velocity</td></tr>
+                <tr><td>horz / lookUp</td><td>number</td><td>Vertical look (horizon) velocity</td></tr>
+                <tr><td>bits / buttons</td><td>number</td><td>Bitmask of currently pressed action buttons</td></tr>
+                <tr><td>extBits / extButtons</td><td>number</td><td>Extended button bitmask for additional bindings</td></tr>
+                <tr><td>motion</td><td>{ forward, strafe, turn, lookUp }</td><td>Grouped movement axes — aliases fvel / svel / avel / horz</td></tr>
+            </table>
+
+            <h3 id="IProjectile">IProjectile</h3>
+            <p>Per-tile projectile definition. Accessed via <code>projectiles[i].*</code>. All flat properties remain individually accessible; sub-objects are grouping aliases that compile to the same CON fields.</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>vel</td><td>number</td><td>Base travel speed</td></tr>
+                <tr><td>velMult</td><td>number</td><td>Speed multiplier applied each frame</td></tr>
+                <tr><td>bounces</td><td>number</td><td>Number of bounces before the projectile disappears</td></tr>
+                <tr><td>bSound</td><td>number</td><td>Sound played on bounce</td></tr>
+                <tr><td>iSound</td><td>number</td><td>Sound played when fired</td></tr>
+                <tr><td>sound</td><td>number</td><td>Sound played on impact</td></tr>
+                <tr><td>range</td><td>number</td><td>Maximum travel distance before expiry</td></tr>
+                <tr><td>drop</td><td>number</td><td>Gravity drop per frame (0 = no gravity)</td></tr>
+                <tr><td>hitRadius</td><td>number</td><td>Explosion hit radius for radial damage</td></tr>
+                <tr><td>offset</td><td>number</td><td>Launch offset from the owner sprite</td></tr>
+                <tr><td>trail</td><td>number</td><td>Tile number of the trail sprite (0 = none)</td></tr>
+                <tr><td>tnum</td><td>number</td><td>Trail sprite type tile number</td></tr>
+                <tr><td>tOffset</td><td>number</td><td>Offset between successive trail sprites</td></tr>
+                <tr><td>txRepeat / tyRepeat</td><td>number</td><td>Trail sprite X/Y repeat scale</td></tr>
+                <tr><td>sxRepeat / syRepeat</td><td>number</td><td>Projectile sprite X/Y repeat scale</td></tr>
+                <tr><td>shade</td><td>number</td><td>Shade applied to the projectile sprite</td></tr>
+                <tr><td>pal</td><td>number</td><td>Palette index applied to the projectile sprite</td></tr>
+                <tr><td>cstat</td><td>number</td><td>Sprite status flags (cstat bit-field)</td></tr>
+                <tr><td>clipDist</td><td>number</td><td>Collision clip distance</td></tr>
+                <tr><td>decal</td><td>number</td><td>Decal tile spawned on wall impact</td></tr>
+                <tr><td>extra / extraRand</td><td>number</td><td>Extra damage value and random range added to it</td></tr>
+                <tr><td>userdata</td><td>number</td><td>User-defined data field</td></tr>
+                <tr><td>flashColor</td><td>number</td><td>RGB flash color on impact (packed 0xRRGGBB)</td></tr>
+                <tr><td>spawns</td><td>number</td><td>Tile spawned on impact</td></tr>
+                <tr><td>worksLike</td><td>number</td><td>Tile number of another projectile this one behaves like</td></tr>
+                <tr><td>xRepeat / yRepeat</td><td>number</td><td>Projectile sprite X/Y repeat scale (aliases sxRepeat/syRepeat)</td></tr>
+                <tr><td>trailRepeat</td><td>vec2</td><td>Trail repeat grouped: x = txRepeat, y = tyRepeat</td></tr>
+                <tr><td>spriteRepeat</td><td>vec2</td><td>Sprite repeat grouped: x = sxRepeat, y = syRepeat</td></tr>
+                <tr><td>physics</td><td>{ vel, velMult, drop, range, bounces, offset, clipDist }</td><td>Flight physics sub-object</td></tr>
+                <tr><td>audio</td><td>{ fire, bounce, impact }</td><td>Sounds sub-object — fire=iSound, bounce=bSound, impact=sound</td></tr>
+                <tr><td>trailConfig</td><td>{ enabled, sprite, offset, txRepeat, tyRepeat, sxRepeat, syRepeat }</td><td>Trail sprite config sub-object</td></tr>
+                <tr><td>appearance</td><td>{ shade, pal, cstat, xRepeat, yRepeat }</td><td>Visual appearance sub-object</td></tr>
+                <tr><td>effect</td><td>{ hitRadius, decal, flashColor, extra, extraRand, spawns }</td><td>Impact effects sub-object</td></tr>
+            </table>
+
+            <h3 id="IUserDef">IUserDef</h3>
+            <p>Global game settings block. Accessed via <code>userdef[0].*</code> (always index 0). Sub-objects group related settings; all flat properties remain individually accessible.</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>brightness</td><td>number</td><td>Screen brightness (0–15)</td></tr>
+                <tr><td>god</td><td>number</td><td>God mode active (1 = on)</td></tr>
+                <tr><td>levelNum</td><td>number</td><td>Current level number (0-based within the episode)</td></tr>
+                <tr><td>volumeNum</td><td>number</td><td>Current episode/volume number (0-based)</td></tr>
+                <tr><td>multiMode</td><td>number</td><td>Multiplayer mode (0 = deathmatch, 1 = co-op, etc.)</td></tr>
+                <tr><td>numPlayers</td><td>number (readonly)</td><td>Number of connected players</td></tr>
+                <tr><td>musicEpisode</td><td>number</td><td>Episode number for the currently playing music track</td></tr>
+                <tr><td>musicLevel</td><td>number</td><td>Level number for the currently playing music track</td></tr>
+                <tr><td>playerSkill</td><td>number</td><td>Difficulty skill level (0 = easiest)</td></tr>
+                <tr><td>cameraDist</td><td>number</td><td>Camera distance for the over-shoulder view</td></tr>
+                <tr><td>cameraClock</td><td>number</td><td>Camera clock — timing reference for the camera system</td></tr>
+                <tr><td>scrollMode</td><td>number</td><td>Auto-map scroll mode</td></tr>
+                <tr><td>screenSize</td><td>number</td><td>HUD screen size setting (0 = full, higher = smaller)</td></tr>
+                <tr><td>coop</td><td>number</td><td>Co-op mode flag (1 = co-op active)</td></tr>
+                <tr><td>returnData</td><td>number[]</td><td>General-purpose return value array used by events (CON <code>return</code> field, indices 0–8)</td></tr>
+                <tr><td>level</td><td>{ number, volume, skill, musicEpisode, musicLevel }</td><td>Level info sub-object</td></tr>
+                <tr><td>screen</td><td>{ brightness, size, scrollMode }</td><td>Screen settings sub-object</td></tr>
+                <tr><td>camera</td><td>{ dist, clock }</td><td>Camera settings sub-object</td></tr>
+                <tr><td>multi</td><td>{ mode, numPlayers (readonly), coop }</td><td>Multiplayer settings sub-object</td></tr>
+            </table>
+
+            <h3 id="ITileData">ITileData</h3>
+            <p>Per-tile art metadata. Accessed via <code>tiledata[i].*</code>. All properties are read-only.</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>xsize</td><td>number (readonly)</td><td>Tile width in pixels</td></tr>
+                <tr><td>ysize</td><td>number (readonly)</td><td>Tile height in pixels</td></tr>
+                <tr><td>xOffset</td><td>number (readonly)</td><td>Texture X anchor offset</td></tr>
+                <tr><td>yOffset</td><td>number (readonly)</td><td>Texture Y anchor offset</td></tr>
+                <tr><td>animFrames</td><td>number (readonly)</td><td>Number of animation frames</td></tr>
+                <tr><td>animSpeed</td><td>number (readonly)</td><td>Animation playback speed</td></tr>
+                <tr><td>animType</td><td>number (readonly)</td><td>Animation type (0 = none, 1 = oscillate, 2 = forward loop)</td></tr>
+                <tr><td>gameFlags</td><td>number (readonly)</td><td>Engine game flags for this tile</td></tr>
+                <tr><td>alpha</td><td>number (readonly)</td><td>Per-tile alpha override (0 = opaque, 255 = transparent)</td></tr>
+                <tr><td>size</td><td>vec2 (readonly)</td><td>Tile dimensions grouped: x = xsize, y = ysize</td></tr>
+                <tr><td>offset</td><td>vec2 (readonly)</td><td>Tile anchor offset grouped: x = xOffset, y = yOffset</td></tr>
+            </table>
+
+            <h3 id="IPalData">IPalData</h3>
+            <p>Per-palette flags. Accessed via <code>paldata[i].*</code>. All properties are read-only.</p>
+            <h4>Properties</h4>
+            <table>
+                <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+                <tr><td>noFloorPal</td><td>number (readonly)</td><td>1 if this palette is not applied to floor/ceiling surfaces</td></tr>
             </table>
 
             <h3 id="IWeapon00">IWeapon00</h3>
@@ -3644,6 +3821,128 @@ class displayRest extends CEvent {
             </table>
 
         </div>
+
+        <div id="fixed-point" class="section">
+            <h2>Fixed-Point System</h2>
+            <p>TypeCON provides four fixed-point numeric types that map to plain 32-bit integers at runtime. The compiler detects the declared type at the call site and automatically emits <code>mulscale</code> / <code>divscale</code> instead of <code>mul</code> / <code>div</code>, preserving precision without manual intervention.</p>
+
+            <h3>Precision Types</h3>
+            <table>
+                <tr><th>Type</th><th>Format</th><th>1.0 =</th><th>Typical use</th></tr>
+                <tr><td>FP11</td><td>Q20.11</td><td>2048</td><td>BUILD engine BAM angles (0–2047 = full circle)</td></tr>
+                <tr><td>FP14</td><td>Q17.14</td><td>16384</td><td>Engine sin/cos return values (−1.0 … 1.0)</td></tr>
+                <tr><td>FP16</td><td>Q15.16</td><td>65536</td><td>General fixed-point math, zoom, screen coordinates</td></tr>
+                <tr><td>FP30</td><td>Q1.30</td><td>1073741824</td><td>Unit-range values requiring high precision</td></tr>
+            </table>
+
+            <h3>Automatic Code Generation</h3>
+            <p>The compiler reads the declared variable type and propagates the FP bit-width through every sub-expression:</p>
+            <table>
+                <tr><th>TypeScript</th><th>CON output</th></tr>
+                <tr><td><code>let a: FP16 = b * c</code> (both FP16)</td><td><code>mulscale rd rd rhs 16</code></td></tr>
+                <tr><td><code>let a: FP16 = b / c</code> (both FP16)</td><td><code>divscale rd rd rhs 16</code></td></tr>
+                <tr><td><code>let a: FP16 = b * c</code> (b=FP16, c=int)</td><td><code>mul rd rhs</code> (scale preserved)</td></tr>
+                <tr><td><code>let a: number = b * c</code> (both int)</td><td><code>mul rd rhs</code></td></tr>
+            </table>
+            <p>Mixing two different FP precisions in the same expression (e.g. <code>FP16 * FP11</code>) raises a compile-time error. Use explicit conversion helpers to cross between precisions.</p>
+
+            <h3>Conversion Helpers</h3>
+            <table>
+                <tr><th>Function</th><th>Description</th></tr>
+                <tr><td>intToFP11/14/16/30(x)</td><td>Convert integer to FP by shifting left N bits</td></tr>
+                <tr><td>fp11/14/16/30ToInt(x)</td><td>Convert FP to integer by shifting right N bits (truncates)</td></tr>
+                <tr><td>fp11/14/16/30Raw(x)</td><td>Return the raw integer without any shift — for APIs that expect the fixed-point bit pattern directly</td></tr>
+                <tr><td>fp11/14/16/30ToString(x)</td><td>Convert to decimal string (e.g. "1.5000")</td></tr>
+                <tr><td>fp16FromString(s)</td><td>Parse a decimal string like "1.5000" back to FP16</td></tr>
+                <tr><td>mulscale(a, b, shift)</td><td>Manual fixed-point multiply for cross-precision use</td></tr>
+                <tr><td>divscale(a, b, shift)</td><td>Manual fixed-point divide for cross-precision use</td></tr>
+            </table>
+        </div>
+
+        <div id="math-module" class="section">
+            <h2>Math Module</h2>
+            <p>The built-in <code>Math</code> object provides numeric utilities that compile to native CON instructions. All methods are FP-aware: the compiler detects the fixed-point precision of each argument and emits the appropriate instruction automatically.</p>
+
+            <h3>Methods</h3>
+            <table>
+                <tr><th>Method</th><th>Returns</th><th>Description</th></tr>
+                <tr><td>Math.floor(x)</td><td>number</td><td>Largest integer ≤ x. FP precision is preserved.</td></tr>
+                <tr><td>Math.ceil(x)</td><td>number</td><td>Smallest integer ≥ x.</td></tr>
+                <tr><td>Math.round(x)</td><td>number</td><td>Round to nearest integer (half rounds up).</td></tr>
+                <tr><td>Math.trunc(x)</td><td>number</td><td>Truncate toward zero.</td></tr>
+                <tr><td>Math.abs(x)</td><td>number</td><td>Absolute value. Preserves FP precision.</td></tr>
+                <tr><td>Math.sqrt(x)</td><td>number</td><td>Integer square root via CON <code>sqrt</code>.</td></tr>
+                <tr><td>Math.min(a, b)</td><td>number</td><td>Smaller of two values. Preserves FP precision.</td></tr>
+                <tr><td>Math.max(a, b)</td><td>number</td><td>Larger of two values. Preserves FP precision.</td></tr>
+                <tr><td>Math.clamp(x, min, max)</td><td>number</td><td>Clamp x to [min, max]. Preserves FP precision.</td></tr>
+                <tr><td>Math.sin(angle: FP11)</td><td>FP14</td><td>Sine via engine lookup table. Accepts FP11 BAM angle or plain BAM integer (0–2047). Returns FP14 (1.0 = 16384).</td></tr>
+                <tr><td>Math.cos(angle: FP11)</td><td>FP14</td><td>Cosine via engine lookup table.</td></tr>
+                <tr><td>Math.tan(angle: FP11)</td><td>FP14</td><td>Tangent: sin/cos via precompile defstate. Undefined near ±90°/270°.</td></tr>
+                <tr><td>Math.atan2(dy, dx)</td><td>number</td><td>Arc-tangent. Returns BAM angle (0–2047). Wraps CON <code>getangle</code>.</td></tr>
+                <tr><td>Math.pow(base, exp)</td><td>number</td><td>Exponentiation via repeated multiplication. FP16 base uses mulscale per iteration.</td></tr>
+                <tr><td>Math.log(x)</td><td>FP16</td><td>Natural logarithm approximation: floor(log₂(x)) × ln(2).</td></tr>
+                <tr><td>Math.log2(x)</td><td>FP16</td><td>Base-2 logarithm approximation. Each integer bit = 65536 in result.</td></tr>
+                <tr><td>Math.log10(x)</td><td>FP16</td><td>Base-10 logarithm approximation.</td></tr>
+                <tr><td>Math.exp(x: FP16)</td><td>FP16</td><td>Natural exponential via 5-term Taylor series. Accurate for small |x|.</td></tr>
+                <tr><td>Math.divr(a, b)</td><td>number</td><td>Rounded integer division: round(a / b).</td></tr>
+                <tr><td>Math.random()</td><td>number</td><td>Pseudo-random integer in [0, 32767]. Wraps CON <code>displayrand</code>.</td></tr>
+                <tr><td>Math.randomInt(max)</td><td>number</td><td>Pseudo-random integer in [0, max-1].</td></tr>
+                <tr><td>Math.toBAM(degrees)</td><td>number</td><td>Convert degrees to BAM angle units (0–2047 = full circle).</td></tr>
+                <tr><td>Math.toDeg(bam)</td><td>number</td><td>Convert BAM angle to integer degrees.</td></tr>
+                <tr><td>Math.toRad(degrees)</td><td>FP16</td><td>Integer degrees to FP16 radians.</td></tr>
+                <tr><td>Math.fromRad(radians: FP16)</td><td>number</td><td>FP16 radians to integer degrees.</td></tr>
+            </table>
+
+            <h3>Full-Precision Rendering</h3>
+            <p>Two rendering methods accept FP types directly to avoid integer rounding artifacts:</p>
+            <table>
+                <tr><th>Method</th><th>Description</th></tr>
+                <tr><td>RotateSpriteF(x: FP16, y: FP16, scale: FP16, ang: FP11, picnum, shade, pal, orientation, x0, y0, x1, y1)</td><td>Full-precision <code>rotatesprite</code>. x/y are normalized screen coords [0.0–1.0]. Automatically sets <code>ROTATESPRITE_FULL16</code>.</td></tr>
+                <tr><td>ScreenTextF(picnum, x: FP16, y: FP16, scale: FP16, block_ang: FP11, char_ang: FP11, quote, shade, pal, orientation, alpha, xspace, yline, xbetween, ybetween, flags, x0, y0, x1, y1)</td><td>Full-precision <code>screentext</code>. Same normalized coordinate convention. Automatically sets <code>ROTATESPRITE_FULL16</code>.</td></tr>
+            </table>
+        </div>
+
+        <div id="anim-module" class="section">
+            <h2>AnimUtils Module</h2>
+            <p>Import with <code>import 'include/TCSet100/AnimUtils'</code>. All functions operate on <code>FP16</code> values (1.0 = 65536) unless otherwise noted. They are pre-compiled to CON <code>defstate</code> blocks.</p>
+
+            <h3>Core</h3>
+            <table>
+                <tr><th>Function</th><th>Returns</th><th>Description</th></tr>
+                <tr><td>AnimUtils.lerp(a: FP16, b: FP16, t: FP16)</td><td>FP16</td><td>Linear interpolation: a + (b − a) × t. t = 0 → a, t = 1.0 → b.</td></tr>
+                <tr><td>AnimUtils.approach(current, target, step)</td><td>number</td><td>Move current toward target by up to step per call (integer). Does not overshoot.</td></tr>
+                <tr><td>AnimUtils.pingPong(t, period)</td><td>number</td><td>Bounce an integer value back and forth in [0, period].</td></tr>
+                <tr><td>AnimUtils.oscillateFP(t, period)</td><td>FP16</td><td>Smooth oscillation in [0.0, 1.0] over the given period.</td></tr>
+                <tr><td>AnimUtils.pulse(t, period, duty)</td><td>number</td><td>Square-wave pulse: 1 for the first <em>duty</em> ticks of each period, 0 otherwise.</td></tr>
+            </table>
+
+            <h3>Easing Functions</h3>
+            <p>All easing functions accept t ∈ [0.0, 1.0] and return a value in [0.0, 1.0].</p>
+            <table>
+                <tr><th>Function</th><th>Description</th></tr>
+                <tr><td>AnimUtils.smoothstep(t)</td><td>Cubic smooth-step: 3t² − 2t³</td></tr>
+                <tr><td>AnimUtils.smootherstep(t)</td><td>Quintic smoother-step: 6t⁵ − 15t⁴ + 10t³</td></tr>
+                <tr><td>AnimUtils.easeInQuad(t)</td><td>Quadratic ease-in: t²</td></tr>
+                <tr><td>AnimUtils.easeOutQuad(t)</td><td>Quadratic ease-out: 1 − (1−t)²</td></tr>
+                <tr><td>AnimUtils.easeInOutQuad(t)</td><td>Quadratic ease-in/out</td></tr>
+                <tr><td>AnimUtils.easeInCubic(t)</td><td>Cubic ease-in: t³</td></tr>
+                <tr><td>AnimUtils.easeOutCubic(t)</td><td>Cubic ease-out</td></tr>
+                <tr><td>AnimUtils.easeInQuint(t)</td><td>Quintic ease-in: t⁵</td></tr>
+                <tr><td>AnimUtils.easeOutQuint(t)</td><td>Quintic ease-out</td></tr>
+                <tr><td>AnimUtils.easeInSine(t)</td><td>Sinusoidal ease-in using BAM-angle lookup</td></tr>
+                <tr><td>AnimUtils.easeOutSine(t)</td><td>Sinusoidal ease-out</td></tr>
+                <tr><td>AnimUtils.easeInOutSine(t)</td><td>Sinusoidal ease-in/out</td></tr>
+                <tr><td>AnimUtils.easeInPow(t, power)</td><td>Power ease-in: t^power</td></tr>
+                <tr><td>AnimUtils.easeOutPow(t, power)</td><td>Power ease-out: 1 − (1−t)^power</td></tr>
+            </table>
+
+            <h3>Curves</h3>
+            <table>
+                <tr><th>Function</th><th>Returns</th><th>Description</th></tr>
+                <tr><td>AnimUtils.bezierQuad(a: FP16, b: FP16, c: FP16, t: FP16)</td><td>FP16</td><td>Quadratic Bézier interpolation through control points a, b, c at parameter t.</td></tr>
+            </table>
+        </div>
+
     </div>
 </body>
 

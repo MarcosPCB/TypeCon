@@ -21,7 +21,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
   let code = context.options.lineDetail ? `// class ${className}\n` : '';
 
   const base = cd.getExtends()?.getExpression().getText() || "";
-  const type = base;
+  let type = base;
   // const isEvent = base === "CEvent"; // demonstration if needed
 
   // We'll create a local context for parsing this class
@@ -45,6 +45,11 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
     mainBFunc: false,
     curFunc: undefined,
   };
+
+  if (type === 'CInput') {
+    type = 'CEvent';
+    localCtx.currentEventName = 'PROCESSINPUT';
+  }
 
   let cls: SymbolDefinition;
 
