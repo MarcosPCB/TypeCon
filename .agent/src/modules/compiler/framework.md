@@ -5,11 +5,27 @@ The file `src/modules/compiler/framework.ts` defines the CON initialization stri
 ## Virtual Machine Architecture
 
 ### Registers
-- `r0` to `r23`: General purpose registers (mainly for function parameters).
-- `ra`: Accumulator (holds expression results).
-- `rb`: Base / Return value register.
-- `rsp` / `rbp`: Stack Pointer and Base Pointer.
-- `rssp` / `rsbp`: String Stack pointers (for quote memory).
+
+All registers are declared as `gamevar` with flag `132096` (defined as `REG_FLAGS`).
+
+| Register | Name | Purpose |
+|---|---|---|
+| `r0`–`r23` | General Purpose | Primarily used for passing function parameters |
+| `ra` | Accumulator | Holds the result of the last expression/operation |
+| `rb` | Base / Return | Used for function return values and base addresses |
+| `rc` | Counter | Used in loops and internal iteration |
+| `rd` | Data | Temporary data holder for binary expression operands |
+| `ri` | Index | **Used for all array/flat[] indexing** — set before every native struct access and property read/write |
+| `rsi` | Source Index | Native struct dispatch and sub-function indexing |
+| `rsw` / `rswc` / `rswe` | Switch Control | Condition holder, counter, and clause enabler for the two-pass switch trick |
+| `rf` | Flags | State flags (e.g. bit 0 = heap address return mode) |
+| `rbp` | Base Pointer | Points to the start of the current function's stack frame |
+| `rsp` | Stack Pointer | Points to the top of the stack in the `flat` array |
+| `rbbp` | Stored Base Ptr | Saved base pointer used during string frame management |
+| `rsbp` | String Base | Base pointer for the quote string stack |
+| `rssp` | String Stack | Current top pointer for the quote string stack |
+
+`ri` is the most frequently touched register — every `visitMemberExpression` call either reads it (for `this` context) or writes it (`set ri <index>`) before emitting a `get/set<op>[ri].<field>` instruction.
 
 ### Flat Memory
 - The entire memory (stack, globals, heap) is simulated inside a single massive array named `flat`.

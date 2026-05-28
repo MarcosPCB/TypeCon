@@ -6,7 +6,7 @@ The `src/modules/linker` module takes intermediate `.tco` objects (compiled modu
 - **Merging**: Combines multiple `.tco` JSON files into a single CON script.
 - **Topological Sorting**: Ensures modules are linked in the correct dependency order.
 - **Symbol Resolution**: Merges local symbol tables into one global table. Detects and throws errors on naming collisions.
-- **Placeholder Patching**: Replaces `__PLACEHOLDER_ADDR__` tokens in the intermediate CON code with the absolute flat memory indices calculated during the linking phase.
+- **Placeholder Patching**: Replaces `_G_ADDR_<varName>` tokens embedded in the intermediate CON code with the absolute `flat[]` indices calculated during the linking phase. (See `Linker.ts`: `code.replace(/_G_ADDR_([A-Za-z0-9_]+)/g, resolveAddr)`)
 - **Framework Injection**: Prepends the CON Virtual Machine (from `framework.ts`) at the top of the final output.
 
 ## Agent Guidelines

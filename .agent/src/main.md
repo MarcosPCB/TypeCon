@@ -15,7 +15,11 @@ This module (`src/main.ts`) serves as the Command-Line Interface (CLI) and prima
 - `-of`: Output folder path.
 - `-c`: Compile to intermediate `.tco` object.
 - `-L`: Link `.tco` objects to final `.con`.
-- `-di`: Include `GAME.CON` as a default inclusion.
+- `-di` / `--default-inclusion`: Include `GAME.CON` as a default inclusion.
+- `-C` / `--clean`: Empty build folders (`obj/`, `asm/`, `compiled/`) and exit.
+- `-hl` / `--headerless`: Omit the VM init header from the output (used when the header is provided separately).
+- `-np` / `--no-precompiled`: Disable automatic linking of pre-compiled system modules (`_mathFuncs`, `_stringFuncs`, etc.).
+- `-sep` / `--separate`: (Used with `-L`) Output each linked module as its own `.con` file instead of one merged file.
 
 ## Agent Guidelines
 - When building a mod, the expected workflow is two-step: `tcc -c -i src/Actor.ts` followed by `tcc -L -di -o final.con`.
