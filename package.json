@@ -50,7 +50,8 @@
     "templates/*.*",
     "templates/**/*.*",
     "README.md",
-    "postBuild.js"
+    "postBuild.js",
+    "typecon.example.json"
   ],
   "dependencies": {
     "fs-extra": "^11.3.0",
