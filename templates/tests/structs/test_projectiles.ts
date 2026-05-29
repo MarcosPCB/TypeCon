@@ -1,4 +1,4 @@
-import '../include/TCSet100/types';
+import '../../../include/TCSet100/types';
 
 class TestProjectiles extends CEvent {
     constructor() { super('NewGame'); }

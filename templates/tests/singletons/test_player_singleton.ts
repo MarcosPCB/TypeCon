@@ -1,4 +1,4 @@
-import '../include/TCSet100/types';
+import '../../../include/TCSet100/types';
 
 class TestActor extends CActor {
     constructor() { super(0, false, 0); }

@@ -1,5 +1,5 @@
-import '../include/TCSet100/types';
-import { DN3D } from '../include/TCSet100/DN3D/game.ts';
+import '../../../include/TCSet100/types';
+import { DN3D } from '../../../include/TCSet100/DN3D/game.ts';
 
 // ─── FP16 helper: linearly interpolate two screen positions ───────────────────
 function lerpFP16(from: FP16, to: FP16, t: FP16): FP16 {

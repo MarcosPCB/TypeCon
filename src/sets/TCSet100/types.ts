@@ -1345,6 +1345,24 @@ declare global {
         public flags: CON_NATIVE<number>;
         /** The Lotag and Hitag of the sprite */
         public tags: CON_NATIVE<tag>;
+        public blend: CON_NATIVE<number>;
+        public readonly uloTag: CON_NATIVE<number>;
+        public readonly uhiTag: CON_NATIVE<number>;
+        public htCgg: CON_NATIVE<number>;
+        public htOwner: CON_NATIVE<number>;
+        public readonly htUMovFlag: CON_NATIVE<number>;
+        public htFloorZOffset: CON_NATIVE<number>;
+        public htWaterZOffset: CON_NATIVE<number>;
+        public htDispPicnum: CON_NATIVE<number>;
+        public readonly isValid: CON_NATIVE<number>;
+        public xPanning: CON_NATIVE<number>;
+        public yPanning: CON_NATIVE<number>;
+        public mdXOff: CON_NATIVE<number>;
+        public mdYOff: CON_NATIVE<number>;
+        public mdZOff: CON_NATIVE<number>;
+        public mdPosXOff: CON_NATIVE<number>;
+        public mdPosYOff: CON_NATIVE<number>;
+        public mdPosZOff: CON_NATIVE<number>;
 
         protected index: number;
 
@@ -1675,13 +1693,80 @@ declare global {
     /** Other sprites in the game world */
     export const sprites: CActor[];
 
-    export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound' | 'NewGame' | 'InitComplete';
-    export type TEventDE = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd';
-    export type TEventI = 'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' | 'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10' | 'DoFire' | 'Fire' | 'PressedFire';
-    export type TEvents = TEventPAE | TEventDE | TEventI;
+    export type TEventPAE =
+        'Game' | 'EGS' | 'Spawn' | 'KillIt' |
+        'ResetPlayer' | 'LoadActor' | 'IncurDamage' |
+        'FakeDoMoveThings' | 'World' | 'PreWorld' |
+        'MoveSector' | 'MoveEffectors' |
+        'RecogSound' | 'Sound' |
+        'CheckTouchDamage' | 'CheckFloorDamage' | 'DamageHPlane' |
+        'DamageSprite' | 'PostDamageSprite' | 'DamageWall' | 'DamageFloor' | 'DamageCeiling' |
+        'ResetGotPics' | 'OperateActivators' | 'PreActorDamage';
+
+    export type TEventDE =
+        'AnimateSprites' |
+        'DisplayRest' | 'DisplayStart' | 'DisplayEnd' |
+        'DisplaySBar' | 'DisplayCrosshair' |
+        'DisplayRooms' | 'DisplayRoomsEnd' | 'DisplayRoomsCamera' | 'DisplayRoomsCameraTile' |
+        'DisplayBonusScreen' |
+        'DisplayMenu' | 'DisplayMenuRest' | 'DisplayInactiveMenu' | 'DisplayInactiveMenuRest' |
+        'DisplayLoadingScreen' |
+        'DisplayCursor' | 'DisplayLevelStats' | 'DisplayCameraOsd' |
+        'DisplaySpit' | 'DisplayFist' | 'DisplayKnee' | 'DisplayKnuckles' |
+        'DisplayScuba' | 'DisplayTip' | 'DisplayAccess' |
+        'DisplayOverheadMapText' | 'DisplayOverheadMapPlayer' |
+        'DisplayPointer' | 'DisplayBorder' |
+        'DisplayWeapon' |
+        'Screen' | 'UpdateScreenArea';
+
+    export type TEventIE =
+        'LookLeft' | 'LookRight' | 'SoarUp' | 'SoarDown' |
+        'Crouch' | 'Jump' | 'ReturnToCenter' |
+        'LookUp' | 'LookDown' | 'AimUp' | 'AimDown' |
+        'TurnLeft' | 'TurnRight' | 'TurnAround' |
+        'StrafeLeft' | 'StrafeRight' |
+        'MoveForward' | 'MoveBackward' |
+        'SwimUp' | 'SwimDown' |
+        'Use' | 'ProcessInput' |
+        'PreUpdateAngles' | 'PostUpdateAngles';
+
+    export type TEventWE =
+        'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' |
+        'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10' |
+        'DoFire' | 'PressedFire' | 'Fire' | 'AltFire' | 'AltWeapon' |
+        'FireWeapon' | 'PreWeaponShoot' | 'PostWeaponShoot' |
+        'SelectWeapon' | 'ChangeWeapon' | 'PreviousWeapon' | 'NextWeapon' | 'LastWeapon' |
+        'DrawWeapon' | 'Holster' | 'QuickKick' |
+        'GetShotRange' | 'GetAutoAimAngle';
+
+    export type TEventPIE =
+        'Inventory' | 'InventoryLeft' | 'InventoryRight' |
+        'UseNightVision' | 'UseSteroids' |
+        'HoloDukeOn' | 'HoloDukeOff' |
+        'UseMedkit' | 'UseJetpack' |
+        'ResetInventory' | 'ResetWeapons';
+
+    export type TEventME =
+        'Init' | 'InitComplete' |
+        'EnterLevel' | 'PreLevel' | 'NewGame' | 'PreGame' | 'NewGameCustom' |
+        'LoadGame' | 'SaveGame' | 'PreLoadGame' | 'PostSaveGame' |
+        'Logo' |
+        'ActivateCheat' |
+        'CheatGetSteroids' | 'CheatGetHeat' | 'CheatGetBoot' | 'CheatGetShield' |
+        'CheatGetScuba' | 'CheatGetHoloduke' | 'CheatGetJetpack' | 'CheatGetFirstAid' |
+        'ChangeMenu' | 'OpenMenuSound' |
+        'SetDefaults' |
+        'MainMenuScreen' | 'NewGameScreen' | 'EndLevelScreen' | 'ExitGameScreen' | 'ExitProgramScreen' |
+        'CutScene' | 'PreCutScene' | 'SkipCutScene' |
+        'PlayLevelMusicSlot' | 'ContinueLevelMusicSlot' |
+        'MenuCursorLeft' | 'MenuCursorRight' | 'MenuCursorShade' | 'MenuShadeSelected' |
+        'GetLoadTile' | 'GetMenuTile' | 'GetBonusTile' |
+        'Capir' | 'ValidateStart';
+
+    export type TEvents = TEventPAE | TEventDE | TEventIE | TEventWE | TEventPIE | TEventME;
 
     export type OnEvent = Partial<{
-        [E in TEventPAE]: (
+        [E in TEvents]: (
             this: CEvent & CActor
         ) => void | number;
     }>;
@@ -1880,6 +1965,8 @@ declare global {
 
         public wallPoint2: CWall;
         public next: { wall: CWall, sector: CSector };
+        public readonly uloTag: CON_NATIVE<number>;
+        public readonly uhiTag: CON_NATIVE<number>;
     }
 
     export class CSector {
@@ -1898,6 +1985,8 @@ declare global {
 
         public firstWall: CWall;
         public walls: CWall[];
+        public readonly uloTag: CON_NATIVE<number>;
+        public readonly uhiTag: CON_NATIVE<number>;
     }
 
     export const sectors: CSector[];
@@ -2937,6 +3026,80 @@ declare global {
         public status: CON_NATIVE<{ onGround: boolean; onLadder: boolean; jumping: boolean; crouching: boolean; god: boolean; dead: boolean; }>;
         /** Level statistics: actorsKilled, secretRooms, totalKills */
         public stats: CON_NATIVE<{ actorsKilled: number; secretRooms: number; totalKills: number; }>;
+        public q16Horiz: CON_NATIVE<number>;
+        public q16HorizOff: CON_NATIVE<number>;
+        public oq16Horiz: CON_NATIVE<number>;
+        public oq16HorizOff: CON_NATIVE<number>;
+        public q16Ang: CON_NATIVE<number>;
+        public oq16Ang: CON_NATIVE<number>;
+        public q16AngVel: CON_NATIVE<number>;
+        public gravity: CON_NATIVE<number>;
+        public floorZOffset: CON_NATIVE<number>;
+        public spriteZOffset: CON_NATIVE<number>;
+        public minWaterZDist: CON_NATIVE<number>;
+        public waterZOffset: CON_NATIVE<number>;
+        public shrunkZOffset: CON_NATIVE<number>;
+        public crouchZIncrement: CON_NATIVE<number>;
+        public crouchSpeedModifier: CON_NATIVE<number>;
+        public swimSpeedModifier: CON_NATIVE<number>;
+        public swimZIncrement: CON_NATIVE<number>;
+        public minSwimZVel: CON_NATIVE<number>;
+        public maxSwimZVel: CON_NATIVE<number>;
+        public jetpackZIncrement: CON_NATIVE<number>;
+        public invDispTime: CON_NATIVE<number>;
+        public bobPosX: CON_NATIVE<number>;
+        public bobPosY: CON_NATIVE<number>;
+        public pyOff: CON_NATIVE<number>;
+        public opyOff: CON_NATIVE<number>;
+        public trueFZ: CON_NATIVE<number>;
+        public trueCZ: CON_NATIVE<number>;
+        public oLookAng: CON_NATIVE<number>;
+        public oRotScrnAng: CON_NATIVE<number>;
+        public subweapon: CON_NATIVE<number>;
+        public wackedByActor: CON_NATIVE<number>;
+        public tipIncs: CON_NATIVE<number>;
+        public holoDukeAmount: CON_NATIVE<number>;
+        public newOwner: CON_NATIVE<number>;
+        public hbombHoldDelay: CON_NATIVE<number>;
+        public airLeft: CON_NATIVE<number>;
+        public accessWallNum: CON_NATIVE<number>;
+        public accessSpriteNum: CON_NATIVE<number>;
+        public gotAccess: CON_NATIVE<number>;
+        public firstAidAmount: CON_NATIVE<number>;
+        public somethingOnPlayer: CON_NATIVE<number>;
+        public parallaxSectnum: CON_NATIVE<number>;
+        public dummyPlayerSprite: CON_NATIVE<number>;
+        public extraExtra8: CON_NATIVE<number>;
+        public heatAmount: CON_NATIVE<number>;
+        public actorSqu: CON_NATIVE<number>;
+        public timeBeforeExit: CON_NATIVE<number>;
+        public customExitSound: CON_NATIVE<number>;
+        public weapRecCnt: CON_NATIVE<number>;
+        public interfaceToggle: CON_NATIVE<number>;
+        public rotScrnAng: CON_NATIVE<number>;
+        public holoDukeOn: CON_NATIVE<number>;
+        public pyCount: CON_NATIVE<number>;
+        public clipDist: CON_NATIVE<number>;
+        public footprintShade: CON_NATIVE<number>;
+        public bootAmount: CON_NATIVE<number>;
+        public footprintCount: CON_NATIVE<number>;
+        public hbombOn: CON_NATIVE<number>;
+        public invenIcon: CON_NATIVE<number>;
+        public buttonPalette: CON_NATIVE<number>;
+        public jetpackOn: CON_NATIVE<number>;
+        public spriteBridge: CON_NATIVE<number>;
+        public scubaOn: CON_NATIVE<number>;
+        public footprintPal: CON_NATIVE<number>;
+        public heatOn: CON_NATIVE<number>;
+        public holsterWeapon: CON_NATIVE<number>;
+        public reloading: CON_NATIVE<number>;
+        public maxShieldAmount: CON_NATIVE<number>;
+        public autoStep: CON_NATIVE<number>;
+        public autoStepSbw: CON_NATIVE<number>;
+        public floorZRebound: CON_NATIVE<number>;
+        public floorZCutoff: CON_NATIVE<number>;
+        public numLoogs: CON_NATIVE<number>;
+        public loogCnt: CON_NATIVE<number>;
 
         constructor(
             picnum: constant,
@@ -3114,6 +3277,170 @@ declare global {
         camera: CON_NATIVE<{ dist: number; clock: number; }>;
         /** Multiplayer settings grouped: `mode`, `numPlayers` (read-only), `coop` */
         multi: CON_NATIVE<{ mode: number; readonly numPlayers: number; coop: number; }>;
+        warpOn: CON_NATIVE<number>;
+        cashman: CON_NATIVE<number>;
+        eog: CON_NATIVE<number>;
+        showAllMap: CON_NATIVE<number>;
+        showHelp: CON_NATIVE<number>;
+        clipping: CON_NATIVE<number>;
+        overheadOn: CON_NATIVE<number>;
+        lastOverhead: CON_NATIVE<number>;
+        showWeapons: CON_NATIVE<number>;
+        pauseOn: CON_NATIVE<number>;
+        fromBonus: CON_NATIVE<number>;
+        cameraSprite: CON_NATIVE<number>;
+        lastCamSprite: CON_NATIVE<number>;
+        lastLevel: CON_NATIVE<number>;
+        secretLevel: CON_NATIVE<number>;
+        constVisibility: CON_NATIVE<number>;
+        uwFramerate: CON_NATIVE<number>;
+        cameraTime: CON_NATIVE<number>;
+        folFvel: CON_NATIVE<number>;
+        folSvel: CON_NATIVE<number>;
+        folAvel: CON_NATIVE<number>;
+        folX: CON_NATIVE<number>;
+        folY: CON_NATIVE<number>;
+        folA: CON_NATIVE<number>;
+        recCnt: CON_NATIVE<number>;
+        enteredName: CON_NATIVE<number>;
+        screenTilting: CON_NATIVE<number>;
+        shadows: CON_NATIVE<number>;
+        ftaOn: CON_NATIVE<number>;
+        executions: CON_NATIVE<number>;
+        autoRun: CON_NATIVE<number>;
+        coords: CON_NATIVE<number>;
+        tickrate: CON_NATIVE<number>;
+        mCoop: CON_NATIVE<number>;
+        screenSizeUD: CON_NATIVE<number>;
+        lockout: CON_NATIVE<number>;
+        crosshair: CON_NATIVE<number>;
+        playerAI: CON_NATIVE<number>;
+        respawnMonsters: CON_NATIVE<number>;
+        respawnItems: CON_NATIVE<number>;
+        respawnInventory: CON_NATIVE<number>;
+        recstat: CON_NATIVE<number>;
+        monstersOff: CON_NATIVE<number>;
+        mRespawnItems: CON_NATIVE<number>;
+        mRespawnMonsters: CON_NATIVE<number>;
+        mRespawnInventory: CON_NATIVE<number>;
+        mRecstat: CON_NATIVE<number>;
+        mMonstersOff: CON_NATIVE<number>;
+        udDetail: CON_NATIVE<number>;
+        mFfire: CON_NATIVE<number>;
+        ffire: CON_NATIVE<number>;
+        mPlayerSkill: CON_NATIVE<number>;
+        mLevelNumber: CON_NATIVE<number>;
+        mVolumeNumber: CON_NATIVE<number>;
+        mMarker: CON_NATIVE<number>;
+        marker: CON_NATIVE<number>;
+        mouseflip: CON_NATIVE<number>;
+        statusbarscale: CON_NATIVE<number>;
+        drawweapon: CON_NATIVE<number>;
+        mouseaiming: CON_NATIVE<number>;
+        udWeaponswitch: CON_NATIVE<number>;
+        democams: CON_NATIVE<number>;
+        color: CON_NATIVE<number>;
+        msgdisptime: CON_NATIVE<number>;
+        statusbarmode: CON_NATIVE<number>;
+        mNoexits: CON_NATIVE<number>;
+        noexits: CON_NATIVE<number>;
+        autovote: CON_NATIVE<number>;
+        automsg: CON_NATIVE<number>;
+        idplayers: CON_NATIVE<number>;
+        udTeam: CON_NATIVE<number>;
+        viewbob: CON_NATIVE<number>;
+        weaponsway: CON_NATIVE<number>;
+        obituaries: CON_NATIVE<number>;
+        levelstats: CON_NATIVE<number>;
+        crosshairscale: CON_NATIVE<number>;
+        althud: CON_NATIVE<number>;
+        displayBonusScreen: CON_NATIVE<number>;
+        showLevelText: CON_NATIVE<number>;
+        weaponscale: CON_NATIVE<number>;
+        textscale: CON_NATIVE<number>;
+        runkeyMode: CON_NATIVE<number>;
+        mOriginX: CON_NATIVE<number>;
+        mOriginY: CON_NATIVE<number>;
+        playerbest: CON_NATIVE<number>;
+        musictoggle: CON_NATIVE<number>;
+        usevoxels: CON_NATIVE<number>;
+        usehightile: CON_NATIVE<number>;
+        usemodels: CON_NATIVE<number>;
+        gametypeflags: CON_NATIVE<number>;
+        mGametypeflags: CON_NATIVE<number>;
+        globalflags: CON_NATIVE<number>;
+        globalgameflags: CON_NATIVE<number>;
+        vmPlayer: CON_NATIVE<number>;
+        vmSprite: CON_NATIVE<number>;
+        vmDistance: CON_NATIVE<number>;
+        soundtoggle: CON_NATIVE<number>;
+        gametextTracking: CON_NATIVE<number>;
+        mgametextTracking: CON_NATIVE<number>;
+        menutextTracking: CON_NATIVE<number>;
+        maxSpritesOnScreen: CON_NATIVE<number>;
+        screenareaX1: CON_NATIVE<number>;
+        screenareaY1: CON_NATIVE<number>;
+        screenareaX2: CON_NATIVE<number>;
+        screenareaY2: CON_NATIVE<number>;
+        screenfade: CON_NATIVE<number>;
+        menubackground: CON_NATIVE<number>;
+        statusbarflags: CON_NATIVE<number>;
+        statusbarrange: CON_NATIVE<number>;
+        statusbarcustom: CON_NATIVE<number>;
+        hudontop: CON_NATIVE<number>;
+        menuSlidebarZ: CON_NATIVE<number>;
+        menuSlidebarMargin: CON_NATIVE<number>;
+        menuSlidecursorZ: CON_NATIVE<number>;
+        globalR: CON_NATIVE<number>;
+        globalG: CON_NATIVE<number>;
+        globalB: CON_NATIVE<number>;
+        defaultVolume: CON_NATIVE<number>;
+        defaultSkill: CON_NATIVE<number>;
+        menuShadeDeselected: CON_NATIVE<number>;
+        menuShadeDisabled: CON_NATIVE<number>;
+        menutextZoom: CON_NATIVE<number>;
+        menutextXspace: CON_NATIVE<number>;
+        menutextPal: CON_NATIVE<number>;
+        menutextPalselected: CON_NATIVE<number>;
+        menutextPaldeselected: CON_NATIVE<number>;
+        menutextPaldisabled: CON_NATIVE<number>;
+        menutextPalselectedR: CON_NATIVE<number>;
+        menutextPaldeselectedR: CON_NATIVE<number>;
+        menutextPaldisabledR: CON_NATIVE<number>;
+        gametextZoom: CON_NATIVE<number>;
+        gametextXspace: CON_NATIVE<number>;
+        gametextPal: CON_NATIVE<number>;
+        gametextPalselected: CON_NATIVE<number>;
+        gametextPaldeselected: CON_NATIVE<number>;
+        gametextPaldisabled: CON_NATIVE<number>;
+        gametextPalselectedR: CON_NATIVE<number>;
+        gametextPaldeselectedR: CON_NATIVE<number>;
+        gametextPaldisabledR: CON_NATIVE<number>;
+        minitextZoom: CON_NATIVE<number>;
+        minitextXspace: CON_NATIVE<number>;
+        minitextTracking: CON_NATIVE<number>;
+        minitextPal: CON_NATIVE<number>;
+        minitextPalselected: CON_NATIVE<number>;
+        minitextPaldeselected: CON_NATIVE<number>;
+        minitextPaldisabled: CON_NATIVE<number>;
+        minitextPalselectedR: CON_NATIVE<number>;
+        minitextPaldeselectedR: CON_NATIVE<number>;
+        minitextPaldisabledR: CON_NATIVE<number>;
+        menutitlePal: CON_NATIVE<number>;
+        slidebarPalselected: CON_NATIVE<number>;
+        slidebarPaldisabled: CON_NATIVE<number>;
+        shadowPal: CON_NATIVE<number>;
+        menuScrollbarTilenum: CON_NATIVE<number>;
+        menuScrollbarZ: CON_NATIVE<number>;
+        menuScrollcursorZ: CON_NATIVE<number>;
+        quoteYOffset: CON_NATIVE<number>;
+        userByteVersion: CON_NATIVE<number>;
+        autosave: CON_NATIVE<number>;
+        drawY: CON_NATIVE<number>;
+        drawYxaspect: CON_NATIVE<number>;
+        fov: CON_NATIVE<number>;
+        gamepadactive: CON_NATIVE<number>;
+        kickMode: CON_NATIVE<number>;
     }
 
     /**
@@ -3187,6 +3514,10 @@ declare global {
         extButtons: CON_NATIVE<number>;
         /** Movement axes grouped: `forward` (fvel), `strafe` (svel), `turn` (avel), `lookUp` (horz) */
         motion: CON_NATIVE<{ forward: number; strafe: number; turn: number; lookUp: number; }>;
+        /** Raw fixed-point angular velocity (multiply `avel` by 65536) */
+        q16Avel: CON_NATIVE<number>;
+        /** Raw fixed-point vertical look (multiply `horz` by 65536) */
+        q16Horz: CON_NATIVE<number>;
     }
 
     export const projectiles: IProjectile[];

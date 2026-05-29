@@ -94,37 +94,141 @@ export enum Names {
     JIBS6 = 2286
 }
 
-export type TEventPAE = 'Game' | 'EGS' | 'Spawn' | 'KillIt' | 'PreGame' | 'PreActorDamage' | 'AnimateSprites' | 'RecogSound' | 'NewGame' | 'InitComplete' | 'ProcessInput';
-export type TEventDE = 'DisplayRest' | 'DisplayStart' | 'DisplayEnd';
-export type TEventI = 'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' | 'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10' | 'DoFire' | 'Fire' | 'PressedFire';
-export type TEvents = TEventPAE | TEventDE | TEventI;
+export type TEventPAE =
+    'Game' | 'EGS' | 'Spawn' | 'KillIt' |
+    'ResetPlayer' | 'LoadActor' | 'IncurDamage' |
+    'FakeDoMoveThings' | 'World' | 'PreWorld' |
+    'MoveSector' | 'MoveEffectors' |
+    'RecogSound' | 'Sound' |
+    'CheckTouchDamage' | 'CheckFloorDamage' | 'DamageHPlane' |
+    'DamageSprite' | 'PostDamageSprite' | 'DamageWall' | 'DamageFloor' | 'DamageCeiling' |
+    'ResetGotPics' | 'OperateActivators' | 'PreActorDamage';
+
+export type TEventDE =
+    'AnimateSprites' |
+    'DisplayRest' | 'DisplayStart' | 'DisplayEnd' |
+    'DisplaySBar' | 'DisplayCrosshair' |
+    'DisplayRooms' | 'DisplayRoomsEnd' | 'DisplayRoomsCamera' | 'DisplayRoomsCameraTile' |
+    'DisplayBonusScreen' |
+    'DisplayMenu' | 'DisplayMenuRest' | 'DisplayInactiveMenu' | 'DisplayInactiveMenuRest' |
+    'DisplayLoadingScreen' |
+    'DisplayCursor' | 'DisplayLevelStats' | 'DisplayCameraOsd' |
+    'DisplaySpit' | 'DisplayFist' | 'DisplayKnee' | 'DisplayKnuckles' |
+    'DisplayScuba' | 'DisplayTip' | 'DisplayAccess' |
+    'DisplayOverheadMapText' | 'DisplayOverheadMapPlayer' |
+    'DisplayPointer' | 'DisplayBorder' |
+    'DisplayWeapon' |
+    'Screen' | 'UpdateScreenArea';
+
+export type TEventIE =
+    'LookLeft' | 'LookRight' | 'SoarUp' | 'SoarDown' |
+    'Crouch' | 'Jump' | 'ReturnToCenter' |
+    'LookUp' | 'LookDown' | 'AimUp' | 'AimDown' |
+    'TurnLeft' | 'TurnRight' | 'TurnAround' |
+    'StrafeLeft' | 'StrafeRight' |
+    'MoveForward' | 'MoveBackward' |
+    'SwimUp' | 'SwimDown' |
+    'Use' | 'ProcessInput' |
+    'PreUpdateAngles' | 'PostUpdateAngles';
+
+export type TEventWE =
+    'WeapKey1' | 'WeapKey2' | 'WeapKey3' | 'WeapKey4' | 'WeapKey5' |
+    'WeapKey6' | 'WeapKey7' | 'WeapKey8' | 'WeapKey9' | 'WeapKey10' |
+    'DoFire' | 'PressedFire' | 'Fire' | 'AltFire' | 'AltWeapon' |
+    'FireWeapon' | 'PreWeaponShoot' | 'PostWeaponShoot' |
+    'SelectWeapon' | 'ChangeWeapon' | 'PreviousWeapon' | 'NextWeapon' | 'LastWeapon' |
+    'DrawWeapon' | 'Holster' | 'QuickKick' |
+    'GetShotRange' | 'GetAutoAimAngle';
+
+export type TEventPIE =
+    'Inventory' | 'InventoryLeft' | 'InventoryRight' |
+    'UseNightVision' | 'UseSteroids' |
+    'HoloDukeOn' | 'HoloDukeOff' |
+    'UseMedkit' | 'UseJetpack' |
+    'ResetInventory' | 'ResetWeapons';
+
+export type TEventME =
+    'Init' | 'InitComplete' |
+    'EnterLevel' | 'PreLevel' | 'NewGame' | 'PreGame' | 'NewGameCustom' |
+    'LoadGame' | 'SaveGame' | 'PreLoadGame' | 'PostSaveGame' |
+    'Logo' |
+    'ActivateCheat' |
+    'CheatGetSteroids' | 'CheatGetHeat' | 'CheatGetBoot' | 'CheatGetShield' |
+    'CheatGetScuba' | 'CheatGetHoloduke' | 'CheatGetJetpack' | 'CheatGetFirstAid' |
+    'ChangeMenu' | 'OpenMenuSound' |
+    'SetDefaults' |
+    'MainMenuScreen' | 'NewGameScreen' | 'EndLevelScreen' | 'ExitGameScreen' | 'ExitProgramScreen' |
+    'CutScene' | 'PreCutScene' | 'SkipCutScene' |
+    'PlayLevelMusicSlot' | 'ContinueLevelMusicSlot' |
+    'MenuCursorLeft' | 'MenuCursorRight' | 'MenuCursorShade' | 'MenuShadeSelected' |
+    'GetLoadTile' | 'GetMenuTile' | 'GetBonusTile' |
+    'Capir' | 'ValidateStart';
+
+export type TEvents = TEventPAE | TEventDE | TEventIE | TEventWE | TEventPIE | TEventME;
 
 export const EventList: TEvents[] = [
-    'DisplayRest',
-    'DisplayStart',
-    'DisplayEnd',
-    'Game',
-    'EGS',
-    'Spawn',
+    // PAE — Per-Actor Events
+    'Game', 'EGS', 'Spawn', 'KillIt',
+    'ResetPlayer', 'LoadActor', 'IncurDamage',
+    'FakeDoMoveThings', 'World', 'PreWorld',
+    'MoveSector', 'MoveEffectors',
+    'RecogSound', 'Sound',
+    'CheckTouchDamage', 'CheckFloorDamage', 'DamageHPlane',
+    'DamageSprite', 'PostDamageSprite', 'DamageWall', 'DamageFloor', 'DamageCeiling',
+    'ResetGotPics', 'OperateActivators', 'PreActorDamage',
+    // DE — Display Events
     'AnimateSprites',
-    'KillIt',
-    'PreGame',
-    'PreActorDamage',
-    'RecogSound',
-    'NewGame',
-    'InitComplete',
-    'ProcessInput',
-    'WeapKey1',
-    'WeapKey2',
-    'WeapKey3',
-    'WeapKey4',
-    'WeapKey5',
-    'WeapKey6',
-    'WeapKey7',
-    'WeapKey8',
-    'WeapKey9',
-    'WeapKey10',
-    'DoFire',
-    'Fire',
-    'PressedFire'
+    'DisplayRest', 'DisplayStart', 'DisplayEnd',
+    'DisplaySBar', 'DisplayCrosshair',
+    'DisplayRooms', 'DisplayRoomsEnd', 'DisplayRoomsCamera', 'DisplayRoomsCameraTile',
+    'DisplayBonusScreen',
+    'DisplayMenu', 'DisplayMenuRest', 'DisplayInactiveMenu', 'DisplayInactiveMenuRest',
+    'DisplayLoadingScreen',
+    'DisplayCursor', 'DisplayLevelStats', 'DisplayCameraOsd',
+    'DisplaySpit', 'DisplayFist', 'DisplayKnee', 'DisplayKnuckles',
+    'DisplayScuba', 'DisplayTip', 'DisplayAccess',
+    'DisplayOverheadMapText', 'DisplayOverheadMapPlayer',
+    'DisplayPointer', 'DisplayBorder',
+    'DisplayWeapon',
+    'Screen', 'UpdateScreenArea',
+    // IE — Input Events
+    'LookLeft', 'LookRight', 'SoarUp', 'SoarDown',
+    'Crouch', 'Jump', 'ReturnToCenter',
+    'LookUp', 'LookDown', 'AimUp', 'AimDown',
+    'TurnLeft', 'TurnRight', 'TurnAround',
+    'StrafeLeft', 'StrafeRight',
+    'MoveForward', 'MoveBackward',
+    'SwimUp', 'SwimDown',
+    'Use', 'ProcessInput',
+    'PreUpdateAngles', 'PostUpdateAngles',
+    // WE — Weapon Events
+    'WeapKey1', 'WeapKey2', 'WeapKey3', 'WeapKey4', 'WeapKey5',
+    'WeapKey6', 'WeapKey7', 'WeapKey8', 'WeapKey9', 'WeapKey10',
+    'DoFire', 'PressedFire', 'Fire', 'AltFire', 'AltWeapon',
+    'FireWeapon', 'PreWeaponShoot', 'PostWeaponShoot',
+    'SelectWeapon', 'ChangeWeapon', 'PreviousWeapon', 'NextWeapon', 'LastWeapon',
+    'DrawWeapon', 'Holster', 'QuickKick',
+    'GetShotRange', 'GetAutoAimAngle',
+    // PIE — Player Inventory Events
+    'Inventory', 'InventoryLeft', 'InventoryRight',
+    'UseNightVision', 'UseSteroids',
+    'HoloDukeOn', 'HoloDukeOff',
+    'UseMedkit', 'UseJetpack',
+    'ResetInventory', 'ResetWeapons',
+    // ME — Misc / Game-Lifecycle Events
+    'Init', 'InitComplete',
+    'EnterLevel', 'PreLevel', 'NewGame', 'PreGame', 'NewGameCustom',
+    'LoadGame', 'SaveGame', 'PreLoadGame', 'PostSaveGame',
+    'Logo',
+    'ActivateCheat',
+    'CheatGetSteroids', 'CheatGetHeat', 'CheatGetBoot', 'CheatGetShield',
+    'CheatGetScuba', 'CheatGetHoloduke', 'CheatGetJetpack', 'CheatGetFirstAid',
+    'ChangeMenu', 'OpenMenuSound',
+    'SetDefaults',
+    'MainMenuScreen', 'NewGameScreen', 'EndLevelScreen', 'ExitGameScreen', 'ExitProgramScreen',
+    'CutScene', 'PreCutScene', 'SkipCutScene',
+    'PlayLevelMusicSlot', 'ContinueLevelMusicSlot',
+    'MenuCursorLeft', 'MenuCursorRight', 'MenuCursorShade', 'MenuShadeSelected',
+    'GetLoadTile', 'GetMenuTile', 'GetBonusTile',
+    'Capir', 'ValidateStart',
 ];

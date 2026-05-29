@@ -6,6 +6,7 @@ obj/*.AST
 asm/*.icc
 test/eduke
 test/eduke32
+eduke32_src
 *.cfg
 *.log
 *.cache

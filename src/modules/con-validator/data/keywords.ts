@@ -1,0 +1,305 @@
+export interface KeywordMeta {
+  isBlockOpener?: boolean;
+  blockCloser?: string;    // expected closer: 'enda'|'ends'|'endevent'|'endswitch'|'}'
+  isBlockCloser?: boolean;
+  topLevelOnly?: boolean;  // must appear outside any block
+  isLoop?: boolean;        // marks this keyword as a loop — next '{' inherits isLoop:true
+  loopOnly?: boolean;      // continue — only valid inside a loop
+  breakable?: boolean;     // break — valid inside a loop OR switch block
+  takesLabel?: boolean;    // next token is a state/label name
+  takesEventName?: boolean;
+  /** After consuming any fixed structured arguments, skip the remainder of the line as free text. */
+  consumesRestOfLine?: true;
+}
+
+// Built from gamedef.h TRANSFORM_SCRIPT_KEYWORDS_LIST + TRANSFORM_SCRIPT_ONLY_KEYWORDS_LIST
+export const KEYWORDS = new Map<string, KeywordMeta>([
+  // ── Block structure ──────────────────────────────────────────────────────
+  ['{',             { isBlockOpener: true, blockCloser: '}' }],
+  ['}',             { isBlockCloser: true }],
+  ['defstate',      { isBlockOpener: true, blockCloser: 'ends', topLevelOnly: true, takesLabel: true }],
+  ['state',         { takesLabel: true }],  // call a state (not a definition)
+  ['appendstate',   { takesLabel: true }],
+  ['prependstate',  { takesLabel: true }],
+  ['ends',          { isBlockCloser: true }],
+  ['actor',         { isBlockOpener: true, blockCloser: 'enda', topLevelOnly: true }],
+  ['useractor',     { isBlockOpener: true, blockCloser: 'enda', topLevelOnly: true }],
+  ['enda',          { isBlockCloser: true }],
+  ['onevent',       { isBlockOpener: true, blockCloser: 'endevent', topLevelOnly: true, takesEventName: true }],
+  ['appendevent',   { isBlockOpener: true, blockCloser: 'endevent', topLevelOnly: true, takesEventName: true }],
+  ['endevent',      { isBlockCloser: true }],
+  ['switch',        { isBlockOpener: true, blockCloser: 'endswitch' }],
+  ['endswitch',     { isBlockCloser: true }],
+  ['case',          {}],
+  ['default',       {}],
+  ['else',          {}],
+
+  // ── Top-level declarations (script-only, no bytecode) ───────────────────
+  ['gamevar',       { topLevelOnly: true }],
+  ['gamearray',     { topLevelOnly: true }],
+  ['define',        { topLevelOnly: true }],
+  ['include',       { topLevelOnly: true }],
+  ['includedefault',{ topLevelOnly: true }],
+  ['includeoptional',{ topLevelOnly: true }],
+  ['action',        {}],
+  ['move',          {}],
+  ['ai',            {}],
+  ['gamestartup',   { topLevelOnly: true }],
+  ['precache',      { topLevelOnly: true }],
+  ['scriptsize',    { topLevelOnly: true }],
+  ['setcfgname',    { topLevelOnly: true }],
+  ['setdefname',    { topLevelOnly: true }],
+  ['setgamename',   { topLevelOnly: true }],
+  ['definequote',          { consumesRestOfLine: true }],  // definequote N <text to EOL>
+  ['definelevelname',      { consumesRestOfLine: true }],  // definelevelname V L <name> ...
+  ['definesound',          {}],
+  ['music',                {}],
+  ['defineprojectile',     {}],
+  ['definegametype',       { consumesRestOfLine: true }],  // definegametype N flags <name to EOL>
+  ['defineskillname',      { consumesRestOfLine: true }],  // defineskillname N <text to EOL>
+  ['definevolumename',     { consumesRestOfLine: true }],  // definevolumename N <text to EOL>
+  ['definegamefuncname',   { consumesRestOfLine: true }],  // definegamefuncname N <text to EOL>
+  ['definecheat',          { consumesRestOfLine: true }],  // definecheat <str> <flags> (cheat string can shadow keywords)
+  ['definecheatdescription',{ consumesRestOfLine: true }], // definecheatdescription N <text to EOL>
+  ['definevolumeflags',    {}],
+  ['betaname',             { consumesRestOfLine: true }],  // betaname <text to EOL>
+  ['enhanced',      {}],
+  ['dynamicremap',  {}],
+  ['dynamicsoundremap',{}],
+  ['undefinecheat', {}],
+  ['undefinegamefunc',{}],
+  ['undefinelevel', {}],
+  ['undefineskill', {}],
+  ['undefinevolume',{}],
+  ['eventloadactor',{}],
+  ['damageeventtile',{}],
+  ['damageeventtilerange',{}],
+  ['spritenopal',   {}],
+  ['spritenoshade', {}],
+  ['spritenvg',     {}],
+  ['spriteshadow',  {}],
+
+  // ── Control flow ─────────────────────────────────────────────────────────
+  ['break',         { breakable: true }],
+  ['continue',      { loopOnly: true }],
+  ['return',        {}],
+  ['jump',          {}],
+  ['nullop',        {}],
+  ['exit',          {}],
+  ['terminate',     {}],
+  ['yield',         {}],
+  ['yieldjump',     {}],
+
+  // ── Loops — these are NOT block openers; the '{' following them is.
+  //   isLoop:true causes the next '{' to be tagged as the loop block.
+  ['for',           { isLoop: true }],
+  ['whilevare',     { isLoop: true }],
+  ['whilevarl',     { isLoop: true }],
+  ['whilevarn',     { isLoop: true }],
+  ['whilevarvare',  { isLoop: true }],
+  ['whilevarvarl',  { isLoop: true }],
+  ['whilevarvarn',  { isLoop: true }],
+  // Short aliases generated by TypeCON
+  ['whilel',        { isLoop: true }],
+  ['whilen',        { isLoop: true }],
+  ['whilee',        { isLoop: true }],
+
+  // ── Variable operations (var ← immediate) ────────────────────────────────
+  ['setvar',        {}], ['setvar_global',{}], ['setvar_player',{}], ['setvar_actor',{}],
+  ['addvar',        {}], ['subvar',        {}], ['mulvar',        {}], ['divvar',        {}],
+  ['modvar',        {}], ['randvar',       {}],
+  ['andvar',        {}], ['orvar',         {}], ['xorvar',        {}],
+  ['shiftvarl',     {}], ['shiftvarr',     {}],
+  // Short aliases (TypeCON generates these)
+  ['set',           {}], ['add',           {}], ['sub',           {}], ['mul',           {}],
+  ['div',           {}], ['mod',           {}], ['and',           {}], ['or',            {}],
+  ['xor',           {}], ['negate',        {}], ['abs',           {}], ['rand',          {}],
+
+  // ── Variable operations (var ← var) ──────────────────────────────────────
+  ['setvarvar',     {}], ['addvarvar',     {}], ['subvarvar',     {}], ['mulvarvar',     {}],
+  ['divvarvar',     {}], ['modvarvar',     {}], ['randvarvar',    {}],
+  ['andvarvar',     {}], ['orvarvar',      {}], ['xorvarvar',     {}],
+  ['shiftvarvarl',  {}], ['shiftvarvarr',  {}],
+
+  // ── Conditionals (var vs immediate) ──────────────────────────────────────
+  ['ifvara',        {}], ['ifvarae',       {}], ['ifvarb',        {}], ['ifvarbe',       {}],
+  ['ifvare',        {}], ['ifvarn',        {}], ['ifvarg',        {}], ['ifvarge',       {}],
+  ['ifvarl',        {}], ['ifvarle',       {}],
+  ['ifvarand',      {}], ['ifvaror',       {}], ['ifvarxor',      {}],
+  ['ifvarboth',     {}], ['ifvareither',   {}],
+
+  // ── Conditionals (var vs var) ─────────────────────────────────────────────
+  ['ifvarvara',     {}], ['ifvarvarae',    {}], ['ifvarvarb',     {}], ['ifvarvarbe',    {}],
+  ['ifvarvare',     {}], ['ifvarvarn',     {}], ['ifvarvarg',     {}], ['ifvarvarge',    {}],
+  ['ifvarvarl',     {}], ['ifvarvarle',    {}],
+  ['ifvarvarand',   {}], ['ifvarvaror',    {}], ['ifvarvarxor',   {}],
+  ['ifvarvarboth',  {}], ['ifvarvareither',{}],
+  // Short aliases (TypeCON generates these)
+  ['ife',           {}], ['ifn',           {}], ['ifl',           {}], ['ifg',           {}],
+  ['ifle',          {}], ['ifge',          {}], ['ifa',           {}], ['ifb',           {}],
+  ['ifand',         {}], ['ifor',          {}], ['ifeither',      {}],
+
+  // ── Actor/sprite conditions ───────────────────────────────────────────────
+  ['ifaction',      {}], ['ifactioncount', {}], ['ifactor',       {}],
+  ['ifactornotstayput',{}], ['ifactorsound',{}], ['ifai',          {}],
+  ['ifangdiffl',    {}], ['ifdead',        {}], ['ifhitweapon',   {}],
+  ['ifmove',        {}], ['ifnotmoving',   {}], ['ifsound',       {}],
+  ['ifstrength',    {}],
+
+  // ── Player/world conditions ───────────────────────────────────────────────
+  ['ifp',           {}], ['ifpdistg',      {}], ['ifpdistl',      {}],
+  ['ifphealthl',    {}], ['ifpinventory',  {}], ['ifplayersl',    {}],
+  ['ifplaybackon',  {}], ['ifrespawn',     {}], ['ifwasweapon',   {}],
+  ['ifawayfromwall',{}], ['ifbulletnear',  {}], ['ifcansee',      {}],
+  ['ifcanseetarget',{}], ['ifcanshoottarget',{}],
+  ['ifceilingdistl',{}], ['ifcount',       {}], ['ifcutscene',    {}],
+  ['iffloordistl',  {}], ['ifgapzl',       {}], ['ifgotweaponce', {}],
+  ['ifhitspace',    {}], ['ifinouterspace',{}], ['ifinspace',     {}],
+  ['ifinwater',     {}], ['ifmultiplayer', {}], ['ifnosounds',    {}],
+  ['ifonwater',     {}], ['ifoutside',     {}], ['ifrnd',         {}],
+  ['ifserver',      {}], ['ifclient',      {}], ['ifspawnedby',   {}],
+  ['ifspritepal',   {}], ['ifsquished',    {}],
+
+  // ── Struct getters ────────────────────────────────────────────────────────
+  ['getactor',      {}], ['getactorstruct',{}], ['getactorvar',   {}],
+  ['getactorangle', {}], ['getangletotarget',{}],
+  ['getarraysequence',{}], ['getarraysize', {}], ['getcurraddress',{}],
+  ['getplayer',     {}], ['getplayerstruct',{}], ['getplayervar',  {}],
+  ['getplayerangle',{}], ['getpname',      {}],
+  ['getangle',      {}], ['getprojectile', {}], ['getsector',     {}],
+  ['getsectorstruct',{}], ['getspriteext', {}], ['getspritestruct',{}],
+  ['gettspr',       {}], ['getuserdef',    {}], ['getwall',       {}],
+  ['getwallstruct', {}], ['getthisprojectile',{}],
+  ['getinput',      {}], ['gettiledata',   {}],
+  ['getlastpal',    {}], ['gettextureceiling',{}], ['gettexturefloor',{}],
+  ['getngcflags',   {}],
+
+  // ── Struct setters ────────────────────────────────────────────────────────
+  ['setactor',      {}], ['setactorstruct',{}], ['setactorvar',   {}],
+  ['setactorangle', {}], ['setactorsoundpitch',{}],
+  ['setplayer',     {}], ['setplayerstruct',{}], ['setplayervar',  {}],
+  ['setplayerangle',{}], ['setinput',      {}],
+  ['setarray',      {}], ['setarraysequence',{}],
+  ['setprojectile', {}], ['setsector',     {}], ['setsectorstruct',{}],
+  ['setspriteext',  {}], ['setspritestruct',{}], ['settspr',       {}],
+  ['setuserdef',    {}], ['setwall',       {}], ['setwallstruct', {}],
+  ['setthisprojectile',{}], ['setsprite',  {}], ['settiledata',   {}],
+  ['setngcflags',   {}],
+
+  // ── Movement/positioning ──────────────────────────────────────────────────
+  ['movesprite',    {}], ['movesector',    {}], ['fall',          {}],
+  ['ssp',           {}], ['clipmove',      {}], ['clipmovenoslide',{}],
+  ['updatesector',  {}], ['updatesectorz', {}],
+  ['updatesectorneighbor',{}], ['updatesectorneighborz',{}],
+  ['rotatepoint',   {}], ['getzrange',     {}],
+
+  // ── Math ──────────────────────────────────────────────────────────────────
+  ['mulscale',      {}], ['divscale',      {}], ['divr',          {}],
+  ['divru',         {}], ['sqrt',          {}], ['sin',           {}],
+  ['cos',           {}], ['scalevar',      {}], ['clamp',         {}],
+  ['klabs',         {}], ['count',         {}],
+
+  // ── Distance/geometry ─────────────────────────────────────────────────────
+  ['dist',          {}], ['ldist',         {}], ['calchypotenuse',{}],
+  ['getclosestcol', {}], ['lineintersect', {}], ['rayintersect',  {}],
+  ['getceilzofslope',{}], ['getflorzofslope',{}],
+  ['nextsectorneighborz',{}], ['sectorofwall',{}],
+
+  // ── Sprite queries ────────────────────────────────────────────────────────
+  ['cactor',        {}], ['headspritesect',{}], ['headspritestat',{}],
+  ['nextspritesect',{}], ['nextspritestat',{}],
+  ['prevspritesect',{}], ['prevspritestat',{}],
+  ['spgethitag',    {}], ['spgetlotag',    {}],
+  ['sectgethitag',  {}], ['sectgetlotag',  {}],
+  ['spriteflags',   {}], ['insertspriteq', {}],
+
+  // ── Sound ─────────────────────────────────────────────────────────────────
+  ['sound',         {}], ['soundonce',     {}], ['actorsound',    {}],
+  ['globalsound',   {}], ['screensound',   {}],
+  ['stopsound',     {}], ['stopactorsound',{}], ['stopallsounds', {}],
+  ['stopallmusic',  {}], ['getmusicposition',{}], ['setmusicposition',{}],
+  ['starttrack',    {}], ['starttrackslot',{}], ['swaptrackslot', {}],
+  ['preloadtrackslotforswap',{}],
+
+  // ── Rendering/display ─────────────────────────────────────────────────────
+  ['rotatesprite',  {}], ['rotatesprite16',{}], ['rotatespritea', {}],
+  ['showview',      {}], ['showviewq16',   {}],
+  ['showviewunbiased',{}], ['showviewq16unbiased',{}],
+  ['myos',          {}], ['myosx',         {}], ['myospal',       {}], ['myospalx',{}],
+  ['gametext',      {}], ['gametextz',     {}], ['screentext',    {}],
+  ['digitalnumber', {}], ['digitalnumberz',{}], ['minitext',      {}],
+  ['palfrom',       {}], ['screenpal',     {}], ['setgamepalette',{}],
+
+  // ── Collision/interaction ─────────────────────────────────────────────────
+  ['hitscan',       {}], ['canseespr',     {}], ['cansee',        {}],
+  ['neartag',       {}], ['hitradius',     {}],
+  ['guts',          {}], ['debris',        {}], ['lotsofglass',   {}],
+  ['spawnceilingglass',{}], ['spawnwallglass',{}],
+  ['spawnwallstainedglass',{}], ['checactivatormotion',{}],
+
+  // ── Spawning/projectiles ──────────────────────────────────────────────────
+  ['spawn',         {}], ['espawn',        {}], ['eshoot',        {}],
+  ['ezshoot',       {}], ['eqspawn',       {}], ['qspawn',        {}],
+  ['cspawn',        {}], ['shoot',         {}], ['zshoot',        {}],
+  ['shootr',        {}], ['shootn',        {}], ['projectile',    {}],
+  ['tossweapon',    {}],
+
+  // ── Arrays ────────────────────────────────────────────────────────────────
+  ['resizearray',   {}], ['swaparrays',    {}],
+  ['readarrayfromfile',{}], ['writearraytofile',{}],
+  ['copy',          {}],
+
+  // ── Inventory/weapons ─────────────────────────────────────────────────────
+  ['addammo',       {}], ['addweapon',     {}], ['addinventory',  {}],
+  ['addkills',      {}], ['addphealth',    {}], ['addstrength',   {}],
+  ['checkavailinven',{}], ['checkavailweapon',{}],
+  ['gmaxammo',      {}], ['smaxammo',      {}], ['addlogvar',     {}],
+  ['strength',      {}], ['mail',          {}], ['money',         {}],
+  ['paper',         {}], ['pkick',         {}],
+
+  // ── Time/animation ────────────────────────────────────────────────────────
+  ['cstat',         {}], ['cstator',       {}], ['clipdist',      {}],
+  ['sizeat',        {}], ['sizeto',        {}], ['sleeptime',     {}],
+  ['inittimer',     {}], ['time',          {}],
+  ['resetactioncount',{}], ['resetcount',  {}],
+
+  // ── String/quote operations ───────────────────────────────────────────────
+  ['quote',         {}], ['userquote',     {}], ['redefinequote', {}],
+  ['qgetquote',     {}], ['qgetsysstr',    {}], ['qsprintf',      {}],
+  ['qstrcat',       {}], ['qstrcmp',       {}], ['qstrcpy',       {}],
+  ['qstrdim',       {}], ['qstrlen',       {}], ['qstrncat',      {}],
+  ['qsubstr',       {}],
+
+  // ── Player state ──────────────────────────────────────────────────────────
+  ['resetplayer',   {}], ['resetplayerflags',{}], ['wackplayer',  {}],
+  ['lockplayer',    {}], ['pstomp',        {}], ['flash',         {}],
+  ['tip',           {}], ['inv',           {}],
+  ['checkactivatormotion',{}], ['respawnhitag',{}], ['quake',      {}],
+  ['endoflevel',    {}], ['endofgame',     {}],
+  ['startlevel',    {}], ['startcutscene', {}],
+
+  // ── Sector operations ─────────────────────────────────────────────────────
+  ['operatesectors',{}], ['operateactivators',{}], ['operaterespawns',{}],
+  ['operatemasterswitches',{}], ['operate',  {}],
+  ['activatebysector',{}], ['activatecheat',{}], ['dragpoint',    {}],
+
+  // ── Find operations ───────────────────────────────────────────────────────
+  ['findnearactor', {}], ['findnearactor3d',{}], ['findnearactorz',{}],
+  ['findnearsprite',{}], ['findnearsprite3d',{}], ['findnearspritez',{}],
+  ['findotherplayer',{}], ['findplayer',   {}],
+
+  // ── Save/load ─────────────────────────────────────────────────────────────
+  ['savegamevar',   {}], ['readgamevar',   {}],
+  ['savemapstate',  {}], ['loadmapstate',  {}], ['clearmapstate', {}],
+  ['save',          {}], ['savenn',        {}],
+
+  // ── Input/timer ───────────────────────────────────────────────────────────
+  ['getkeyname',    {}], ['getgamefuncbind',{}], ['getticks',     {}],
+  ['gettimedate',   {}], ['getincangle',   {}],
+
+  // ── Debug ────────────────────────────────────────────────────────────────
+  ['debug',         {}], ['echo',          {}],
+
+  // ── Misc ─────────────────────────────────────────────────────────────────
+  ['cspriteflags',  {}],
+]);

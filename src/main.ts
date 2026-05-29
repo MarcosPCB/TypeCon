@@ -5,6 +5,7 @@ import path = require('path');
 import { CONInit } from './modules/compiler/framework';
 import { TsToConCompiler } from './modules/compiler/Compiler';
 import { Linker } from './modules/linker/Linker';
+import { validateCON } from './modules/con-validator/index';
 import inquirer from 'inquirer';
 const fsExtra = require("fs-extra");
 import { spawnSync } from 'child_process';
@@ -41,6 +42,7 @@ let con_module = false;
 let compile_mode: 'single' | 'module' = 'single';
 let intermediate_code = false;
 let clean = false;
+let validateOnly = false;
 
 export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
     switch (color) {
@@ -105,7 +107,14 @@ Usage:
     \x1b[95m-ei or --eduke-init\x1b[0m: Init file is EDUKE.CON
     \x1b[95m-Cm or --con-module\x1b[0m: (Linker) Output as a relocatable CON module (generates global array storage)
     \x1b[96m-np or --no-precompiled\x1b[0m: Disable automatic linking of pre-compiled system modules
-    \x1b[91m-C or --clean\x1b[0m: Empty build folders (obj, asm, compiled) and exit`
+    \x1b[91m-C or --clean\x1b[0m: Empty build folders (obj, asm, compiled) and exit
+
+    Validator options:
+    \x1b[32m-V or --validate\x1b[0m: Validate a compiled .con file against EDuke32 CON rules
+        Reports block structure errors, unknown events, out-of-range tile IDs,
+        invalid struct fields, and resource-limit violations.
+        Use \x1b[33m-i\x1b[0m for a single file or \x1b[33m-il\x1b[0m for multiple files.
+        Exit code 0 = OK (warnings only), 1 = errors found.`
 
 
 
@@ -504,6 +513,9 @@ async function Main() {
         if (a == '--clean' || a == '-C')
             clean = true;
 
+        if (a == '--validate' || a == '-V')
+            validateOnly = true;
+
         if (a == 'setup') {
             initFunc = true;
         }
@@ -522,6 +534,7 @@ async function Main() {
     if (runLinker) modeCount++;
     if (compile_only) modeCount++;
     if (clean) modeCount++;
+    if (validateOnly) modeCount++;
 
     if (modeCount === 0) {
         console.log(colorText('\nNo mode specified. You must choose exactly one of:', 'red'));
@@ -529,6 +542,7 @@ async function Main() {
         console.log(colorText('  -c / --compile   : Compile source files to .tco', 'cyan'));
         console.log(colorText('  -L / --linker    : Link .tco files into a .con', 'cyan'));
         console.log(colorText('  -C / --clean     : Clean build folders', 'cyan'));
+        console.log(colorText('  -V / --validate  : Validate a compiled .con file', 'cyan'));
         console.log(helpText);
         process.exit(1);
     }
@@ -540,6 +554,59 @@ async function Main() {
 
     if (initFunc) {
         await Setup();
+    }
+
+    if (validateOnly) {
+        const validateFiles = files.length > 0 ? files : fileName ? [fileName] : [];
+        if (validateFiles.length === 0) {
+            console.log(colorText('Error: -V requires at least one .con input file via -i or -il', 'red'));
+            process.exit(1);
+        }
+        const baseCONDir = path.join(process.cwd(), 'baseCON');
+        let allOk = true;
+        for (const file of validateFiles) {
+            if (!fs.existsSync(file)) {
+                console.log(colorText(`Error: File not found: ${file}`, 'red'));
+                allOk = false;
+                continue;
+            }
+            const text = fs.readFileSync(file, 'utf-8');
+            const conDir = path.dirname(path.resolve(file));
+            const baseDirs = [conDir];
+            if (fs.existsSync(baseCONDir)) baseDirs.push(baseCONDir);
+            const result = validateCON(text, { baseDirs });
+
+            // Report each included file
+            for (const inc of result.includedFiles) {
+                const hasErrors = inc.diagnostics.some(d => d.severity === 'error');
+                if (!hasErrors) {
+                    const parts: string[] = [];
+                    if (inc.gamevarsDelta > 0) parts.push(`gamevars: ${inc.gamevarsDelta}`);
+                    if (inc.arraysDelta   > 0) parts.push(`arrays: ${inc.arraysDelta}`);
+                    if (inc.statesDelta   > 0) parts.push(`states: ${inc.statesDelta}`);
+                    if (inc.definesDelta  > 0) parts.push(`defines: ${inc.definesDelta}`);
+                    if (inc.actionsDelta  > 0) parts.push(`actions: ${inc.actionsDelta}`);
+                    if (inc.movesDelta    > 0) parts.push(`moves: ${inc.movesDelta}`);
+                    if (inc.aisDelta      > 0) parts.push(`ais: ${inc.aisDelta}`);
+                    if (inc.quotesDelta   > 0) parts.push(`quotes: ${inc.quotesDelta}`);
+                    const stats = parts.length > 0 ? `  (${parts.join('  ')})` : '';
+                    console.log(colorText(`OK  ${inc.filePath}`, 'green') + stats);
+                }
+            }
+
+            if (result.diagnostics.length === 0) {
+                console.log(colorText(`OK  ${file}`, 'green') + `  (${result.symbolTable.usageSummary()})`);
+            } else {
+                for (const d of result.diagnostics) {
+                    const tag = d.severity === 'error'
+                        ? colorText('[ERROR]', 'red')
+                        : colorText('[WARN] ', 'yellow');
+                    console.log(`${tag} ${d.file ?? file}:${d.line}  ${d.code} — ${d.message}`);
+                }
+                if (!result.ok) allOk = false;
+            }
+        }
+        process.exit(allOk ? 0 : 1);
     }
 
     if (clean) {

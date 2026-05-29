@@ -1,5 +1,5 @@
-import '../include/TCSet100/types';
-import { AnimUtils } from '../include/TCSet100/AnimUtils';
+import '../../../include/TCSet100/types';
+import { AnimUtils } from '../../../include/TCSet100/AnimUtils';
 
 class TestAnim extends CEvent {
     constructor() { super('InitComplete'); }

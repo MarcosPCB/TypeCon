@@ -1,4 +1,4 @@
-import '../include/TCSet100/types';
+import '../../../include/TCSet100/types';
 
 // tsprites are only valid during renderer events
 class TestTSprites extends CEvent {

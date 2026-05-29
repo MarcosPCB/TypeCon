@@ -1,5 +1,5 @@
-import '../include/TCSet100/types';
-import { DN3D } from '../include/TCSet100/DN3D/game.ts';
+import '../../../include/TCSet100/types';
+import { DN3D } from '../../../include/TCSet100/DN3D/game.ts';
 
 /**
  * Type definitions for testing
