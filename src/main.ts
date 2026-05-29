@@ -12,6 +12,9 @@ import { spawnSync } from 'child_process';
 const packConfig = require('../package.json');
 import https from 'https';
 import semver from 'semver';
+import { loadConfig, runMake, MakeStep } from './modules/make/index';
+import { runMakeCreate } from './modules/make/create';
+import { runMakeConfig } from './modules/make/config';
 
 let fileName = '';
 let input_folder = '';
@@ -75,6 +78,15 @@ const helpText = `
 Usage:
     Project options:
     \x1b[31msetup\x1b[0m: Creates the project's basic setup including folders, include files, templates and the basic TypeScript configuration
+
+    Make (project build system):
+    \x1b[32mmake create\x1b[0m:   Interactive wizard — create typecon.json from scratch
+    \x1b[32mmake config\x1b[0m:   Reconfigure typecon.json; toggle individual modules with arrow keys
+    \x1b[32mmake\x1b[0m:          Run full pipeline: compile → link → validate
+    \x1b[32mmake clear\x1b[0m:    Delete obj/, asm/, and compiled/ contents only (no build)
+    \x1b[32mmake compile\x1b[0m:  Compile TypeScript sources to .tco only
+    \x1b[32mmake link\x1b[0m:     Link .tco files into the output .con only
+    \x1b[32mmake validate\x1b[0m: Validate the output .con only
 
     Common options (Works on both):
     \x1b[31m-i or --input\x1b[0m:  Input file path
@@ -375,6 +387,18 @@ By ItsMarcos\x1b[0m - Use \x1b[95m'--help or -?'\x1b[0m to get the list of comma
 async function Main() {
     if (!fs.existsSync(process.cwd() + '/compiled'))
         fs.mkdirSync(process.cwd() + '/compiled');
+
+    // ── make subcommand ──────────────────────────────────────────────────────
+    if (process.argv[2] === 'make') {
+        const sub = process.argv[3];
+        if (sub === 'create') { await runMakeCreate(); process.exit(0); }
+        if (sub === 'config') { await runMakeConfig(); process.exit(0); }
+        const normalised = sub === 'clear' ? 'clean' : sub;
+        const step = (['clean', 'compile', 'link', 'validate'].includes(normalised) ? normalised : 'all') as MakeStep;
+        const cfg  = loadConfig(path.join(process.cwd(), 'typecon.json'));
+        await runMake(step, cfg);
+        process.exit(0);
+    }
 
     for (let i = 0; i < process.argv.length; i++) {
         const a = process.argv[i];

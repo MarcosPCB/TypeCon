@@ -1,0 +1,37 @@
+{
+  "name": "MyMod",
+  "sources": [
+    "src/actors/**/*.ts",
+    "src/events/**/*.ts"
+  ],
+  "objDir": "obj",
+  "outputDir": "compiled",
+  "output": "EDUKE.CON",
+  "stackSize": 1024,
+  "heapPageSize": 4,
+  "heapPageNumber": 128,
+  "defaultInclusion": false,
+  "precompiledModules": true,
+  "modules": [
+    {
+      "path": "src/actors/BossActor.ts",
+      "enabled": true,
+      "required": true
+    },
+    {
+      "path": "src/actors/MinorEnemy.ts",
+      "enabled": false
+    }
+  ],
+  "validate": {
+    "enabled": true,
+    "warnNearLimits": true,
+    "baseDirs": [
+      "baseCON"
+    ]
+  },
+  "locked": [
+    "stackSize",
+    "heapPageSize"
+  ]
+}

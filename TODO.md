@@ -12,8 +12,13 @@
  ## CON Script interpreter
  - Create tests for all CORE codes 
 
- ## MAKE module
- - Implement a Makefile system
-
  ## TypeCON Plugin
   - Update the plugin with the lateest changes
+
+## DEBUG mode
+ - Add a DEBUG mode for checking stack, heap and other values during runtime
+ - Add the values on screen (can be toggled by the player in game)
+
+ ## Weapons example
+  - Add DN3D drawing routines in TypeCON as an example
+  - Add a new weapon as an example (could be the Plasma Gun from LE) with pickup sprite and everything.
