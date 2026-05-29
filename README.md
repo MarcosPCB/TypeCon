@@ -216,6 +216,74 @@ project/
 
 ---
 
+## 🔧 Make Module (Project Build System)
+
+`tcc make` replaces manual flag chaining with a project-level build orchestrator. Create a `typecon.json` once and run the full pipeline — or any individual step — with a single command.
+
+### Quick start
+
+```bash
+# 1. Generate typecon.json (interactive wizard)
+tcc make create
+
+# 2. Run the full pipeline (compile → link → validate)
+tcc make
+
+# 3. Reconfigure at any time
+tcc make config
+```
+
+### Subcommands
+
+| Command | Description |
+|---|---|
+| `tcc make` | Full pipeline: compile → link → validate |
+| `tcc make create` | Interactive wizard — generates `typecon.json` |
+| `tcc make config` | Reconfigure an existing `typecon.json` |
+| `tcc make compile` | Compile source files → `.tco` objects |
+| `tcc make link` | Link `.tco` objects → final `.con` |
+| `tcc make validate` | Validate the linked output with the CON validator |
+| `tcc make clear` | Empty `obj/`, `asm/`, and `compiled/` (no build) |
+
+### `typecon.json` format
+
+```json
+{
+  "name": "MyMod",
+  "sources": ["src/actors/**/*.ts", "src/events/**/*.ts"],
+  "objDir": "obj",
+  "outputDir": "compiled",
+  "output": "EDUKE.CON",
+  "stackSize": 1024,
+  "heapPageSize": 4,
+  "heapPageNumber": 128,
+  "defaultInclusion": false,
+  "precompiledModules": true,
+  "modules": [
+    { "path": "src/actors/BossActor.ts", "enabled": true, "required": true },
+    { "path": "src/actors/MinorEnemy.ts", "enabled": false }
+  ],
+  "validate": {
+    "enabled": true,
+    "warnNearLimits": true,
+    "baseDirs": ["baseCON"]
+  },
+  "locked": ["stackSize", "heapPageSize"]
+}
+```
+
+All fields are optional and fall back to the same defaults as the equivalent CLI flags.
+
+### Module configuration
+
+The `modules[]` array lets you enable or disable specific source files independent of what the `sources` globs match. Entries with `"required": true` cannot be disabled via `tcc make config`.
+
+### Lock system
+
+Any field key listed in `locked[]` is shown in `tcc make config` but cannot be edited — useful for locking down stack/heap sizes or output paths in shared project configs. Adding `"locked"` to its own array hides the lock management UI entirely.
+
+---
+
 ## 🚥 CLI Parameters
 
 ### Project Setup

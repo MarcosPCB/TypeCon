@@ -1,5 +1,24 @@
 # Changelog
 
+## [v0.8.2]
+
+### Added
+- **Make Module (`tcc make`)**: Project-level build orchestrator driven by `typecon.json`. Replaces manual flag chaining with a single command that runs the full compile → link → validate pipeline.
+  - `tcc make create` — interactive wizard that generates a new `typecon.json` from scratch (project name, source globs, output paths, stack/heap sizes, validator settings, per-module enable/required flags, and field lock configuration).
+  - `tcc make config` — reconfigures an existing `typecon.json`; `name` and `sources` are always read-only; all other fields are editable unless listed in `locked[]`.
+  - `tcc make` — runs the full pipeline (compile → link → validate). Does **not** clean first.
+  - `tcc make clear` / `tcc make clean` — empties `obj/`, `asm/`, and `compiled/` without building.
+  - `tcc make compile` / `tcc make link` / `tcc make validate` — run individual pipeline steps.
+- **`typecon.json` project config**: Per-project build file with fields for `name`, `sources` (glob array), `objDir`, `outputDir`, `output`, `stackSize`, `heapPageSize`, `heapPageNumber`, `defaultInclusion`, `precompiledModules`, `modules[]` (per-file enable/required overrides), `validate{}`, and `locked[]`.
+- **Lockable fields**: Any field key listed in `locked[]` is displayed but not editable in `tcc make config`. The `locked` key itself can be locked ("lock-locked"), hiding the lock management section entirely.
+- **Required modules**: `modules[]` entries with `required: true` cannot be disabled in `tcc make config`. When `"modules"` is in `locked[]`, only enable/disable is available — the required-status checkbox is hidden.
+- **Folder-grouped module UI**: Module checkboxes in `tcc make create` and `tcc make config` are sorted by folder with visual `── folder/ ──` separators for large projects.
+- **`typecon.example.json`**: Reference config file added to the repo showing all available fields.
+- **EDuke32 event system expansion**: All 164 EDuke32 events now mapped across 6 categories — PAE (25 Per-Actor Events), DE (33 Duke Events), IE (24 Input Events), WE (28 World Events), PIE (11 Per-Item Events), ME (43 Misc Events).
+- **Validator per-file delta stats**: `IncludedFileResult` now tracks symbol deltas per included file — defines, actions, moves, AIs, quotes, and aggregate symbol count added by each `include` directive.
+- **Validator symbol-type tracking**: Validator reports on `defines`, `actions`, `moves`, `ais`, and `quotes` usage alongside the existing label/game-var counts, with near-limit warnings for each category.
+- **Templates reorganization**: Template files reorganized into category subdirectories under `templates/` (actors, tests/events, tests/general, tests/input, tests/math, tests/singletons, tests/structs).
+
 ## [v0.8.0]
 
 ### Added

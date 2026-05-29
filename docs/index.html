@@ -180,6 +180,15 @@
             <li><a href="#fixed-point">Fixed-Point System</a></li>
             <li><a href="#math-module">Math Module</a></li>
             <li><a href="#anim-module">AnimUtils Module</a></li>
+            <li>
+                <a href="#make-module">Make Module</a>
+                <ul>
+                    <li><a href="#make-subcommands">Subcommands</a></li>
+                    <li><a href="#make-typecon-json">typecon.json</a></li>
+                    <li><a href="#make-modules">Module Config</a></li>
+                    <li><a href="#make-locks">Lock System</a></li>
+                </ul>
+            </li>
             <li><a href="Architecture.md">Technical Architecture</a></li>
             <li><a href="../CHANGELOG.md">Changelog</a></li>
         </ul>
@@ -3940,6 +3949,103 @@ class displayRest extends CEvent {
             <table>
                 <tr><th>Function</th><th>Returns</th><th>Description</th></tr>
                 <tr><td>AnimUtils.bezierQuad(a: FP16, b: FP16, c: FP16, t: FP16)</td><td>FP16</td><td>Quadratic Bézier interpolation through control points a, b, c at parameter t.</td></tr>
+            </table>
+        </div>
+
+        <div id="make-module" class="section">
+            <h2>Make Module</h2>
+            <p>The <code>tcc make</code> subcommand is a project-level build orchestrator. Instead of chaining compiler flags manually, you describe the project once in <code>typecon.json</code> and run the full pipeline — or any individual step — with a single command.</p>
+
+            <h3 id="make-subcommands">Subcommands</h3>
+            <table>
+                <tr><th>Command</th><th>Description</th></tr>
+                <tr><td><code>tcc make</code></td><td>Run the full pipeline: compile → link → validate (validate skipped if <code>validate.enabled</code> is <code>false</code>).</td></tr>
+                <tr><td><code>tcc make create</code></td><td>Interactive wizard. Asks questions about your project and writes a new <code>typecon.json</code>. If the file already exists, prompts before overwriting.</td></tr>
+                <tr><td><code>tcc make config</code></td><td>Reconfigure an existing <code>typecon.json</code>. <code>name</code> and <code>sources</code> are always read-only; all other fields are editable unless listed in <code>locked[]</code>.</td></tr>
+                <tr><td><code>tcc make compile</code></td><td>Compile source files from <code>sources</code> globs (filtered by <code>modules[]</code>) into <code>.tco</code> objects in <code>objDir</code>.</td></tr>
+                <tr><td><code>tcc make link</code></td><td>Link all <code>.tco</code> files in <code>objDir</code> into a single <code>.con</code> file written to <code>outputDir/output</code>.</td></tr>
+                <tr><td><code>tcc make validate</code></td><td>Run the CON validator on the linked output and report diagnostics.</td></tr>
+                <tr><td><code>tcc make clear</code> / <code>tcc make clean</code></td><td>Empty <code>obj/</code>, <code>asm/</code>, and <code>compiled/</code> without building.</td></tr>
+            </table>
+
+            <h3 id="make-typecon-json">typecon.json Schema</h3>
+            <p>All fields are optional. Defaults mirror the equivalent CLI flag defaults.</p>
+            <table>
+                <tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr>
+                <tr><td><code>name</code></td><td>string</td><td>cwd directory name</td><td>Project display name. Read-only in <code>tcc make config</code>.</td></tr>
+                <tr><td><code>sources</code></td><td>string[]</td><td><code>["src/**/*.ts"]</code></td><td>Glob patterns (relative to cwd) that select source files. Read-only in <code>tcc make config</code>.</td></tr>
+                <tr><td><code>objDir</code></td><td>string</td><td><code>"obj"</code></td><td>Directory for compiled <code>.tco</code> intermediate files.</td></tr>
+                <tr><td><code>outputDir</code></td><td>string</td><td><code>"compiled"</code></td><td>Directory for the final linked <code>.con</code> file.</td></tr>
+                <tr><td><code>output</code></td><td>string</td><td><code>"GAME.CON"</code></td><td>Output filename written inside <code>outputDir</code>.</td></tr>
+                <tr><td><code>stackSize</code></td><td>number</td><td>1024</td><td>Virtual stack size in <code>flat[]</code> elements.</td></tr>
+                <tr><td><code>heapPageSize</code></td><td>number</td><td>4</td><td>Heap page minimum size (KB).</td></tr>
+                <tr><td><code>heapPageNumber</code></td><td>number</td><td>128</td><td>Number of heap pages.</td></tr>
+                <tr><td><code>defaultInclusion</code></td><td>boolean</td><td>false</td><td>Prepend <code>include GAME.CON</code> to the output.</td></tr>
+                <tr><td><code>precompiledModules</code></td><td>boolean</td><td>true</td><td>Link pre-compiled system modules (math, anim, GC, etc.).</td></tr>
+                <tr><td><code>modules</code></td><td>MakeModuleEntry[]</td><td>—</td><td>Per-file enable/required overrides. See <a href="#make-modules">Module Config</a>.</td></tr>
+                <tr><td><code>validate</code></td><td>MakeValidateConfig</td><td>—</td><td>Validator settings. See table below.</td></tr>
+                <tr><td><code>locked</code></td><td>string[]</td><td>—</td><td>Keys listed here are displayed but not editable in <code>tcc make config</code>. See <a href="#make-locks">Lock System</a>.</td></tr>
+            </table>
+
+            <h4>validate object</h4>
+            <table>
+                <tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr>
+                <tr><td><code>enabled</code></td><td>boolean</td><td>true</td><td>Run the validator as part of <code>tcc make</code>.</td></tr>
+                <tr><td><code>warnNearLimits</code></td><td>boolean</td><td>true</td><td>Emit warnings when approaching EDuke32 resource limits.</td></tr>
+                <tr><td><code>baseDirs</code></td><td>string[]</td><td><code>["baseCON"]</code></td><td>Additional directories searched for <code>include</code>d CON files during validation.</td></tr>
+            </table>
+
+            <h4>Example typecon.json</h4>
+            <pre class="code">{
+  "name": "MyMod",
+  "sources": ["src/actors/**/*.ts", "src/events/**/*.ts"],
+  "objDir": "obj",
+  "outputDir": "compiled",
+  "output": "EDUKE.CON",
+  "stackSize": 1024,
+  "heapPageSize": 4,
+  "heapPageNumber": 128,
+  "defaultInclusion": false,
+  "precompiledModules": true,
+  "modules": [
+    { "path": "src/actors/BossActor.ts", "enabled": true, "required": true },
+    { "path": "src/actors/MinorEnemy.ts", "enabled": false }
+  ],
+  "validate": {
+    "enabled": true,
+    "warnNearLimits": true,
+    "baseDirs": ["baseCON"]
+  },
+  "locked": ["stackSize", "heapPageSize"]
+}</pre>
+
+            <h3 id="make-modules">Module Configuration</h3>
+            <p>The <code>modules[]</code> array overrides the enable/disable state of individual source files regardless of what the <code>sources</code> globs match.</p>
+            <table>
+                <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+                <tr><td><code>path</code></td><td>string</td><td>Relative path to the source file (from cwd). Must match a path returned by the glob expansion or be explicitly listed.</td></tr>
+                <tr><td><code>enabled</code></td><td>boolean</td><td>Whether this file is included in the compile step. Defaults to <code>true</code> for any file matched by <code>sources</code> that has no entry here.</td></tr>
+                <tr><td><code>required</code></td><td>boolean</td><td>Optional. When <code>true</code>, the file cannot be disabled via <code>tcc make config</code>. It always compiles.</td></tr>
+            </table>
+            <p>In <code>tcc make config</code>, modules are shown as a folder-grouped checkbox list. Files with <code>required: true</code> appear as disabled entries (always checked). When <code>"modules"</code> is in <code>locked[]</code>, only the enable/disable checkbox is shown — the required-status step is skipped.</p>
+
+            <h3 id="make-locks">Lock System</h3>
+            <p>Add any field key to the <code>locked[]</code> array to prevent it from being changed in <code>tcc make config</code>. Locked fields are still displayed alongside their current value so the team can see the setting, but the prompt is skipped.</p>
+            <table>
+                <tr><th>Lockable key</th><th>What it protects</th></tr>
+                <tr><td><code>objDir</code></td><td>Object output directory</td></tr>
+                <tr><td><code>outputDir</code></td><td>Compiled output directory</td></tr>
+                <tr><td><code>output</code></td><td>Output CON filename</td></tr>
+                <tr><td><code>stackSize</code></td><td>Virtual stack size</td></tr>
+                <tr><td><code>heapPageSize</code></td><td>Heap page size</td></tr>
+                <tr><td><code>heapPageNumber</code></td><td>Heap page count</td></tr>
+                <tr><td><code>defaultInclusion</code></td><td>Include default GAME.CON flag</td></tr>
+                <tr><td><code>precompiledModules</code></td><td>Pre-compiled system modules flag</td></tr>
+                <tr><td><code>validate.enabled</code></td><td>Validator enabled flag</td></tr>
+                <tr><td><code>validate.warnNearLimits</code></td><td>Near-limit warning flag</td></tr>
+                <tr><td><code>validate.baseDirs</code></td><td>Validator include directories</td></tr>
+                <tr><td><code>modules</code></td><td>Required module status (only enable/disable available when locked)</td></tr>
+                <tr><td><code>locked</code></td><td>The lock list itself — when present, the lock management UI is hidden in <code>tcc make config</code></td></tr>
             </table>
         </div>
 
