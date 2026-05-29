@@ -11,3 +11,9 @@
 
  ## CON Script interpreter
  - Create tests for all CORE codes 
+
+ ## MAKE module
+ - Implement a Makefile system
+
+ ## TypeCON Plugin
+  - Update the plugin with the lateest changes
