@@ -1,6 +1,11 @@
 node_modules
+eduke32_src
+.agent
+.claude
 compiled
 obj
+CLAUDE.md
+TODO.md
 asm
 test
 test
