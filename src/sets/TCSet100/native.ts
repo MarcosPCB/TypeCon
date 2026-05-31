@@ -2689,14 +2689,6 @@ export const nativeVars_Players: CON_NATIVE_VAR[] = [
         init: 0
     },
     {
-        name: 'onLadder',
-        var_type: CON_NATIVE_TYPE.native,
-        type: CON_NATIVE_FLAGS.VARIABLE,
-        readonly: false,
-        code: 'on_ladder',
-        init: 0
-    },
-    {
         name: 'jumping',
         var_type: CON_NATIVE_TYPE.native,
         type: CON_NATIVE_FLAGS.VARIABLE,
@@ -2710,14 +2702,6 @@ export const nativeVars_Players: CON_NATIVE_VAR[] = [
         type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'crouch_toggle',
-        init: 0
-    },
-    {
-        name: 'god',
-        var_type: CON_NATIVE_TYPE.native,
-        type: CON_NATIVE_FLAGS.VARIABLE,
-        readonly: false,
-        code: 'god',
         init: 0
     },
     {
@@ -2742,14 +2726,6 @@ export const nativeVars_Players: CON_NATIVE_VAR[] = [
         type: CON_NATIVE_FLAGS.VARIABLE,
         readonly: false,
         code: 'secret_rooms',
-        init: 0
-    },
-    {
-        name: 'totalKills',
-        var_type: CON_NATIVE_TYPE.native,
-        type: CON_NATIVE_FLAGS.VARIABLE,
-        readonly: false,
-        code: 'total_kills',
         init: 0
     },
     {
@@ -2785,14 +2761,6 @@ export const nativeVars_Players: CON_NATIVE_VAR[] = [
         init: 0
     },
     {
-        name: 'invAmount',
-        var_type: CON_NATIVE_TYPE.array,
-        type: CON_NATIVE_FLAGS.ARRAY,
-        readonly: false,
-        code: 'inv_amount rsi',
-        init: 0
-    },
-    {
         name: 'resources',
         var_type: CON_NATIVE_TYPE.object,
         type: CON_NATIVE_FLAGS.OBJECT,
@@ -2805,7 +2773,6 @@ export const nativeVars_Players: CON_NATIVE_VAR[] = [
             { name: 'jetpack',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'jetpack_amount',    init: 0 },
             { name: 'scuba',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'scuba_amount',      init: 0 },
             { name: 'steroids', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'steroids_amount',   init: 0 },
-            { name: 'amounts',  var_type: CON_NATIVE_TYPE.array,  type: CON_NATIVE_FLAGS.ARRAY,    readonly: false, code: 'inv_amount rsi',    init: 0 },
         ]
     },
     {
@@ -2817,10 +2784,8 @@ export const nativeVars_Players: CON_NATIVE_VAR[] = [
         init: 0,
         object: [
             { name: 'onGround',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'on_ground',      init: 0 },
-            { name: 'onLadder',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'on_ladder',      init: 0 },
             { name: 'jumping',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'jumping_toggle', init: 0 },
             { name: 'crouching', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'crouch_toggle',  init: 0 },
-            { name: 'god',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'god',            init: 0 },
             { name: 'dead',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'dead_flag',      init: 0 },
         ]
     },
@@ -2834,7 +2799,6 @@ export const nativeVars_Players: CON_NATIVE_VAR[] = [
         object: [
             { name: 'actorsKilled', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'actors_killed', init: 0 },
             { name: 'secretRooms',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'secret_rooms',  init: 0 },
-            { name: 'totalKills',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'total_kills',   init: 0 },
         ]
     },
     // fixed-point angle/horizon variants (raw q16 values, 65536 = 1 integer unit)
@@ -3110,7 +3074,11 @@ export const nativeVars_TSprites: CON_NATIVE_VAR[] = [
         readonly: false,
         code: '',
         init: 0,
-        object: nativePos
+        object: [
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprx', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tspry', init: 0 },
+            { name: 'z', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprz', init: 0 },
+        ]
     },
     {
         name: 'vel',
@@ -3120,9 +3088,9 @@ export const nativeVars_TSprites: CON_NATIVE_VAR[] = [
         code: '',
         init: 0,
         object: [
-            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xvel', init: 0 },
-            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yvel', init: 0 },
-            { name: 'z', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'zvel', init: 0 },
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprxvel', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tspryvel', init: 0 },
+            { name: 'z', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprzvel', init: 0 },
         ]
     },
     {
@@ -3133,8 +3101,8 @@ export const nativeVars_TSprites: CON_NATIVE_VAR[] = [
         code: '',
         init: 0,
         object: [
-            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xrepeat', init: 0 },
-            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yrepeat', init: 0 },
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprxrepeat', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tspryrepeat', init: 0 },
         ]
     },
     {
@@ -3145,21 +3113,21 @@ export const nativeVars_TSprites: CON_NATIVE_VAR[] = [
         code: '',
         init: 0,
         object: [
-            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'xoffset', init: 0 },
-            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'yoffset', init: 0 },
+            { name: 'x', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprxoffset', init: 0 },
+            { name: 'y', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tspryoffset', init: 0 },
         ]
     },
-    { name: 'ang',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'ang',      init: 0 },
-    { name: 'picnum',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'picnum',   init: 0 },
-    { name: 'shade',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'shade',    init: 0 },
-    { name: 'pal',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'pal',      init: 0 },
-    { name: 'cstat',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cstat',    init: 0 },
-    { name: 'owner',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'owner',    init: -1 },
-    { name: 'statnum',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'statnum',  init: 0 },
-    { name: 'sectnum',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'sectnum',  init: 0 },
-    { name: 'extra',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'extra',    init: 0 },
-    { name: 'clipDist', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'clipdist', init: 0 },
-    { name: 'blend',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true,  code: 'blend',    init: 0 },
+    { name: 'ang',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprang',      init: 0 },
+    { name: 'picnum',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprpicnum',   init: 0 },
+    { name: 'shade',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprshade',    init: 0 },
+    { name: 'pal',      var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprpal',      init: 0 },
+    { name: 'cstat',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprcstat',    init: 0 },
+    { name: 'owner',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprowner',    init: -1 },
+    { name: 'statnum',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprstatnum',  init: 0 },
+    { name: 'sectnum',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprsectnum',  init: 0 },
+    { name: 'extra',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprextra',    init: 0 },
+    { name: 'clipDist', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'tsprclipdist', init: 0 },
+    { name: 'blend',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true,  code: 'tsprblend',    init: 0 },
     {
         name: 'tags',
         var_type: CON_NATIVE_TYPE.object,
@@ -3167,7 +3135,10 @@ export const nativeVars_TSprites: CON_NATIVE_VAR[] = [
         readonly: false,
         code: '',
         init: 0,
-        object: nativeTag
+        object: [
+            { name: 'lotag', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: 'tsprlotag' },
+            { name: 'hitag', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, init: 0, code: 'tsprhitag' },
+        ]
     },
 ]
 
@@ -3177,14 +3148,11 @@ export const nativeVars_UserDef: CON_NATIVE_VAR[] = [
     { name: 'levelNum',     var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'level_number', init: 0 },
     { name: 'volumeNum',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'volume_number',init: 0 },
     { name: 'multiMode',    var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'multimode',    init: 0 },
-    { name: 'numPlayers',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true,  code: 'numplayers',   init: 1 },
     { name: 'musicEpisode', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'music_episode',init: 0 },
     { name: 'musicLevel',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'music_level',  init: 0 },
     { name: 'playerSkill',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'player_skill', init: 0 },
-    { name: 'cameraDist',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cameradist',   init: 0 },
-    { name: 'cameraClock',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cameraclock',  init: 0 },
     { name: 'scrollMode',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'scrollmode',   init: 0 },
-    { name: 'screenSize',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'screensize',   init: 0 },
+    { name: 'screenSize',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'screen_size',   init: 0 },
     { name: 'coop',         var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'coop',         init: 0 },
     { name: 'returnData',   var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.ARRAY,    readonly: false, code: 'return rsi',   init: 0 },
     {
@@ -3211,20 +3179,8 @@ export const nativeVars_UserDef: CON_NATIVE_VAR[] = [
         init: 0,
         object: [
             { name: 'brightness', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'brightness', init: 0 },
-            { name: 'size',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'screensize', init: 0 },
+            { name: 'size',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'screen_size', init: 0 },
             { name: 'scrollMode', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'scrollmode', init: 0 },
-        ]
-    },
-    {
-        name: 'camera',
-        var_type: CON_NATIVE_TYPE.object,
-        type: CON_NATIVE_FLAGS.OBJECT,
-        readonly: false,
-        code: '',
-        init: 0,
-        object: [
-            { name: 'dist',  var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cameradist',  init: 0 },
-            { name: 'clock', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'cameraclock', init: 0 },
         ]
     },
     {
@@ -3236,7 +3192,6 @@ export const nativeVars_UserDef: CON_NATIVE_VAR[] = [
         init: 0,
         object: [
             { name: 'mode',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'multimode',  init: 0 },
-            { name: 'numPlayers', var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: true,  code: 'numplayers', init: 1 },
             { name: 'coop',       var_type: CON_NATIVE_TYPE.native, type: CON_NATIVE_FLAGS.VARIABLE, readonly: false, code: 'coop',       init: 0 },
         ]
     },

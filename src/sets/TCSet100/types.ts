@@ -3004,28 +3004,20 @@ declare global {
         public steroidsAmount: CON_NATIVE<number>;
         /** Weapon animation frame */
         public kickbackPic: CON_NATIVE<number>;
-        /** Whether player is on a ladder */
-        public onLadder: CON_NATIVE<boolean>;
         /** Whether player is jumping */
         public jumping: CON_NATIVE<boolean>;
         /** Whether player is crouching */
         public crouching: CON_NATIVE<boolean>;
-        /** God mode flag */
-        public god: CON_NATIVE<boolean>;
         /** Dead flag */
         public dead: CON_NATIVE<boolean>;
-        /** Total kills */
-        public totalKills: CON_NATIVE<number>;
         /** Player's sprite index */
         public spriteIndex: CON_NATIVE<number>;
-        /** Inventory amounts (indexed array) */
-        public invAmount: CON_NATIVE<number[]>;
-        /** Grouped consumable resources: health, shield, jetpack, scuba, steroids, amounts[] */
-        public resources: CON_NATIVE<{ health: number; shield: number; jetpack: number; scuba: number; steroids: number; amounts: number[]; }>;
-        /** Grouped movement/state flags: onGround, onLadder, jumping, crouching, god, dead */
-        public status: CON_NATIVE<{ onGround: boolean; onLadder: boolean; jumping: boolean; crouching: boolean; god: boolean; dead: boolean; }>;
-        /** Level statistics: actorsKilled, secretRooms, totalKills */
-        public stats: CON_NATIVE<{ actorsKilled: number; secretRooms: number; totalKills: number; }>;
+        /** Grouped consumable resources: health, shield, jetpack, scuba, steroids */
+        public resources: CON_NATIVE<{ health: number; shield: number; jetpack: number; scuba: number; steroids: number; }>;
+        /** Grouped movement/state flags: onGround, jumping, crouching, dead */
+        public status: CON_NATIVE<{ onGround: boolean; jumping: boolean; crouching: boolean; dead: boolean; }>;
+        /** Level statistics: actorsKilled, secretRooms */
+        public stats: CON_NATIVE<{ actorsKilled: number; secretRooms: number; }>;
         public q16Horiz: CON_NATIVE<number>;
         public q16HorizOff: CON_NATIVE<number>;
         public oq16Horiz: CON_NATIVE<number>;
@@ -3249,18 +3241,12 @@ declare global {
         volumeNum: CON_NATIVE<number>;
         /** Multiplayer mode (0 = deathmatch, 1 = co-op, etc.) */
         multiMode: CON_NATIVE<number>;
-        /** Number of connected players (read-only) */
-        readonly numPlayers: CON_NATIVE<number>;
         /** Episode number for the currently playing music track */
         musicEpisode: CON_NATIVE<number>;
         /** Level number for the currently playing music track */
         musicLevel: CON_NATIVE<number>;
         /** Difficulty skill level (0 = easiest) */
         playerSkill: CON_NATIVE<number>;
-        /** Camera distance for the over-shoulder view */
-        cameraDist: CON_NATIVE<number>;
-        /** Camera clock — timing reference for the camera system */
-        cameraClock: CON_NATIVE<number>;
         /** Auto-map scroll mode */
         scrollMode: CON_NATIVE<number>;
         /** HUD screen size setting (0 = full, higher = smaller) */
@@ -3273,10 +3259,8 @@ declare global {
         level: CON_NATIVE<{ number: number; volume: number; skill: number; musicEpisode: number; musicLevel: number; }>;
         /** Screen settings grouped: `brightness`, `size`, `scrollMode` */
         screen: CON_NATIVE<{ brightness: number; size: number; scrollMode: number; }>;
-        /** Camera settings grouped: `dist`, `clock` */
-        camera: CON_NATIVE<{ dist: number; clock: number; }>;
-        /** Multiplayer settings grouped: `mode`, `numPlayers` (read-only), `coop` */
-        multi: CON_NATIVE<{ mode: number; readonly numPlayers: number; coop: number; }>;
+        /** Multiplayer settings grouped: `mode`, `coop` */
+        multi: CON_NATIVE<{ mode: number; coop: number; }>;
         warpOn: CON_NATIVE<number>;
         cashman: CON_NATIVE<number>;
         eog: CON_NATIVE<number>;

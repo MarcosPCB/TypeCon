@@ -18,7 +18,22 @@
 ## DEBUG mode
  - Add a DEBUG mode for checking stack, heap and other values during runtime
  - Add the values on screen (can be toggled by the player in game)
+ - Memory pass in CON Validator
 
  ## Weapons example
   - Add DN3D drawing routines in TypeCON as an example
   - Add a new weapon as an example (could be the Plasma Gun from LE) with pickup sprite and everything.
+
+## Native game vars
+ - Implement remaining game vars
+
+ ## New game vars for every Class
+  - Implement a way to register new variables for specific classes (e.g: per-actor var in CActor or per player in CPlayer)
+
+## Examples for each extra module
+ - Example for AnimUtils
+ - Example for CFile
+
+## Finish New Wwapon System
+
+## New enemy example
