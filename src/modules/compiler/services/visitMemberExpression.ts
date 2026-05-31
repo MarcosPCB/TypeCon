@@ -1,5 +1,6 @@
-import { Expression } from "ts-morph";
+import { Expression, SyntaxKind, StringLiteral } from "ts-morph";
 import { CompilerContext, SegmentIdentifier, SegmentIndex, SegmentProperty, MemberSegment, SymbolDefinition, EnumDefinition, ESymbolType } from "../Compiler";
+import { fnv1a32 } from "../helper/fnv1a32";
 import { addDiagnostic } from "./addDiagnostic";
 import { CON_NATIVE_VAR, CON_NATIVE_FLAGS, CON_NATIVE_TYPE, nativeVars_Players } from "../../../sets/TCSet100/native";
 import { nativeVars_Sprites, nativeVars_Sectors, nativeVars_Walls } from "../../../sets/TCSet100/native";
@@ -84,6 +85,61 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
     }
 
     if (!sym.native_pointer) {
+      // ─── Native Record<string, T> element access ──────────────────────────
+      if (sym.type & ESymbolType.record) {
+        // Load record heap pointer into r1
+        let recLoad: string;
+        if (sym.global)
+          recLoad = context.options.mode === 'module'
+            ? `set r1 flat[_G_ADDR_${sym.name}]\n`
+            : `set r1 flat[${sym.offset}]\n`;
+        else
+          recLoad = `set ri rbp\nadd ri ${(sym as SymbolDefinition).offset}\nset r1 flat[ri]\n`;
+
+        const idxSeg = segments[1];
+        if (!idxSeg || idxSeg.kind !== 'index') {
+          // Bare record variable reference — return the pointer
+          code += recLoad.replace('r1', reg);
+          context.curExpr = ESymbolType.record;
+          return code;
+        }
+
+        const idxExpr = (idxSeg as SegmentIndex).expr;
+        const isLitKey = idxExpr.isKind(SyntaxKind.StringLiteral);
+
+        if (assignment) {
+          // r["key"] = val  (ra holds the value to store)
+          code += `state pushr3\n`;
+          if (isLitKey) {
+            code += `set r0 ${fnv1a32((idxExpr as StringLiteral).getLiteralText())}\n`;
+          } else {
+            code += visitExpression(idxExpr, context, 'r0');
+            code += `state pushr1\nstate _rec_hash\nstate popr1\nset r0 rb\n`;
+          }
+          code += recLoad;       // r1 = rec_ptr
+          code += `set r2 ra\n`; // r2 = value
+          code += `state popr3\n`;
+          code += `state _rec_set\n`;
+        } else {
+          // val = r["key"]
+          code += `state pushr2\n`;
+          if (isLitKey) {
+            code += `set r0 ${fnv1a32((idxExpr as StringLiteral).getLiteralText())}\n`;
+          } else {
+            code += visitExpression(idxExpr, context, 'r0');
+            code += `state pushr1\nstate _rec_hash\nstate popr1\nset r0 rb\n`;
+          }
+          code += recLoad;       // r1 = rec_ptr
+          code += `state popr2\n`;
+          code += `state _rec_get\n`;
+          code += `set ${reg} rb\n`;
+          context.curExpr = (sym as SymbolDefinition).record_value_type ?? ESymbolType.number;
+          context.curFpBits = (sym as SymbolDefinition).record_value_fpbits ?? 0;
+        }
+        return code;
+      }
+      // ──────────────────────────────────────────────────────────────────────
+
       if (sym.global) {
         if (context.options.mode === 'module')
           code += `set ri _G_ADDR_${sym.name}\n`;

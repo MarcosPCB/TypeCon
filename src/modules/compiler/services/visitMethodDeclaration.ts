@@ -170,6 +170,8 @@ export function visitMethodDeclaration(
 
   const retTypeText = md.getReturnTypeNode()?.getText();
   const retFpBits = retTypeText ? FP_ALIAS_BITS[retTypeText] : undefined;
+  const retClassSym = retTypeText ? context.symbolTable.get(retTypeText) as SymbolDefinition : undefined;
+  const retIsClass = retClassSym && (retClassSym.type & ESymbolType.class);
 
   localCtx.symbolTable.set(mName, {
     name: `${className}_${mName}`,
@@ -177,7 +179,9 @@ export function visitMethodDeclaration(
     offset: 0,
     parentClass: className,
     param_fp_bits: paramFpBitsArr,
-    returns_fp_bits: retFpBits
+    returns_fp_bits: retFpBits,
+    returns: retIsClass ? ESymbolType.class : undefined,
+    returns_class_name: retIsClass ? retTypeText : undefined,
   });
 
   localCtx.curFunc = localCtx.symbolTable.get(mName) as SymbolDefinition;

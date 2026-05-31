@@ -7,6 +7,12 @@ import { unrollMemberExpression } from "./unrollMemberExpression";
 import { visitExpression } from "./visitExpression";
 import { resolveNativeArgument } from "./resolveNativeArgument";
 import { formatLineDetail } from "../helper/formatLineDetail";
+import { fnv1a32 } from "../helper/fnv1a32";
+
+// Read methods: key is only used for hash comparison, no string storage needed
+const CRECORD_KEY_READ_METHODS  = new Set(['Get', 'GetType', 'Has']);
+// Write methods: key string is stored in the slot (key_ptr), so string alloc still needed
+const CRECORD_KEY_WRITE_METHODS = new Set(['Set']);
 
 export function visitCallExpression(call: CallExpression, context: CompilerContext, reg = 'ra'): string {
   let code = context.options.lineDetail ? formatLineDetail(call.getText()) : '';
@@ -405,7 +411,13 @@ set rb ra
       context.curFpBits = 0;
   } else {
     const fnName = fnNameRaw.startsWith("this.") ? fnNameRaw.substring(5) : fnNameRaw;
-    const func = context.symbolTable.get(fnObj ? fnObj : fnName) as SymbolDefinition;
+    let func = context.symbolTable.get(fnObj ? fnObj : fnName) as SymbolDefinition;
+    let isParamClass = false;
+    // Fallback: method call on a class-typed function parameter
+    if (!func && fnObj && context.paramMap[fnObj]) {
+      func = context.paramMap[fnObj] as unknown as SymbolDefinition;
+      isParamClass = Boolean(func.type & ESymbolType.class);
+    }
 
     if (!func) {
       addDiagnostic(call, context, 'error', `Invalid ${fnObj ? 'class/object' : 'function'} ${fnNameRaw}`);
@@ -429,7 +441,36 @@ set rb ra
 
     const targetSym = (isClass || isModule) ? func.children[fnName] as SymbolDefinition : func;
 
+    // CRecord compile-time hash optimisation: pre-compute FNV-1a for string-literal keys.
+    // r6 carries the hash into the method body (0 = compute at runtime from string ptr in r0).
+    let crecordHashCode = '';
+    let skipArg0ForHash = false;
+    if (isClass && func.class_name === 'CRecord' && args.length > 0) {
+      const isReadMethod  = CRECORD_KEY_READ_METHODS.has(fnName);
+      const isWriteMethod = CRECORD_KEY_WRITE_METHODS.has(fnName);
+      if (isReadMethod || isWriteMethod) {
+        if (args[0].isKind(SyntaxKind.StringLiteral)) {
+          const keyStr = (args[0] as StringLiteral).getLiteralText();
+          const hash = fnv1a32(keyStr);
+          crecordHashCode = `set r6 ${hash}\n`;
+          if (isReadMethod) skipArg0ForHash = true; // No string ptr needed — hash in r6 is enough
+        } else {
+          crecordHashCode = `set r6 0\n`; // Signal method body to compute hash from string in r0
+        }
+      }
+    }
+    // Internal delegation calls (e.g. this.Get(key) from GetInt) always have runtime keys.
+    // Must explicitly reset r6 to 0 to prevent stale hash from an outer optimised call leaking in.
+    if (!isClass && func.parentClass === 'CRecord' && args.length > 0
+        && (CRECORD_KEY_READ_METHODS.has(fnName) || CRECORD_KEY_WRITE_METHODS.has(fnName))) {
+      crecordHashCode = `set r6 0\n`;
+    }
+
     for (let i = 0; i < args.length; i++) {
+      if (i === 0 && skipArg0ForHash) {
+        resolvedLiterals.push(null);
+        continue; // Hash injected via r6; skip heap string allocation for r0
+      }
       code += visitExpression(args[i] as Expression, context, `r${i}`);
       resolvedLiterals.push(null);
       const actualFp = context.curFpBits;
@@ -448,8 +489,20 @@ set rb ra
       }
     }
 
-    if (isClass)
-      code += `set ri rbp\nadd ri ${func.offset}\nset r${totalArgs - 1} flat[ri]\n`;
+    if (isClass) {
+      if (isParamClass) {
+        // this-pointer is already in the parameter register r{func.offset}
+        code += `set r${totalArgs - 1} r${func.offset}\n`;
+      } else if (func.global) {
+        const addr = context.options.mode === 'module'
+          ? `_G_ADDR_${func.name}`
+          : func.offset;
+        code += `set r${totalArgs - 1} flat[${addr}]\n`;
+      } else {
+        code += `set ri rbp\nadd ri ${func.offset}\nset r${totalArgs - 1} flat[ri]\n`;
+      }
+    }
+    code += crecordHashCode;
 
     if (func.type & ESymbolType.sub_function) {
       code += `state pushsi\nset rsi rbp\nadd rsi ${func.offset}\nset rsi flat[rsi]\n`;
@@ -462,6 +515,9 @@ set rb ra
 
     context.curExpr = (isClass || isModule) ? (func.children[fnName] as SymbolDefinition).returns : func.returns;
     context.curFpBits = targetSym.returns_fp_bits ?? 0;
+    if ((context.curExpr & ESymbolType.class) && targetSym.returns_class_name) {
+      context.curSymRet = context.symbolTable.get(targetSym.returns_class_name) as SymbolDefinition;
+    }
   }
 
   if (nativeFn && nativeFn.returns) {

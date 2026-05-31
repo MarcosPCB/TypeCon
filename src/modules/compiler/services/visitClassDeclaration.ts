@@ -247,6 +247,19 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
 
   if (type == '') {
     context.curClass = cls;
+    // Pre-register all method names before the constructor is compiled so that
+    // forward references (calling a method defined later in the file) resolve correctly.
+    const methodsForPreReg = cd.getInstanceMethods();
+    for (const m of methodsForPreReg) {
+      const mName = m.getName();
+      context.symbolTable.set(mName, {
+        name: `${className}_${mName}`,
+        type: ESymbolType.function,
+        offset: 0,
+        parentClass: className,
+      });
+      cls.children[mName] = context.symbolTable.get(mName) as SymbolDefinition;
+    }
   }
 
   if (ctors.length > 0 && type == '') {

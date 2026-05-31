@@ -1,5 +1,5 @@
 import { ReturnStatement } from "ts-morph";
-import { CompilerContext } from "../Compiler";
+import { CompilerContext, ESymbolType } from "../Compiler";
 import { visitExpression } from "./visitExpression";
 
 /******************************************************************************
@@ -22,7 +22,10 @@ export function visitReturnStatement(rs: ReturnStatement, context: CompilerConte
     } else {
       code += `sub rbp 1\nset rsp rbp\n\nstate pop\nset rbp ra\n`;
       code += `terminate\n`;
-      context.curFunc.returns |= context.curExpr;
+      // Don't corrupt an already-set class return type with inferred expression bits.
+      if (!(context.curFunc.returns & ESymbolType.class)) {
+        context.curFunc.returns |= context.curExpr;
+      }
     }
 
     code += `// end function\n`;

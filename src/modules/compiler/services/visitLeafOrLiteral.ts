@@ -30,6 +30,13 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
       if (i.fp_bits)
         context.curFpBits = i.fp_bits;
 
+      if (i.type & ESymbolType.class) {
+        context.curExpr = ESymbolType.class;
+        context.curSymRet = (i as any).class_name
+          ? context.symbolTable.get((i as any).class_name) as SymbolDefinition
+          : null;
+      }
+
       return code;
     }
 
@@ -258,6 +265,14 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
     code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
     context.curExpr = ESymbolType.class;
     context.curSymRet = sym;
+    if (className === 'CJson') {
+      const s = context.options.stackSize  ?? 1024;
+      const p = context.options.heapNumPages ?? 128;
+      if (s < 4096 || p < 256)
+        addDiagnostic(expr, context, 'warning',
+          `CJson requires substantial heap (stack_size=${s}, heap_page_number=${p}). ` +
+          `Recommended: stack_size >= 4096, heap_page_number >= 256 in typecon.json.`);
+    }
     return code;
   }
 

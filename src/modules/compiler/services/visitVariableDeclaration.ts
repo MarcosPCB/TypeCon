@@ -57,7 +57,6 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
       addDiagnostic(decl, context, 'error', `Undeclared type object ${type.getAliasTypeArguments()[0].getText()}`);
       return '';
     }
-
     context.symbolTable.set(varName, {
       name: varName, type: ESymbolType.native, offset: 0, size: 1, children: alias,
       global: isGlobal,
@@ -71,6 +70,53 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
   // because alias resolution via getType() is unreliable in module-scoped files.
   const typeNodeText = decl.getTypeNode()?.getText();
   const fpBits = typeNodeText ? FP_ALIAS_BITS[typeNodeText] : undefined;
+
+  // ─── Native Record<string, T> ─────────────────────────────────────────────
+  if (typeNodeText?.startsWith('Record<')) {
+    const valTypeStr = typeNodeText.match(/^Record<string,\s*(.+)>$/)?.[1]?.trim();
+    const FP_BITS: Record<string, 11|14|16|30> = { FP11: 11, FP14: 14, FP16: 16, FP30: 30 };
+    let recValType: ESymbolType = ESymbolType.number;
+    let recFpBits: 11 | 14 | 16 | 30 | undefined;
+    if (valTypeStr === 'boolean') recValType = ESymbolType.boolean;
+    else if (valTypeStr === 'string') recValType = ESymbolType.string;
+    else if (valTypeStr === 'object') recValType = ESymbolType.object;
+    else if (FP_BITS[valTypeStr]) { recValType = ESymbolType.number | ESymbolType.fixed_point; recFpBits = FP_BITS[valTypeStr]; }
+
+    // Conditional memory warning
+    const s = context.options.stackSize  ?? 1024;
+    const p = context.options.heapNumPages ?? 128;
+    if (s < 4096 || p < 256)
+      addDiagnostic(decl, context, 'warning',
+        `Record requires substantial heap (stack_size=${s}, heap_page_number=${p}). ` +
+        `Recommended: stack_size >= 4096, heap_page_number >= 256 in typecon.json.`);
+
+    // Allocate hash table (r0=0 → default capacity 16; rb = new ptr)
+    code += `set r0 0\nstate _rec_alloc\n`;
+
+    if (isGlobal) {
+      if (context.options.mode === 'module') {
+        context.globalAllocations.push({ name: varName, size: 1 });
+        code += `setarray flat[_G_ADDR_${varName}] rb\n`;
+      } else {
+        code += `setarray flat[${context.globalVarCount}] rb\n`;
+      }
+      context.symbolTable.set(varName, {
+        name: varName, type: ESymbolType.record, offset: context.globalVarCount,
+        size: 1, global: true,
+        record_value_type: recValType as Exclude<ESymbolType, ESymbolType.enum>, record_value_fpbits: recFpBits
+      });
+      context.globalVarCount++;
+    } else {
+      code += `add rsp 1\nsetarray flat[rsp] rb\n`;
+      context.symbolTable.set(varName, {
+        name: varName, type: ESymbolType.record, offset: context.localVarCount,
+        size: 1, global: false, parentFunc: context.curFunc?.name,
+        record_value_type: recValType as Exclude<ESymbolType, ESymbolType.enum>, record_value_fpbits: recFpBits
+      });
+      context.localVarCount++;
+    }
+    return code;
+  }
 
   const init = decl.getInitializer();
   if (init && init.isKind(SyntaxKind.ObjectLiteralExpression)) {
@@ -152,6 +198,7 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
         native_pointer: context.localVarNativePointer,
         native_pointer_index: context.localVarNativePointerIndexed,
         children: context.curSymRet ? context.curSymRet.children : undefined,
+        class_name: (context.curExpr & ESymbolType.class) ? context.curSymRet?.name : undefined,
         global: true,
         fp_bits: fpBits
       });
@@ -170,6 +217,7 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
         native_pointer_index: context.localVarNativePointerIndexed,
         global: false,
         children: context.curSymRet ? context.curSymRet.children : undefined,
+        class_name: (context.curExpr & ESymbolType.class) ? context.curSymRet?.name : undefined,
         fp_bits: fpBits
       });
       context.localVarCount++;

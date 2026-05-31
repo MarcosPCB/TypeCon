@@ -48,6 +48,9 @@ export interface CompilerOptions {
   symbolPrint?: boolean;
 
   mode?: 'single' | 'module';
+
+  stackSize?: number;    // From typecon.json / CLI; used for memory warnings
+  heapNumPages?: number; // From typecon.json / CLI; used for memory warnings
 }
 
 export enum EHeapType {
@@ -75,7 +78,8 @@ export enum ESymbolType {
   constant = 8192,
   not_compiled = 65536,
   sub_function = 131072, // Function or arrow function saved as reference/pointer
-  fixed_point = 262144   // Value uses fixed-point representation; fp_bits gives the precision shift
+  fixed_point = 262144,  // Value uses fixed-point representation; fp_bits gives the precision shift
+  record = 524288        // Record<string, T> native hash-map
 }
 
 /**
@@ -114,9 +118,13 @@ export interface SymbolDefinition {
   parent?: SymbolDefinition;
   parentFunc?: string; // Name of the function this symbol belongs to (for locals)
   parentClass?: string; // Name of the class this symbol belongs to
+  class_name?: string;  // For class-typed variables: the name of the instantiated class (e.g. 'CRecord')
   fp_bits?: 11 | 14 | 16 | 30;          // Fixed-point precision shift (undefined = plain integer)
   returns_fp_bits?: 11 | 14 | 16 | 30;  // FP precision of return value (functions only)
   param_fp_bits?: (11 | 14 | 16 | 30 | 0)[];  // FP precision per parameter (functions only)
+  returns_class_name?: string;               // For functions returning a class instance: the class name
+  record_value_type?: Exclude<ESymbolType, ESymbolType.enum>;  // For Record<string, T>: value type T
+  record_value_fpbits?: 11 | 14 | 16 | 30;  // For Record<string, FPX>: fixed-point precision
 }
 
 export interface TypeAliasDefinition {

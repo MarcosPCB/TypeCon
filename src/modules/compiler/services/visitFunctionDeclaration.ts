@@ -92,6 +92,16 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
           tText = tText.slice(0, tText.length - 2);
         } else t = ESymbolType.object;
 
+        // Check if it's a class type (before falling through to typeAliases)
+        const classSym = context.symbolTable.get(tText);
+        if (classSym && (classSym.type & ESymbolType.class)) {
+          t = ESymbolType.class;
+          children = classSym.children as Record<string, SymbolDefinition>;
+          (localCtx.paramMap[p.getName()] as any) = { name: p.getName(), offset: i, type: t, children, class_name: tText };
+          paramFpBitsArr.push(0);
+          return; // skip the default assignment below
+        }
+
         const alias = context.typeAliases.get(tText);
 
         if (!alias) {
@@ -154,6 +164,16 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
   if (retFpBits !== undefined) {
     (localCtx.symbolTable.get(name) as SymbolDefinition).returns_fp_bits = retFpBits;
     (context.symbolTable.get(name) as SymbolDefinition).returns_fp_bits = retFpBits;
+  }
+  // Detect class return type (e.g. function parse(...): CJson)
+  if (retTypeText) {
+    const retClassSym = context.symbolTable.get(retTypeText);
+    if (retClassSym && (retClassSym.type & ESymbolType.class)) {
+      (localCtx.symbolTable.get(name) as SymbolDefinition).returns = ESymbolType.class;
+      (localCtx.symbolTable.get(name) as SymbolDefinition).returns_class_name = retTypeText;
+      (context.symbolTable.get(name) as SymbolDefinition).returns = ESymbolType.class;
+      (context.symbolTable.get(name) as SymbolDefinition).returns_class_name = retTypeText;
+    }
   }
 
   const body = fd.getBody() as Block;

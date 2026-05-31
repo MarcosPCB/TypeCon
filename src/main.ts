@@ -653,7 +653,7 @@ async function Main() {
     if (stack_size < 1024)
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
-    const compiler = new TsToConCompiler({ lineDetail: line_print, mode: compile_mode });
+    const compiler = new TsToConCompiler({ lineDetail: line_print, mode: compile_mode, stackSize: stack_size, heapNumPages: heap_page_number });
     const initSys = new CONInit(stack_size, heap_page_size, heap_page_number, precompiled_modules, heap_page_size * heap_page_number, 0, accept_con_modules);
 
     // --- LINK MODE ---

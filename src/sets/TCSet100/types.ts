@@ -777,6 +777,7 @@ declare global {
         r3: CON_NATIVE_GAMEVAR<'r3', number>;
         r4: CON_NATIVE_GAMEVAR<'r4', number>;
         r5: CON_NATIVE_GAMEVAR<'r5', number>;
+        r6: CON_NATIVE_GAMEVAR<'r6', number>;
         /**
          * Accumulator register. Used for all kinds of operations. All results are stored in it.
          */

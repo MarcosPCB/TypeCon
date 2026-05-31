@@ -6,7 +6,6 @@ class TestActor extends CActor {
         // singleton: resolves to players[THISACTOR]
         let hp: number = player.health;
         let ang: number = player.ang;
-        player.god = true;
 
         // indexed form still works
         let hp0: number = players[0].health;

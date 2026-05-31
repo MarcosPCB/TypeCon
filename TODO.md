@@ -7,13 +7,10 @@
  ## TS methods, classes and functions
  - Analyse each TS class and method to see if they should be included and to what extent
  - Implement remaining TS classes and methods
- - Implement JSON read/write functions
 
  ## CON Script interpreter
  - Create tests for all CORE codes 
-
- ## TypeCON Plugin
-  - Update the plugin with the lateest changes
+ - Add a CON interpreter for at least variable manipulation so unit testing can be done properly without the need of the Eduke32 Binary
 
 ## DEBUG mode
  - Add a DEBUG mode for checking stack, heap and other values during runtime
