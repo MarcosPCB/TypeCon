@@ -280,6 +280,26 @@ async function Setup() {
     console.log(`Source files copied!`);
 
     try {
+        console.log(`Creating build folders...`);
+        for (const dir of ['compiled', 'asm', 'obj']) {
+            const p = path.join(process.cwd(), dir);
+            if (!fs.existsSync(p)) fs.mkdirSync(p);
+        }
+    } catch (err) {
+        console.log(`ERROR: unable to create build folders`, err);
+    }
+
+    try {
+        console.log(`Copying baseCON files...`);
+        const srcBaseCON = path.join(__dirname, '..', 'baseCON');
+        const dstBaseCON = path.join(process.cwd(), 'baseCON');
+        if (!fs.existsSync(dstBaseCON)) fs.mkdirSync(dstBaseCON);
+        await fsExtra.copy(srcBaseCON, dstBaseCON, { overwrite: true });
+    } catch (err) {
+        console.log(`ERROR: unable to copy baseCON files`, err);
+    }
+
+    try {
         await InstallTypescriptPlugin(process.cwd(), 'typescript');
         await InstallTypescriptPlugin(process.cwd(), 'typecon_plugin');
     } catch (err) {
@@ -342,12 +362,12 @@ async function Setup() {
 
         case 'Basic':
             try {
-                const templatesFolder = path.join(__dirname, '../templates');
+                const examplesFolder = path.join(__dirname, '../examples');
                 const prjTemplatesFolder = path.join(process.cwd(), folder);
 
-                await fsExtra.copy(templatesFolder, prjTemplatesFolder, { overwrite: true });
+                await fsExtra.copy(examplesFolder, prjTemplatesFolder, { overwrite: true });
 
-                console.log('Basic templates are ready!\nCheck them out: AssaultTrooper.ts and test.ts\nCompile them using e.g: yarn tcc -i templates/AssaultTrooper.ts -o AssaultTrooper.con\nThe compiled file will be at "compiled"');
+                console.log('Examples are ready!\nCheck out examples/actors/AssaultTrooper.ts and examples/general/test.ts\nCompile with: tcc -c -il examples/actors/AssaultTrooper.ts && tcc -L -di\nCompiledoutput lands in "compiled/"');
             } catch (err) {
                 console.log(`ERROR: unable to copy files to ${path.join(process.cwd(), folder, 'include')}`, err);
             }

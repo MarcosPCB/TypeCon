@@ -66,50 +66,50 @@ goto :main
 :main
 
 echo === Actors ===
-call :run_test templates\actors\AssaultTrooper.ts
-call :run_test templates\actors\BattleLord.ts
+call :run_test examples\actors\AssaultTrooper.ts
+call :run_test examples\actors\BattleLord.ts
 
 echo.
 echo === General ===
-call :run_test templates\tests\general\test.ts
+call :run_test examples\general\test.ts
 
 echo.
 echo === Events ===
-call :run_test templates\tests\events\test_events.ts
+call :run_test examples\tests\events\test_events.ts
 
 echo.
 echo === Input ===
-call :run_test templates\tests\input\test_cinput.ts
-call :run_test templates\tests\input\test_input.ts
+call :run_test examples\tests\input\test_cinput.ts
+call :run_test examples\tests\input\test_input.ts
 
 echo.
 echo === JSON ===
-call :run_test templates\tests\json\test_json.ts
-call :run_test templates\tests\json\test_json_alias.ts
-call :run_test templates\tests\json\test_json_alias2.ts
-call :run_test templates\tests\json\test_record.ts
+call :run_test examples\tests\json\test_json.ts
+call :run_test examples\tests\json\test_json_alias.ts
+call :run_test examples\tests\json\test_json_alias2.ts
+call :run_test examples\tests\json\test_record.ts
 
 echo.
 echo === Math ===
-call :run_test templates\tests\math\test_anim.ts
-call :run_test templates\tests\math\test_fp.ts
-call :run_test templates\tests\math\test_math.ts
+call :run_test examples\tests\math\test_anim.ts
+call :run_test examples\tests\math\test_fp.ts
+call :run_test examples\tests\math\test_math.ts
 
 echo.
 echo === Singletons ===
-call :run_test templates\tests\singletons\test_player_singleton.ts
-call :run_test templates\tests\singletons\test_singleton.ts
+call :run_test examples\tests\singletons\test_player_singleton.ts
+call :run_test examples\tests\singletons\test_singleton.ts
 
 echo.
 echo === Structs ===
-call :run_test templates\tests\structs\test_paldata.ts
-call :run_test templates\tests\structs\test_players.ts
-call :run_test templates\tests\structs\test_projectiles.ts
-call :run_test templates\tests\structs\test_sectors.ts
-call :run_test templates\tests\structs\test_sprites.ts
-call :run_test templates\tests\structs\test_tiledata.ts
-call :run_test templates\tests\structs\test_tsprites.ts
-call :run_test templates\tests\structs\test_userdef.ts
+call :run_test examples\tests\structs\test_paldata.ts
+call :run_test examples\tests\structs\test_players.ts
+call :run_test examples\tests\structs\test_projectiles.ts
+call :run_test examples\tests\structs\test_sectors.ts
+call :run_test examples\tests\structs\test_sprites.ts
+call :run_test examples\tests\structs\test_tiledata.ts
+call :run_test examples\tests\structs\test_tsprites.ts
+call :run_test examples\tests\structs\test_userdef.ts
 
 :: ── summary ────────────────────────────────────────────────────────────────────
 echo.

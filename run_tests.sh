@@ -75,43 +75,43 @@ fi
 
 # ── test groups ─────────────────────────────────────────────────────────────────
 printf "${C_BOLD}${C_CYAN}=== Actors ===${C_RESET}\n"
-run_test templates/actors/AssaultTrooper.ts
-run_test templates/actors/BattleLord.ts
+run_test examples/actors/AssaultTrooper.ts
+run_test examples/actors/BattleLord.ts
 
 printf "\n${C_BOLD}${C_CYAN}=== General ===${C_RESET}\n"
-run_test templates/tests/general/test.ts
+run_test examples/general/test.ts
 
 printf "\n${C_BOLD}${C_CYAN}=== Events ===${C_RESET}\n"
-run_test templates/tests/events/test_events.ts
+run_test examples/tests/events/test_events.ts
 
 printf "\n${C_BOLD}${C_CYAN}=== Input ===${C_RESET}\n"
-run_test templates/tests/input/test_cinput.ts
-run_test templates/tests/input/test_input.ts
+run_test examples/tests/input/test_cinput.ts
+run_test examples/tests/input/test_input.ts
 
 printf "\n${C_BOLD}${C_CYAN}=== JSON ===${C_RESET}\n"
-run_test templates/tests/json/test_json.ts
-run_test templates/tests/json/test_json_alias.ts
-run_test templates/tests/json/test_json_alias2.ts
-run_test templates/tests/json/test_record.ts
+run_test examples/tests/json/test_json.ts
+run_test examples/tests/json/test_json_alias.ts
+run_test examples/tests/json/test_json_alias2.ts
+run_test examples/tests/json/test_record.ts
 
 printf "\n${C_BOLD}${C_CYAN}=== Math ===${C_RESET}\n"
-run_test templates/tests/math/test_anim.ts
-run_test templates/tests/math/test_fp.ts
-run_test templates/tests/math/test_math.ts
+run_test examples/tests/math/test_anim.ts
+run_test examples/tests/math/test_fp.ts
+run_test examples/tests/math/test_math.ts
 
 printf "\n${C_BOLD}${C_CYAN}=== Singletons ===${C_RESET}\n"
-run_test templates/tests/singletons/test_player_singleton.ts
-run_test templates/tests/singletons/test_singleton.ts
+run_test examples/tests/singletons/test_player_singleton.ts
+run_test examples/tests/singletons/test_singleton.ts
 
 printf "\n${C_BOLD}${C_CYAN}=== Structs ===${C_RESET}\n"
-run_test templates/tests/structs/test_paldata.ts
-run_test templates/tests/structs/test_players.ts
-run_test templates/tests/structs/test_projectiles.ts
-run_test templates/tests/structs/test_sectors.ts
-run_test templates/tests/structs/test_sprites.ts
-run_test templates/tests/structs/test_tiledata.ts
-run_test templates/tests/structs/test_tsprites.ts
-run_test templates/tests/structs/test_userdef.ts
+run_test examples/tests/structs/test_paldata.ts
+run_test examples/tests/structs/test_players.ts
+run_test examples/tests/structs/test_projectiles.ts
+run_test examples/tests/structs/test_sectors.ts
+run_test examples/tests/structs/test_sprites.ts
+run_test examples/tests/structs/test_tiledata.ts
+run_test examples/tests/structs/test_tsprites.ts
+run_test examples/tests/structs/test_userdef.ts
 
 # ── summary ─────────────────────────────────────────────────────────────────────
 TOTAL=$((PASS + FAIL))

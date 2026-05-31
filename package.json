@@ -47,8 +47,9 @@
     "dist/modules/**/*.js",
     "include/*.*",
     "include/**/*.*",
-    "templates/*.*",
-    "templates/**/*.*",
+    "examples/*.*",
+    "examples/**/*.*",
+    "baseCON/*.*",
     "README.md",
     "postBuild.js",
     "typecon.example.json"
