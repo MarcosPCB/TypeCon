@@ -3,6 +3,7 @@ import '../../../include/TCSet100/types';
 // tsprites are only valid during renderer events
 class TestTSprites extends CEvent {
     constructor() { super('DisplayRest'); }
+    // debug-test
     public Append(): void {
         let i: number = 0;
 

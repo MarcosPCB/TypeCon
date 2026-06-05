@@ -23,6 +23,7 @@ export function visitCallExpression(call: CallExpression, context: CompilerConte
   const callExp = call.getExpression();
   let fnNameRaw = '';
   let fnObj: string | undefined;
+  let isThisDirectCall = false;
   if (callExp.isKind(SyntaxKind.Identifier))
     fnNameRaw = call.getExpression().getText();
   else if (callExp.isKind(SyntaxKind.PropertyAccessExpression)
@@ -32,8 +33,14 @@ export function visitCallExpression(call: CallExpression, context: CompilerConte
     let obj = segments[0];
 
     if (obj.kind == 'this') {
-      if (segments.length == 2 && segments[1].kind != 'index')
+      if (segments.length == 2 && segments[1].kind != 'index') {
         fnNameRaw = segments[1].name;
+        // this.method() call inside a class body — r0 must be set to self (flat[rbp])
+        if (context.curClass) {
+          fnObj = context.curClass.name;
+          isThisDirectCall = true;
+        }
+      }
       else //Special case for player class with actor property
         if (segments[1].kind == 'property' && segments[1].name == 'actor')
           fnNameRaw = (segments[2] as SegmentProperty).name;
@@ -204,6 +211,26 @@ export function visitCallExpression(call: CallExpression, context: CompilerConte
     }
   }
 
+  // Explicit FP precision casts: FP11(x), FP14(x), FP16(x), FP30(x)
+  const FP_EXPLICIT_CAST: Record<string, 11 | 14 | 16 | 30> = { FP11: 11, FP14: 14, FP16: 16, FP30: 30 };
+  if (FP_EXPLICIT_CAST[fnNameRaw] !== undefined && !fnObj && args.length === 1) {
+    const targetBits = FP_EXPLICIT_CAST[fnNameRaw];
+    context.nativeArgFpHint = targetBits;
+    code += visitExpression(args[0] as Expression, context, reg);
+    context.nativeArgFpHint = 0;
+    const srcBits = context.curFpBits;
+    if (srcBits > 0 && srcBits !== targetBits) {
+      if (srcBits > targetBits)
+        code += `shiftr ${reg} ${srcBits - targetBits}\n`;
+      else
+        code += `shiftl ${reg} ${targetBits - srcBits}\n`;
+    } else if (srcBits === 0) {
+      code += `shiftl ${reg} ${targetBits}\n`;
+    }
+    context.curFpBits = targetBits;
+    return code;
+  }
+
   if (fnNameRaw == 'CON' && !fnObj) {
     code += `//HAND-WRITTEN CODE
 state push
@@ -299,16 +326,24 @@ set rb ra
         //code += `set r${j} ra\n`;
         resolvedLiterals.push(null);
       } else if (expected & CON_NATIVE_FLAGS.VARIABLE) {
-        // Protect r0..r(i-1): expression evaluation uses r0 as an intermediate and
-        // will clobber already-set argument registers when computing argument i >= 1.
-        if (i > 0) {
-          const n = i <= 12 ? i : 'all';
-          code += `state pushr${n}\n`;
+        // For i=0: evaluate directly into r0 (the standard accumulator path).
+        // For i>0: evaluate into ra first, then move to r${i}. This ensures the
+        // result always lands in the correct register — visitExpression sometimes
+        // evaluates into ra without a final move when the target is r1, r2, etc.
+        context.nativeArgFpHint = (nativeFn.arg_fp_bits?.[i] ?? 0) as (0 | 11 | 14 | 16 | 30);
+        if (i === 0) {
+          code += visitExpression(args[i] as Expression, context, `r0`);
+        } else {
+          code += visitExpression(args[i] as Expression, context, 'ra');
+          code += `set r${i} ra\n`;
         }
-        code += visitExpression(args[i] as Expression, context, `r${i}`);
-        if (i > 0) {
-          const n = i <= 12 ? i : 'all';
-          code += `state popr${n}\n`;
+        context.nativeArgFpHint = 0;
+        // Auto-coerce downward when the argument carries more FP precision than declared.
+        if (!nativeFn.fp_aware_code && !nativeFn.inherit_fp_bits) {
+          const declaredFp = nativeFn.arg_fp_bits?.[i] ?? 0;
+          if (context.curFpBits > declaredFp) {
+            code += `shiftr r${i} ${context.curFpBits - declaredFp}\n`;
+          }
         }
         resolvedLiterals.push(null);
       } else if (expected & CON_NATIVE_FLAGS.FUNCTION) {
@@ -350,6 +385,11 @@ set rb ra
       code += `set ri rbp\nadd ri ${variable.offset}\nset r${argsLen - 2} flat[ri]\nset r${argsLen - 1} ri\n`;
       if (nativeFn.type_belong.includes('string') && nativeFn.return_type == 'string')
         context.curExpr = ESymbolType.string;
+    }
+
+    // @DebugTest: inject counter update after args are in registers, before state call
+    if (context.isDebugTest && (fnNameRaw === 'checkEq' || fnNameRaw === 'checkFpEq')) {
+      code += `add _testCounter 4096\nife r1 r2\n  add _testCounter 1\n`;
     }
 
     if (nativeFn.return_type == 'array')
@@ -493,6 +533,9 @@ set rb ra
       if (isParamClass) {
         // this-pointer is already in the parameter register r{func.offset}
         code += `set r${totalArgs - 1} r${func.offset}\n`;
+      } else if (isThisDirectCall) {
+        // this.method() — self pointer is always at flat[rbp] (frame slot 0)
+        code += `set r${totalArgs - 1} flat[rbp]\n`;
       } else if (func.global) {
         const addr = context.options.mode === 'module'
           ? `_G_ADDR_${func.name}`

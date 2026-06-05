@@ -219,7 +219,10 @@ export interface CompilerContext {
   inSwitch: boolean;
   hasLocalVars: boolean;
   usingRD: boolean;
+  isDebugTest: boolean;
   curFpBits: 0 | 11 | 14 | 16 | 30;  // FP precision of the value currently in ra/rd (0 = integer)
+  declaredFpBits: 0 | 11 | 14 | 16 | 30; // ambient FP precision from enclosing variable declaration; survives visitExpression resets
+  nativeArgFpHint: 0 | 11 | 14 | 16 | 30; // expected FP precision for the current native argument (set by visitCallExpression, consumed by visitLeafOrLiteral)
   rfxAllocated: number;               // How many rfx0..rfx3 scratch registers are in use (0..4)
   project: Project;
   headerDefines: string[];
@@ -333,7 +336,10 @@ export class TsToConCompiler {
       inSwitch: false,
       hasLocalVars: false,
       usingRD: false,
+      isDebugTest: false,
       curFpBits: 0,
+      declaredFpBits: 0,
+      nativeArgFpHint: 0,
       rfxAllocated: 0,
       project: this.project,
 

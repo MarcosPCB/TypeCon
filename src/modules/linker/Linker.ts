@@ -74,12 +74,9 @@ export class Linker {
             config.acceptConModules
         );
 
-        // 3. Allocate Indices (Local to the module if CON module, or absolute if regular)
-        if (this.isConModule) {
-            this.globalOffset = 0; // Relative offsets
-        } else {
-            this.globalOffset = 0; // Absolute offsets
-        }
+        // 3. Allocate globals at flat[0..N-1]; rsp is initialized to N-1 so the
+        //    local stack frames start at flat[N], above the globals.
+        this.globalOffset = 0;
 
         this.allocateGlobals(sortedModules);
 

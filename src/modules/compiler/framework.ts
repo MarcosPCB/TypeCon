@@ -30,11 +30,11 @@ export class CONInit {
     public readonly initStates: string;
 
     public markerDefines: string[] = [];
-    constructor(public readonly stackSize = 1024,
+    constructor(public readonly stackSize = 8192,
         public readonly heapPageSize = 4,
-        public readonly heapNumPages = 128,
+        public readonly heapNumPages = 512,
         public readonly precompiled = true,
-        public readonly heapSize = 4 * 128,
+        public readonly heapSize = 4 * 512,
         public readonly globalStaticSize = 0,
         public readonly acceptConModules = false,
     ) {
@@ -111,11 +111,11 @@ var rswe 0 REG_FLAGS
 var rf 0 REG_FLAGS
 
 //Segmentation register
-var rds ${stackSize + globalStaticSize} REG_FLAGS //determines the start of the heap memory
+var rds ${stackSize} REG_FLAGS //determines the start of the heap memory
 
 //Base pointer and Stack pointer
 var rbp 0 REG_FLAGS
-var rsp -1 REG_FLAGS
+var rsp ${globalStaticSize - 1} REG_FLAGS
 
 //Block base pointer
 var rbbp 0 REG_FLAGS
@@ -130,6 +130,10 @@ var rfx0 0 REG_FLAGS
 var rfx1 0 REG_FLAGS
 var rfx2 0 REG_FLAGS
 var rfx3 0 REG_FLAGS
+
+//Test counter: -1 = not in test mode; set to 0 by _testInit (DEBUG-TEST marker)
+//Encoding: (total_count << 12) | pass_count — read rb after test function to decode
+var _testCounter -1 REG_FLAGS
 
 //ASCII conversion table
 string 900  
@@ -268,8 +272,8 @@ var heapsize ${this.heapSize} REG_FLAGS
 //For pushing the r0-12 registers
 array rstack 24 0
 
-//TypeCON flat memory (stack + global + heap)
-array flat ${stackSize + globalStaticSize + this.heapSize}
+//TypeCON flat memory (stack + heap)
+array flat ${stackSize + this.heapSize}
 `;
         this.initStates = `
 var _HEAPi 0 REG_FLAGS
@@ -278,6 +282,10 @@ var _HEAPk 0 REG_FLAGS
 var _HEAPl 0 REG_FLAGS
 var _HEAP_request 0 REG_FLAGS
 var _HEAP_pointer -1 REG_FLAGS
+
+defstate _testInit
+    set _testCounter 0
+ends
 
 defstate pushrall
     add rsp 1
@@ -599,8 +607,11 @@ defstate alloc
     //The requested size must be a multiple of PAGE_SIZE
     set _HEAPi _HEAP_request
     mod _HEAPi PAGE_SIZE
-    ifn _HEAPi 0
-        add _HEAP_request _HEAPi
+    ifn _HEAPi 0 {
+        set _HEAPl ${heapPageSize}
+        sub _HEAPl _HEAPi
+        add _HEAP_request _HEAPl
+    }
     
     state _GetFreePages
     set _HEAPi rb
@@ -863,10 +874,10 @@ defstate _convertFP2String
 
     ife ra 0 {
         state pushr1
-        set r0 2
+        set r0 7
         state alloc
         state popr1
-        setarray flat[rb] 1
+        setarray flat[rb] 6
         add rb 1
         setarray flat[rb] 48
         add rb 1
@@ -1016,6 +1027,7 @@ defstate _convertString2Quote
     sub ri 32
 
     state push
+    set ra 0
     ifl ri 900
         set ra 1
     ifg ri 994
@@ -1065,6 +1077,7 @@ defstate _convertString2Quote
         sub ri 32
 
         state push
+        set ra 0
         ifl ri 900
             set ra 1
         ifg ri 994

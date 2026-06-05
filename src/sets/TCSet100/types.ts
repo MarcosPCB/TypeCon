@@ -48,6 +48,15 @@ declare global {
     function strLen(s: string): number;
     /** Return the char code of character at index i in a heap-allocated TypeCON string (0-based). */
     function charCodeAt(s: string, i: number): number;
+    /** Explicit FP precision cast to FP11 (Q20.11, 1.0 = 2048). Shifts integer→FP or FP→FP. */
+    function FP11(x: number): FP11;
+    /** Explicit FP precision cast to FP14 (Q17.14, 1.0 = 16384). Shifts integer→FP or FP→FP. */
+    function FP14(x: number): FP14;
+    /** Explicit FP precision cast to FP16 (Q15.16, 1.0 = 65536). Shifts integer→FP or FP→FP. */
+    function FP16(x: number): FP16;
+    /** Explicit FP precision cast to FP30 (Q1.30, 1.0 = 1073741824). Shifts integer→FP or FP→FP. */
+    function FP30(x: number): FP30;
+
     /** Assert integer equality and print "label: exp=X got=Y [PASS/FAIL]" to the OSD. */
     function checkEq(label: string, expected: number, actual: number): void;
     /** Assert FP16 equality and print "label: exp=X.XXXX got=Y.YYYY [PASS/FAIL]" to the OSD. */
@@ -137,21 +146,21 @@ declare global {
          * @param angle Angle in FP11 BAM units or plain BAM integer.
          * @returns sin(angle) in FP14 (1.0 = 16384).
          */
-        sin(angle: FP11): FP14;
+        sin(angle: FP14): FP14;
         /**
          * Cosine from a BAM angle using the engine lookup table.
          * Pass an FP11 BAM angle (1.0 = 2048 = full circle) or a plain BAM integer (0–2047).
          * @param angle Angle in FP11 BAM units or plain BAM integer.
          * @returns cos(angle) in FP14 (1.0 = 16384).
          */
-        cos(angle: FP11): FP14;
+        cos(angle: FP14): FP14;
         /**
          * Tangent: `sin(bam) / cos(bam)` via precompile defstate.
          * Pass an FP11 BAM angle or a plain BAM integer; undefined near ±90°/270°.
          * @param angle Angle in FP11 BAM units or plain BAM integer.
          * @returns tan(angle) in FP14 (1.0 = 16384).
          */
-        tan(angle: FP11): FP14;
+        tan(angle: FP14): FP14;
         /**
          * Arc-tangent: returns the BAM angle whose tangent is `dy/dx`.
          * Wraps CON `getangle`.
@@ -194,13 +203,13 @@ declare global {
          */
         log10(x: number): FP16;
         /**
-         * Natural exponential via 5-term Taylor series:
-         * `1 + x + x²/2 + x³/6 + x⁴/24 + x⁵/120`.
-         * Accurate for small |x|; diverges for |x| > ~1.5.
-         * @param x Exponent in FP16.
-         * @returns Approximate e^x in FP16.
+         * Natural exponential: `e^x` for non-negative integer `x`.
+         * Computed by repeated FP16 multiplication by e (178145 ≈ 2.71828 × 65536).
+         * Exact for small non-negative integers; not defined for negative or fractional x.
+         * @param x Non-negative integer exponent.
+         * @returns e^x in FP16.
          */
-        exp(x: FP16): FP16;
+        exp(x: number): FP16;
         /**
          * Rounded integer division: `round(a / b)`.
          * @param a Dividend.

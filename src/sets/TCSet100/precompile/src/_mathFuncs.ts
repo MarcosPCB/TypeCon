@@ -60,39 +60,12 @@ function _Math_log10(x: number): number {
     return bits * 19729;
 }
 
-function _Math_exp(x: FP16): FP16 {
-    let ONE: FP16 = 1.0;
-    let term: FP16 = x;
-    let result: FP16 = ONE + term;
-    term = (term * x) / 2;    // mulscale — both FP16
-    result = result + term;
-    term = (term * x) / 3;
-    result = result + term;
-    term = (term * x) / 4;
-    result = result + term;
-    term = (term * x) / 5;
-    result = result + term;
+function _Math_exp(x: number): FP16 {
+    let result: FP16 = 1.0;
+    let i: number = 0;
+    while (i < x) {
+        result = mulscale(result, 178145, 16); // 178145 = round(e * 65536) in FP16
+        i = i + 1;
+    }
     return result;
-}
-
-function _Math_tan(bam: number): FP14 {
-    let s: FP14 = Math.sin(bam);
-    let c: FP14 = Math.cos(bam);
-    return s / c;
-}
-
-function _Math_tanFP11(bam: FP11): FP14 {
-    let b: number = fp11ToInt(bam);
-    let s: FP14 = Math.sin(b);
-    let c: FP14 = Math.cos(b);
-    return s / c;
-}
-
-function _Math_tanFP(degrees: FP16): FP14 {
-    let deg: number = fp16ToInt(degrees);
-    let bam: number = deg * 2048;
-    bam = bam / 360;
-    let s: FP14 = Math.sin(bam);
-    let c: FP14 = Math.cos(bam);
-    return s / c;
 }

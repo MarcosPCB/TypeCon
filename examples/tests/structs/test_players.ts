@@ -2,6 +2,7 @@ import '../../../include/TCSet100/types';
 
 class TestPlayersNew extends CEvent {
     constructor() { super('NewGame'); }
+    // debug-test
     public Append(): void {
         // ── resources sub-object ───────────────────────────────────────────
         let hp: number = players[0].resources.health;

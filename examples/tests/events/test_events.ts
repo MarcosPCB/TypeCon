@@ -33,6 +33,7 @@ class TestPIE extends CEvent {
 // ME — Misc: fires once when a level finishes loading (game lifecycle)
 class TestME extends CEvent {
     constructor() { super('EnterLevel'); }
+    // debug-test
     public Append(): void {
         console.log("test_events: EnterLevel OK");
     }

@@ -69,7 +69,16 @@ export class CJson {
     }
 
     GetBool(): boolean {
-        return (this._val != 0) as unknown as boolean;
+        CONUnsafe(`
+set ri flat[rbp]
+add ri 3
+set rd flat[ri]
+set rb 0
+ifn rd 0
+  set rb 1
+set ra rb
+`);
+        return sysFrame.rb as unknown as boolean;
     }
 
     GetInt(): number {
@@ -83,7 +92,13 @@ export class CJson {
         if (this._type == CJsonType.Int) {
             return intToFP16(this._val);
         }
-        return this._val as unknown as FP16;
+        CONUnsafe(`
+set ri flat[rbp]
+add ri 3
+set rb flat[ri]
+set ra rb
+`);
+        return sysFrame.rb as unknown as FP16;
     }
 
     GetString(): string {
@@ -99,6 +114,7 @@ set ri flat[rbp]
 add ri 3
 set ri flat[ri]   // ri = _val (block ptr)
 set rb flat[ri]   // rb = count
+set ra rb
 `);
         return sysFrame.rb;
     }
@@ -139,6 +155,7 @@ add ri 1
 setarray flat[ri] r6    // _val  = element val
 add ri 1
 setarray flat[ri] 0     // _owned = 0 (view)
+set ra rb               // preserve rb through the CONUnsafe epilogue (set rb ra)
 `);
         return sysFrame.rb as unknown as CJson;
     }
@@ -173,10 +190,11 @@ ife ra 0
     set ra 1
 set r6 ra            // r6 = query hash
 
-// Restore obj_ptr from _val again (ri was clobbered)
+// Restore obj_ptr from _val again (ri was clobbered by query hash loop)
 set ri flat[rbp]
 add ri 3
 set ri flat[ri]
+set r10 ri           // r10 = obj_ptr (stable copy; ri is clobbered by inner hash loop)
 
 // Scan keys
 set r5 0
@@ -185,7 +203,7 @@ set r8 0
 set r9 0
 whilel r5 rc {
     // key entry: obj+1+i*3
-    set rd ri
+    set rd r10        // use stable obj_ptr
     add rd 1
     set r4 r5
     mul r4 3
@@ -196,7 +214,7 @@ whilel r5 rc {
     set ra -2128831035
     set r4 flat[r8]
     set r9 0
-    whilel r9 r4 {
+    whilel r9 r4 {    // ri is clobbered here — use r10 not ri after this
         set ri r8
         add ri r9
         add ri 1
@@ -220,11 +238,6 @@ whilel r5 rc {
         add r5 1
 }
 
-// Restore obj_ptr again for building result
-set ri flat[rbp]
-add ri 3
-set ri flat[ri]
-
 // Allocate 5-word view block
 set r0 5
 set r1 4
@@ -247,6 +260,7 @@ ife r7 0
     setarray flat[ri] 0
 add ri 1
 setarray flat[ri] 0   // _owned = 0
+set ra rb             // preserve rb through the CONUnsafe epilogue (set rb ra)
 `);
         return sysFrame.rb as unknown as CJson;
     }
@@ -266,6 +280,7 @@ set r4 r0
 mul r4 3
 add rd r4             // rd = &obj[1 + i*3]
 set rb flat[rd]       // rb = key string ptr
+set ra rb
 `);
         return sysFrame.rb as unknown as string;
     }
@@ -452,8 +467,7 @@ setarray flat[rb] r4
 set rd rb
 add rd 1
 copy flat[ri] flat[rd] r4
-
-// return rb (the new string ptr)
+set ra rb             // preserve rb through the CONUnsafe epilogue (set rb ra)
 `);
         return sysFrame.rb as unknown as string;
     }
@@ -480,11 +494,12 @@ copy flat[ri] flat[rd] r4
             }
         }
 
+        let _d2: number = 0;
         if (c == 46) { // '.'
             hasDot = 1;
             this._pos = this._pos + 1;
             c = charCodeAt(this._src, this._pos);
-            let _d2: number = 1;
+            _d2 = 1;
             while (_d2 == 1) {
                 if (c < 48) _d2 = 0;
                 if (c > 57) _d2 = 0;
@@ -521,7 +536,7 @@ state pushr1
 set r0 r3
 state free
 state popr1
-set rb r3
+set ra r3             // preserve r3 through the CONUnsafe epilogue (set rb ra)
 `);
             this._type = CJsonType.FP16;
             this._val = sysFrame.rb;
@@ -555,10 +570,13 @@ add ri 3
 setarray flat[ri] rb
 `);
         this._type = CJsonType.Array;
+        // Save arr_block_ptr before _parseValue() overwrites this._val
+        const arrPtr: number = this._val;
         this._skipWS();
 
         if (this._peek() == 93) { // ']'
             this._pos = this._pos + 1;
+            this._val = arrPtr;
             return;
         }
 
@@ -568,17 +586,14 @@ setarray flat[ri] rb
             const eType: number = this._type;
             const eVal: number = this._val;
 
-            // Append to array block
+            // Append to array block using saved arrPtr (not this._val which was overwritten)
             sysFrame.r4 = eType;
             sysFrame.r5 = eVal;
+            sysFrame.r6 = arrPtr;
             CONUnsafe(`
-// r4=type, r5=val
-// arr_ptr = object._val = flat[self+3]
-set ri flat[rbp]
-add ri 3
-set ri flat[ri]       // ri = arr_ptr
+// r4=type, r5=val, r6=arr_ptr (saved before _parseValue ran)
+set ri r6             // ri = arr_ptr (stable; no longer reads corrupted this._val)
 set rc flat[ri]       // rc = count
-// Check capacity
 set rd rc
 mul rd 2
 add rd 1
@@ -586,7 +601,8 @@ add rd ri             // rd = &arr[1 + count*2]
 setarray flat[rd] r4
 add rd 1
 setarray flat[rd] r5
-add flat[ri] 1        // count++
+add rc 1
+setarray flat[ri] rc  // count++
 `);
 
             this._skipWS();
@@ -601,8 +617,9 @@ add flat[ri] 1        // count++
             }
         }
 
-        // Restore _type to Array (it was overwritten by child parseValue calls)
+        // Restore _type and _val (both overwritten by child parseValue calls)
         this._type = CJsonType.Array;
+        this._val = arrPtr;
     }
 
     private _parseObject(): void {
@@ -617,10 +634,13 @@ add ri 3
 setarray flat[ri] rb
 `);
         this._type = CJsonType.Object;
+        // Save obj_block_ptr before _parseValue() overwrites this._val
+        const objPtr: number = this._val;
         this._skipWS();
 
         if (this._peek() == 125) { // '}'
             this._pos = this._pos + 1;
+            this._val = objPtr;
             return;
         }
 
@@ -635,15 +655,14 @@ setarray flat[ri] rb
             const vType: number = this._type;
             const vVal: number = this._val;
 
-            // Append key+val to object block
+            // Append key+val using saved objPtr (not this._val which was overwritten)
             sysFrame.r4 = kStr as unknown as number;
             sysFrame.r5 = vType;
             sysFrame.r6 = vVal;
+            sysFrame.rd = objPtr;
             CONUnsafe(`
-// r4=key_ptr, r5=val_type, r6=val
-set ri flat[rbp]
-add ri 3
-set ri flat[ri]       // ri = obj_ptr
+// r4=key_ptr, r5=val_type, r6=val, rd=obj_ptr (saved before _parseValue ran)
+set ri rd             // ri = obj_ptr; rd is now free for scratch
 set rc flat[ri]       // rc = count
 set rd rc
 mul rd 3
@@ -654,7 +673,8 @@ add rd 1
 setarray flat[rd] r5
 add rd 1
 setarray flat[rd] r6
-add flat[ri] 1        // count++
+add rc 1
+setarray flat[ri] rc  // count++
 `);
 
             this._skipWS();
@@ -668,7 +688,9 @@ add flat[ri] 1        // count++
             }
         }
 
+        // Restore _type and _val (both overwritten by child parseValue calls)
         this._type = CJsonType.Object;
+        this._val = objPtr;
     }
 
     // ── private indexed accessors (for ToRecord) ──────────
@@ -684,6 +706,7 @@ add rd 1
 add rd ri
 add rd 1
 set rb flat[rd]
+set ra rb
 `);
         return sysFrame.rb;
     }
@@ -699,6 +722,7 @@ add rd 1
 add rd ri
 add rd 2
 set rb flat[rd]
+set ra rb
 `);
         return sysFrame.rb;
     }

@@ -104,6 +104,11 @@ export class SymbolTable {
     return this.states.has(name);
   }
 
+  /** Returns the line where `name` was declared, or undefined if unknown. */
+  getStateLine(name: string): number | undefined {
+    return this.states.get(name)?.line;
+  }
+
   usageSummary(): string {
     const parts: string[] = [];
     parts.push(`gamevars:  ${this.gamevars.size}/${LIMITS.MAXGAMEVARS}`);

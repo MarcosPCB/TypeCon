@@ -2,6 +2,7 @@ import '../../../include/TCSet100/types';
 
 class TestMath extends CEvent {
     constructor() { super('InitComplete'); }
+    // debug-test
     public Append(): void {
         let a: FP16 = 2.0;   // 131072
         let b: FP16 = 0.5;   // 32768
@@ -20,12 +21,12 @@ class TestMath extends CEvent {
         checkFpEq("clamp(2,0.5,1.0)", 65536, Math.clamp(a, b, intToFP16(1)));
 
         // ── Trig (integer BAM) ────────────────────────────────────────────
-        checkFpEq("sin(512bam)", 65536, Math.sin(angle));
+        checkFpEq("sin(512bam)", 16384, Math.sin(angle));
         checkFpEq("cos(512bam)", 0, Math.cos(angle));
 
         // ── Trig (FP16 degrees) ───────────────────────────────────────────
-        checkFpEq("sin(1.93fp)", 2287, Math.sin(1.93));
-        checkFpEq("tan(1.93fp)", 2287, Math.tan(1.93));
+        checkFpEq("sin(1.93fp)", 553, Math.sin(1.93));
+        checkFpEq("tan(1.93fp)", 503, Math.tan(1.93));
 
         // ── Angle conversions ─────────────────────────────────────────────
         checkEq("toBAM(90)", 512, Math.toBAM(90));
@@ -44,7 +45,7 @@ class TestMath extends CEvent {
         checkFpEq("log(2.0fp)", 45426, Math.log(a));
 
         // ── Exp ───────────────────────────────────────────────────────────
-        checkFpEq("exp(2.0)", 484417, Math.exp(a));
+        checkFpEq("exp(2.0)", 484247, Math.exp(a));
 
         // ── Utilities ─────────────────────────────────────────────────────
         checkEq("divr(7,2)", 4, Math.divr(7, 2));

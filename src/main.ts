@@ -6,6 +6,7 @@ import { CONInit } from './modules/compiler/framework';
 import { TsToConCompiler } from './modules/compiler/Compiler';
 import { Linker } from './modules/linker/Linker';
 import { validateCON } from './modules/con-validator/index';
+import { runVM, VMRunResult } from './modules/con-vm/index';
 import inquirer from 'inquirer';
 const fsExtra = require("fs-extra");
 import { spawnSync } from 'child_process';
@@ -20,7 +21,7 @@ let fileName = '';
 let input_folder = '';
 let line_print = false;
 let symbol_print = false;
-let stack_size = 1024;
+let stack_size = 8192;
 let output_folder = 'compiled';
 let objFolder = 'obj';
 let objFolderExplicitlySet = false;
@@ -35,7 +36,7 @@ let init_file = 'init.con';
 let initFunc = false;
 let precompiled_modules = true;
 let heap_page_size = 4;
-let heap_page_number = 128;
+let heap_page_number = 512;
 let eduke_init = false;
 let share_context = false;
 let compile_only = false;
@@ -46,6 +47,12 @@ let compile_mode: 'single' | 'module' = 'single';
 let intermediate_code = false;
 let clean = false;
 let validateOnly = false;
+let simulateOnly = false;
+let simState: string | undefined;
+let simNoInit = false;
+let simNoValidate = false;
+let simShowMemory = false;
+let simTestMode = false;
 
 export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
     switch (color) {
@@ -126,7 +133,19 @@ Usage:
         Reports block structure errors, unknown events, out-of-range tile IDs,
         invalid struct fields, and resource-limit violations.
         Use \x1b[33m-i\x1b[0m for a single file or \x1b[33m-il\x1b[0m for multiple files.
-        Exit code 0 = OK (warnings only), 1 = errors found.`
+        Exit code 0 = OK (warnings only), 1 = errors found.
+
+    Simulator options:
+    \x1b[32m-S or --sim\x1b[0m: Simulate a compiled .con file in the built-in CON VM
+        Use \x1b[33m-i\x1b[0m or \x1b[33m-il\x1b[0m to specify the .con file(s).
+    \x1b[33m--state NAME\x1b[0m: Run a specific defstate instead of the default event sequence.
+        The game-lifecycle sequence (EVENT_INIT → EVENT_INITCOMPLETE →
+        EVENT_SETDEFAULTS → EVENT_NEWGAME) still runs first to bootstrap VM state.
+    \x1b[33m--no-init\x1b[0m: Skip the lifecycle bootstrap when using --state (raw execution).
+    \x1b[33m--no-validate\x1b[0m / \x1b[33m-nv\x1b[0m: Skip the pre-simulation validation step.
+    \x1b[33m--mem\x1b[0m / \x1b[33m-mem\x1b[0m: Print a memory usage report after simulation (stack ptr, heap HWM, flat HWM).
+    \x1b[33m--test\x1b[0m: Run in test mode — requires @DebugTest decorator on functions in the source.
+        Prints a structured pass/fail summary and exits with code 0 (all pass) or 1 (any fail).`
 
 
 
@@ -415,7 +434,7 @@ async function Main() {
         if (sub === 'config') { await runMakeConfig(); process.exit(0); }
         const normalised = sub === 'clear' ? 'clean' : sub;
         const step = (['clean', 'compile', 'link', 'validate'].includes(normalised) ? normalised : 'all') as MakeStep;
-        const cfg  = loadConfig(path.join(process.cwd(), 'typecon.json'));
+        const cfg = loadConfig(path.join(process.cwd(), 'typecon.json'));
         await runMake(step, cfg);
         process.exit(0);
     }
@@ -500,11 +519,11 @@ async function Main() {
 
 
 
-        if (a == '--create-init' || a == '-ci' || a == '--link' || a == '-l') {
+        if (a == '--create-init' || a == '-ci') {
             createInit = true;
         }
 
-        if (a == '--linker' || a == '-L') {
+        if (a == '--linker' || a == '-L' || a == '-l') {
             runLinker = true;
         }
 
@@ -560,6 +579,24 @@ async function Main() {
         if (a == '--validate' || a == '-V')
             validateOnly = true;
 
+        if (a == '--sim' || a == '-S')
+            simulateOnly = true;
+
+        if (a == '--state')
+            simState = process.argv[i + 1];
+
+        if (a == '--no-init')
+            simNoInit = true;
+
+        if (a == '--no-validate' || a == '-nv')
+            simNoValidate = true;
+
+        if (a == '--mem' || a == '-mem')
+            simShowMemory = true;
+
+        if (a == '--test')
+            simTestMode = true;
+
         if (a == 'setup') {
             initFunc = true;
         }
@@ -579,6 +616,7 @@ async function Main() {
     if (compile_only) modeCount++;
     if (clean) modeCount++;
     if (validateOnly) modeCount++;
+    if (simulateOnly) modeCount++;
 
     if (modeCount === 0) {
         console.log(colorText('\nNo mode specified. You must choose exactly one of:', 'red'));
@@ -587,6 +625,7 @@ async function Main() {
         console.log(colorText('  -L / --linker    : Link .tco files into a .con', 'cyan'));
         console.log(colorText('  -C / --clean     : Clean build folders', 'cyan'));
         console.log(colorText('  -V / --validate  : Validate a compiled .con file', 'cyan'));
+        console.log(colorText('  -S / --sim       : Simulate a compiled .con file', 'cyan'));
         console.log(helpText);
         process.exit(1);
     }
@@ -626,13 +665,13 @@ async function Main() {
                 if (!hasErrors) {
                     const parts: string[] = [];
                     if (inc.gamevarsDelta > 0) parts.push(`gamevars: ${inc.gamevarsDelta}`);
-                    if (inc.arraysDelta   > 0) parts.push(`arrays: ${inc.arraysDelta}`);
-                    if (inc.statesDelta   > 0) parts.push(`states: ${inc.statesDelta}`);
-                    if (inc.definesDelta  > 0) parts.push(`defines: ${inc.definesDelta}`);
-                    if (inc.actionsDelta  > 0) parts.push(`actions: ${inc.actionsDelta}`);
-                    if (inc.movesDelta    > 0) parts.push(`moves: ${inc.movesDelta}`);
-                    if (inc.aisDelta      > 0) parts.push(`ais: ${inc.aisDelta}`);
-                    if (inc.quotesDelta   > 0) parts.push(`quotes: ${inc.quotesDelta}`);
+                    if (inc.arraysDelta > 0) parts.push(`arrays: ${inc.arraysDelta}`);
+                    if (inc.statesDelta > 0) parts.push(`states: ${inc.statesDelta}`);
+                    if (inc.definesDelta > 0) parts.push(`defines: ${inc.definesDelta}`);
+                    if (inc.actionsDelta > 0) parts.push(`actions: ${inc.actionsDelta}`);
+                    if (inc.movesDelta > 0) parts.push(`moves: ${inc.movesDelta}`);
+                    if (inc.aisDelta > 0) parts.push(`ais: ${inc.aisDelta}`);
+                    if (inc.quotesDelta > 0) parts.push(`quotes: ${inc.quotesDelta}`);
                     const stats = parts.length > 0 ? `  (${parts.join('  ')})` : '';
                     console.log(colorText(`OK  ${inc.filePath}`, 'green') + stats);
                 }
@@ -651,6 +690,57 @@ async function Main() {
             }
         }
         process.exit(allOk ? 0 : 1);
+    }
+
+    if (simulateOnly) {
+        const simFiles = files.length > 0 ? files : fileName ? [fileName] : [];
+        if (simFiles.length === 0) {
+            console.log(colorText('Error: -S requires at least one .con input file via -i or -il', 'red'));
+            process.exit(1);
+        }
+        const baseCONDir = path.join(process.cwd(), 'baseCON');
+        for (const file of simFiles) {
+            if (!fs.existsSync(file)) {
+                console.log(colorText(`Error: File not found: ${file}`, 'red'));
+                process.exit(1);
+            }
+            const source = fs.readFileSync(file, 'utf-8');
+
+            // Validate before simulating (skip with --no-validate / -nv)
+            if (!simNoValidate) {
+                const conDir = path.dirname(path.resolve(file));
+                const baseDirs = [conDir];
+                if (fs.existsSync(baseCONDir)) baseDirs.push(baseCONDir);
+                const valResult = validateCON(source, { baseDirs });
+                for (const inc of valResult.includedFiles) {
+                    const hasErrors = inc.diagnostics.some(d => d.severity === 'error');
+                    if (!hasErrors) {
+                        console.log(colorText(`OK  ${inc.filePath}`, 'green'));
+                    }
+                }
+                if (valResult.diagnostics.length > 0) {
+                    for (const d of valResult.diagnostics) {
+                        const tag = d.severity === 'error'
+                            ? colorText('[ERROR]', 'red')
+                            : colorText('[WARN] ', 'yellow');
+                        console.log(`${tag} ${d.file ?? file}:${d.line}  ${d.code} — ${d.message}`);
+                    }
+                    if (!valResult.ok) {
+                        console.log(colorText(`Simulation aborted: validation errors in ${file}`, 'red'));
+                        process.exit(1);
+                    }
+                } else {
+                    console.log(colorText(`OK  ${file}`, 'green') + `  (${valResult.symbolTable.usageSummary()})`);
+                }
+            }
+
+            console.log(colorText(`Simulating: ${file}`, 'cyan') + (simState ? ` (state: ${simState})` : ''));
+            const vmResult = runVM(source, { entryState: simState, noInit: simNoInit, showMemory: simShowMemory, testMode: simTestMode });
+            if (simTestMode && vmResult.exitCode !== 0) {
+                process.exit(vmResult.exitCode);
+            }
+        }
+        process.exit(0);
     }
 
     if (clean) {

@@ -82,10 +82,10 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
     else if (valTypeStr === 'object') recValType = ESymbolType.object;
     else if (FP_BITS[valTypeStr]) { recValType = ESymbolType.number | ESymbolType.fixed_point; recFpBits = FP_BITS[valTypeStr]; }
 
-    // Conditional memory warning
+    // Conditional memory warning — skip in nocompile files (e.g. type-only declaration files)
     const s = context.options.stackSize  ?? 1024;
     const p = context.options.heapNumPages ?? 128;
-    if (s < 4096 || p < 256)
+    if ((s < 4096 || p < 256) && !(context.currentFile.options & ECompileOptions.no_compile))
       addDiagnostic(decl, context, 'warning',
         `Record requires substantial heap (stack_size=${s}, heap_page_number=${p}). ` +
         `Recommended: stack_size >= 4096, heap_page_number >= 256 in typecon.json.`);
@@ -160,15 +160,34 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
         if (typeof litVal === 'number') {
           code += `set ra ${Math.round(litVal * (1 << fpBits))}\n`;
         } else {
+          // Propagate declared FP type as ambient context so literals and
+          // sub-expressions inside the initializer know the target precision
+          const prevDeclaredFp = context.declaredFpBits;
+          context.declaredFpBits = fpBits;
           code += visitExpression(init as Expression, context);
+          context.declaredFpBits = prevDeclaredFp;
+          // Coerce result if expression returned a different FP precision
+          if (context.curFpBits > 0 && context.curFpBits !== fpBits) {
+            if (context.curFpBits > fpBits)
+              code += `shiftr ra ${context.curFpBits - fpBits}\n`;
+            else
+              code += `shiftl ra ${fpBits - context.curFpBits}\n`;
+          }
         }
         context.curExpr = ESymbolType.number | ESymbolType.fixed_point;
         context.curFpBits = fpBits;
       } else {
         code += visitExpression(init as Expression, context);
+        // If curFpBits wasn't set (const FP identifier evaluated at compile time),
+        // fall back to the symbol's declared fp_bits
+        let rhsFp = context.curFpBits;
+        if (rhsFp === 0 && (init as Expression).isKind(SyntaxKind.Identifier)) {
+          const rhsSym = (context.symbolTable.get((init as Expression).getText()) ?? context.paramMap[(init as Expression).getText()]) as SymbolDefinition | undefined;
+          if (rhsSym?.fp_bits) rhsFp = rhsSym.fp_bits;
+        }
         // FP value assigned to a plain-integer variable: truncate via shiftr
-        if (fpBits === undefined && context.curFpBits !== 0) {
-          code += `shiftr ra ${context.curFpBits}\n`;
+        if (fpBits === undefined && rhsFp !== 0) {
+          code += `shiftr ra ${rhsFp}\n`;
           context.curFpBits = 0;
         }
       }
@@ -186,7 +205,7 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
           size: 1
         });
         // Use G_ADDR for initialization
-        code += `set rsp _G_ADDR_${varName}\nsetarray flat[rsp] ra\n`;
+        code += `setarray flat[_G_ADDR_${varName}] ra\n`;
       } else {
         // Absolute global offset
         code += `setarray flat[${context.globalVarCount}] ra\n`;

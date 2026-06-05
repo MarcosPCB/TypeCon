@@ -31,25 +31,59 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
     if (typeof valD === 'undefined')
       code += visitExpression(right, context,);
 
-    const rightFpBitsAssign = context.curFpBits;
+    // If right side was compile-time evaluated (curFpBits not updated), fall back to
+    // the symbol's declared fp_bits so FP→int coercion still fires for const FP vars
+    let rightFpBitsAssign = context.curFpBits;
+    if (rightFpBitsAssign === 0 && typeof valD !== 'undefined' && right.isKind(SyntaxKind.Identifier)) {
+      const rhsSym = (context.symbolTable.get(right.getText()) ?? context.paramMap[right.getText()]) as SymbolDefinition | undefined;
+      if (rhsSym?.fp_bits) rightFpBitsAssign = rhsSym.fp_bits;
+    }
 
-    // For plain `=`: if right side is FP but left side is a plain integer, truncate
-    if (opText === '=' && rightFpBitsAssign !== 0 && typeof valD === 'undefined') {
+    // Track the value to use in storeLeftSideOfAssignment (may be overridden below)
+    let storeVal: string | number = typeof valD !== 'undefined' ? Number(valD) : 'ra';
+
+    // For plain `=`: if right side is FP but left side is a plain integer, convert
+    if (opText === '=' && rightFpBitsAssign !== 0) {
       const leftText = left.isKind(SyntaxKind.Identifier) ? left.getText().trim() : null;
       if (leftText) {
         const leftSym = (context.symbolTable.get(leftText) ?? context.paramMap[leftText]) as SymbolDefinition | undefined;
         if (leftSym && !leftSym.fp_bits && !(leftSym.type & ESymbolType.fixed_point)) {
-          code += `shiftr ra ${rightFpBitsAssign}\n`;
+          if (typeof valD === 'undefined') {
+            // Runtime FP value in ra: emit shift
+            code += `shiftr ra ${rightFpBitsAssign}\n`;
+            // storeVal stays 'ra'
+          } else {
+            // Compile-time constant: convert at compile time
+            storeVal = ((Number(valD) >>> rightFpBitsAssign) | 0);
+          }
           context.curFpBits = 0;
         }
       }
     }
 
+    // Detect float literal on right side for compound-assignment scaling
+    const litTextAssign = right.isKind(SyntaxKind.NumericLiteral) ? right.getText() : null;
+    const litIsFloatAssign = litTextAssign !== null && litTextAssign.includes('.');
+
     if (opText != '=') {
       //code += `set rd ra\n`
       code += visitExpression(left, context, 'rd');
       const leftFpBitsAssign = context.curFpBits;
-      const rhs = typeof valD !== 'undefined' ? Number(valD) : 'ra';
+
+      // Scale float literals to FP and compute effective right FP precision
+      let effectiveRightFpBitsAssign = rightFpBitsAssign;
+      let rhs: string | number;
+      if (typeof valD !== 'undefined') {
+        const n = Number(valD);
+        if (litIsFloatAssign && leftFpBitsAssign > 0) {
+          rhs = Math.round(n * (1 << leftFpBitsAssign));
+          effectiveRightFpBitsAssign = leftFpBitsAssign;
+        } else {
+          rhs = n;
+        }
+      } else {
+        rhs = 'ra';
+      }
 
       switch (opText) {
         case '+=':
@@ -59,18 +93,18 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
           code += `sub rd ${rhs}\n`;
           break;
         case "*=":
-          if (leftFpBitsAssign !== 0 && rightFpBitsAssign !== 0) {
-            if (leftFpBitsAssign !== rightFpBitsAssign)
-              addDiagnostic(bin, context, 'warning', `FP precision mismatch in *=: FP${leftFpBitsAssign} vs FP${rightFpBitsAssign}`);
+          if (leftFpBitsAssign !== 0 && effectiveRightFpBitsAssign !== 0) {
+            if (leftFpBitsAssign !== effectiveRightFpBitsAssign)
+              addDiagnostic(bin, context, 'warning', `FP precision mismatch in *=: FP${leftFpBitsAssign} vs FP${effectiveRightFpBitsAssign}`);
             code += `mulscale rd rd ${rhs} ${leftFpBitsAssign}\n`;
           } else {
             code += `mul rd ${rhs}\n`;
           }
           break;
         case "/=":
-          if (leftFpBitsAssign !== 0 && rightFpBitsAssign !== 0) {
-            if (leftFpBitsAssign !== rightFpBitsAssign)
-              addDiagnostic(bin, context, 'warning', `FP precision mismatch in /=: FP${leftFpBitsAssign} vs FP${rightFpBitsAssign}`);
+          if (leftFpBitsAssign !== 0 && effectiveRightFpBitsAssign !== 0) {
+            if (leftFpBitsAssign !== effectiveRightFpBitsAssign)
+              addDiagnostic(bin, context, 'warning', `FP precision mismatch in /=: FP${leftFpBitsAssign} vs FP${effectiveRightFpBitsAssign}`);
             code += `divscale rd rd ${rhs} ${leftFpBitsAssign}\n`;
           } else {
             code += `div rd ${rhs}\n`;
@@ -97,7 +131,7 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
       }
     }
 
-    code += storeLeftSideOfAssignment(left, context, `${opText != '=' ? 'rd' : typeof valD !== 'undefined' ? Number(valD) : 'ra'}`);
+    code += storeLeftSideOfAssignment(left, context, `${opText != '=' ? 'rd' : String(storeVal)}`);
     context.usingRD = useRD;
 
     return code;
@@ -159,7 +193,28 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
   // Track result FP precision
   let resultFpBits: 0 | 11 | 14 | 16 | 30 = 0;
 
-  const rhs = typeof valD !== 'undefined' ? String(Number(valD)) : 'ra';
+  // Auto-coerce non-literal right side to match left FP precision
+  let effectiveRightFpBits = rightFpBits;
+  if (typeof valD === 'undefined' && rightFpBits > 0 && leftFpBits > 0 && rightFpBits !== leftFpBits) {
+    if (rightFpBits > leftFpBits)
+      code += `shiftr ra ${rightFpBits - leftFpBits}\n`;
+    else
+      code += `shiftl ra ${leftFpBits - rightFpBits}\n`;
+    addDiagnostic(bin, context, 'warning',
+      `Auto-coercing right FP${rightFpBits} to FP${leftFpBits} in '${opText}'`);
+    effectiveRightFpBits = leftFpBits;
+  }
+
+  // Scale float literals (text contains '.') to the FP representation of the left operand
+  const litText = right.isKind(SyntaxKind.NumericLiteral) ? right.getText() : null;
+  const litIsFloat = litText !== null && litText.includes('.');
+  let rhs: string;
+  if (typeof valD !== 'undefined') {
+    const n = Number(valD);
+    rhs = (litIsFloat && leftFpBits > 0) ? String(Math.round(n * (1 << leftFpBits))) : String(n);
+  } else {
+    rhs = 'ra';
+  }
 
   switch (opText) {
     case "+":
@@ -176,32 +231,32 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
       resultFpBits = leftFpBits;
       break;
     case "*":
-      if (leftFpBits !== 0 && rightFpBits !== 0) {
-        if (leftFpBits !== rightFpBits)
-          addDiagnostic(bin, context, 'error', `FP precision mismatch: FP${leftFpBits} * FP${rightFpBits} — convert explicitly`);
+      if (leftFpBits !== 0 && effectiveRightFpBits !== 0) {
+        if (leftFpBits !== effectiveRightFpBits)
+          addDiagnostic(bin, context, 'warning', `FP precision mismatch: FP${leftFpBits} * FP${effectiveRightFpBits}`);
         code += `mulscale rd rd ${rhs} ${leftFpBits}\n`;
         resultFpBits = leftFpBits;
-      } else if (leftFpBits !== 0 && rightFpBits === 0) {
+      } else if (leftFpBits !== 0 && effectiveRightFpBits === 0) {
         code += `mul rd ${rhs}\n`;
         resultFpBits = leftFpBits;
-      } else if (leftFpBits === 0 && rightFpBits !== 0) {
-        addDiagnostic(bin, context, 'error', `integer * FP${rightFpBits}: swap operands or cast left side to FP`);
+      } else if (leftFpBits === 0 && effectiveRightFpBits !== 0) {
+        addDiagnostic(bin, context, 'warning', `integer * FP${effectiveRightFpBits}: swap operands or use explicit cast`);
         code += `mul rd ${rhs}\n`;
       } else {
         code += `mul rd ${rhs}\n`;
       }
       break;
     case "/":
-      if (leftFpBits !== 0 && rightFpBits !== 0) {
-        if (leftFpBits !== rightFpBits)
-          addDiagnostic(bin, context, 'error', `FP precision mismatch: FP${leftFpBits} / FP${rightFpBits} — convert explicitly`);
+      if (leftFpBits !== 0 && effectiveRightFpBits !== 0) {
+        if (leftFpBits !== effectiveRightFpBits)
+          addDiagnostic(bin, context, 'warning', `FP precision mismatch: FP${leftFpBits} / FP${effectiveRightFpBits}`);
         code += `divscale rd rd ${rhs} ${leftFpBits}\n`;
         resultFpBits = leftFpBits;
-      } else if (leftFpBits !== 0 && rightFpBits === 0) {
+      } else if (leftFpBits !== 0 && effectiveRightFpBits === 0) {
         code += `div rd ${rhs}\n`;
         resultFpBits = leftFpBits;
-      } else if (leftFpBits === 0 && rightFpBits !== 0) {
-        addDiagnostic(bin, context, 'error', `integer / FP${rightFpBits}: cast left side to FP first`);
+      } else if (leftFpBits === 0 && effectiveRightFpBits !== 0) {
+        addDiagnostic(bin, context, 'warning', `integer / FP${effectiveRightFpBits}: cast left side to FP first`);
         code += `div rd ${rhs}\n`;
       } else {
         code += `div rd ${rhs}\n`;

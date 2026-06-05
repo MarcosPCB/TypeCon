@@ -164,9 +164,7 @@ export namespace AnimUtils {
      * @returns Eased value (FP16).
      */
     export function easeInSine(t: FP16): FP16 {
-        let ONE: FP16 = 1.0;
-        let bam: number = fp16ToInt(t) * 512;
-        return ONE - Math.cos(bam);
+        return FP16(1.0 - FP16(Math.cos(FP14(t) * 90.0)));
     }
 
     /**
@@ -176,8 +174,8 @@ export namespace AnimUtils {
      * @returns Eased value (FP16).
      */
     export function easeOutSine(t: FP16): FP16 {
-        let bam: number = fp16ToInt(t) * 512;
-        return Math.sin(bam);
+        let x: FP14 = Math.sin(t * 90.0);
+        return FP16(x);
     }
 
     /**
@@ -187,10 +185,8 @@ export namespace AnimUtils {
      * @returns Eased value (FP16).
      */
     export function easeInOutSine(t: FP16): FP16 {
-        let ONE: FP16 = 1.0;
-        let bam: number = fp16ToInt(t) * 1024;
-        let cosv: FP16 = Math.cos(bam);
-        return (ONE - cosv) / 2;
+        let x: FP14 = - ((Math.cos(t * 180.0)) - 1.0) / 2.0;
+        return FP16(x);
     }
 
     // ── Customisable power ease ───────────────────────────────────────────────
@@ -268,15 +264,12 @@ export namespace AnimUtils {
      */
     export function pingPong(t: number, period: number): number {
         let full: number = period * 2;
-        let q: number = t / full;
-        let phase: number = t - q * full;
-        let result: number = 0;
-        if (phase < period) {
-            result = phase;
-        } else {
-            result = full - phase;
+        let q: number = t / full;           // integer floor division
+        let phase: number = t - q * full;   // t mod (2*period)
+        if (phase >= period) {
+            phase = phase - period;         // descending half: map [period,2*period) → [0,period)
         }
-        return result;
+        return phase;
     }
 
     /**
@@ -294,8 +287,7 @@ export namespace AnimUtils {
         if (phase >= period) {
             phase = full - phase;
         }
-        let num: number = phase * 65536;
-        return num / period;
+        return FP16(phase) / FP16(period);
     }
 
     // ── Utilities ─────────────────────────────────────────────────────────────

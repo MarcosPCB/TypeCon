@@ -29,6 +29,13 @@ export function visitWhileStatement(ws: WhileStatement, context: CompilerContext
 
   const ifCode = `${right}\n${left}\nset ra 1\n${pattern.op} rb rd\n  set ra 0\n`;
   code += ifCode + 'set rc 0\nwhilen ra 1 {\n' + indent('state pushc\n', 1);
+
+  // pushc occupies one stack slot inside the loop body. Bump localVarCount so
+  // that any local variables declared inside the loop get correct rbp-relative
+  // offsets (i.e., offset = slot distance from rbp, accounting for the pushc slot).
+  const savedLocalVarCount = context.localVarCount;
+  context.localVarCount += 1;
+
   const block = ws.getStatement();
   if (block.isKind(SyntaxKind.Block)) {
     const stmts = block.getStatements();
@@ -36,6 +43,15 @@ export function visitWhileStatement(ws: WhileStatement, context: CompilerContext
       code += visitStatement(stmt, context);
     });
   }
+
+  // Emit cleanup for any locals allocated inside the loop body so the stack is
+  // stable across iterations (only the pushc slot remains before popc).
+  const loopBodySlots = context.localVarCount - savedLocalVarCount - 1;
+  if (loopBodySlots > 0)
+    code += indent(`sub rsp ${loopBodySlots}\n`, 1);
+
+  context.localVarCount = savedLocalVarCount;
+
   code += indent(ifCode + 'state popc\nadd rc 1\n', 1);
   code += '}\n';
 

@@ -23,8 +23,20 @@ export function visitExpression(expr: Expression, context: CompilerContext, reg 
 
   const val = evaluateLiteralExpression(expr, context);
 
-  if (typeof val === 'number')
-    return (context.options.lineDetail ? formatLineDetail(`Evaluated: ${expr.getText()}`) : '') + `set ${reg} ${val}\n`;
+  if (typeof val === 'number') {
+    // If the value is a non-integer float and there's an FP context hint, convert to
+    // the integer FP representation at compile time (e.g. Math.sin(1.93) → set r0 3952).
+    const fpBits = (context.nativeArgFpHint || context.curFpBits) as number;
+    const isFloatLit = expr.isKind(SyntaxKind.NumericLiteral) && expr.getText().includes('.');
+    // Fall back to declared FP type, then FP16 default for float literals with no context
+    const effectiveFp = fpBits || (isFloatLit ? (context.declaredFpBits || 16) : 0);
+    let emitVal: number = val;
+    if ((!Number.isInteger(val) || isFloatLit) && effectiveFp > 0) {
+      emitVal = Math.round(val * (1 << effectiveFp));
+      context.curFpBits = effectiveFp as (0 | 11 | 14 | 16 | 30);
+    }
+    return (context.options.lineDetail ? formatLineDetail(`Evaluated: ${expr.getText()}`) : '') + `set ${reg} ${emitVal}\n`;
+  }
 
   switch (expr.getKind()) {
     case SyntaxKind.BinaryExpression:

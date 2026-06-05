@@ -2,6 +2,7 @@ import '../../../include/TCSet100/types';
 
 class TestSingleton extends CEvent {
     constructor() { super('NewGame'); }
+    // debug-test
     public Append(): void {
         let b: number = userdef.brightness;
         let sc: number = userdef.screen.size;

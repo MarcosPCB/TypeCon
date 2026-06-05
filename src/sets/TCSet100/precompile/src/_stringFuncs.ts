@@ -14,14 +14,16 @@ function _stringToFP16(s: string): FP16 {
 
     let intPart: number = 0;
     let c: number = 0;
-    while (i < len) {
+    let _intRun: number = 1;
+    while (i < len && _intRun == 1) {
         c = charCodeAt(s, i);
         if (c == 46) {
             i = i + 1;
-            break;
+            _intRun = 0;
+        } else {
+            intPart = intPart * 10 + c - 48;
+            i = i + 1;
         }
-        intPart = intPart * 10 + c - 48;
-        i = i + 1;
     }
 
     let fracInt: number = 0;

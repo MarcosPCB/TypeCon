@@ -264,9 +264,9 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
 
   if (ctors.length > 0 && type == '') {
     code = `${context.options.lineDetail ? formatLineDetail(ctors[0].getText()) : ''}\ndefstate ${className}_constructor \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
-    code += indent(`state pushr2\nset r0 ${cls.num_elements}\nset r1 ${EHeapType.object}\nstate alloc\nstate popr2\nstate pushb\n`, 1);
+    code += indent(`state pushr2\nset r0 ${cls.num_elements}\nset r1 ${EHeapType.object}\nstate alloc\nstate popr2\nsetarray flat[rbp] rb\nadd rsp 1\n`, 1);
     code += visitConstructorDeclaration(ctors[0], context, '');
-    code += `  state popb\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
+    code += `  set rb flat[rbp]\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
   }
 
   // visit methods

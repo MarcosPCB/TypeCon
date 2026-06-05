@@ -114,14 +114,24 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
   }
 
   if (expr.isKind(SyntaxKind.NumericLiteral)) {
-    code += `set ${reg} ${expr.getText()}\n`;
-    if (direct)
-      return expr.getText();
-
+    const raw = expr.getText();
+    const val = parseFloat(raw);
+    const fpBits = (context.nativeArgFpHint || context.curFpBits) as number;
+    const effectiveFp = fpBits || (raw.includes('.') ? (context.declaredFpBits || 16) : 0);
+    if ((!Number.isInteger(val) || raw.includes('.')) && effectiveFp > 0) {
+      // Float literal in an FP context: convert to the integer FP representation at compile time.
+      const fpVal = Math.round(val * (1 << effectiveFp));
+      code += `set ${reg} ${fpVal}\n`;
+      context.curFpBits = effectiveFp as (0 | 11 | 14 | 16 | 30);
+      if (direct) return String(fpVal);
+    } else {
+      code += `set ${reg} ${raw}\n`;
+      if (direct) return raw;
+    }
     return code;
   }
   if (expr.isKind(SyntaxKind.StringLiteral) || expr.isKind(SyntaxKind.NoSubstitutionTemplateLiteral)) {
-    let text = expr.getText().replace(/[`'"]/g, "");
+    let text = (expr as unknown as { getLiteralValue(): string }).getLiteralValue();
     code += `state pushr2\nset r0 ${text.length + 1}\nset r1 ${EHeapType.string}\nstate alloc\nstate popr2\nsetarray flat[rb] ${text.length}\nset ri rb\n`;
     //code += `add rsp 1\nset rd rsp\nadd rsp 1\nsetarray flat[rsp] ${text.length}\n`;
     for (let i = 0; i < text.length; i++)

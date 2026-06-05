@@ -2,6 +2,7 @@ import '../../../include/TCSet100/types';
 
 class TestUserDef extends CEvent {
     constructor() { super('NewGame'); }
+    // debug-test
     public Append(): void {
         // ── flat fields ────────────────────────────────────────────────────
         let bright: number = userdef[0].brightness;

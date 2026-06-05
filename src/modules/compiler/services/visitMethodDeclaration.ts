@@ -77,20 +77,26 @@ export function visitMethodDeclaration(
     code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nenda \n\n`;
     return code;
   } else if (type == 'CEvent' && (mName.toLowerCase() == 'append' || mName.toLowerCase() == 'prepend')) {
+    const isDebugTest = md.getLeadingCommentRanges().some(c => /debug-test/i.test(c.getText()));
+    if (isDebugTest) localCtx.isDebugTest = true;
     localCtx.curFunc = { name: mName, type: ESymbolType.function, offset: 0, parentClass: className };
-    let code = `${context.options.lineDetail ? formatLineDetail(md.getText()) : ''}\n${mName.toLowerCase() == 'append' ? 'append' : 'on'}event EVENT_${context.currentEventName}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
+    let code = `${context.options.lineDetail ? formatLineDetail(md.getText()) : ''}\n${mName.toLowerCase() == 'append' ? 'append' : 'on'}event EVENT_${context.currentEventName}\n${isDebugTest ? '//// DEBUG-TEST ////\n  state _testInit\n' : ''}  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
     const body = md.getBody() as any;
     if (body) {
       body.getStatements().forEach(st => {
         code += indent(visitStatement(st, localCtx), 1) + "\n";
       });
     }
+    if (isDebugTest) code += `  set rb _testCounter\n`;
     code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nendevent \n\n`;
     return code;
   }
 
   // otherwise => normal state
-  let code = `${context.options.lineDetail ? formatLineDetail(md.getText()) : ''}\ndefstate ${className}_${mName}\n`;
+  const isDebugTestNormal = md.getLeadingCommentRanges().some(c => /debug-test/i.test(c.getText()));
+  if (isDebugTestNormal) localCtx.isDebugTest = true;
+
+  let code = `${context.options.lineDetail ? formatLineDetail(md.getText()) : ''}\ndefstate ${className}_${mName}\n${isDebugTestNormal ? '//// DEBUG-TEST ////\n  state _testInit\n' : ''}`;
 
   //if(md.getDescendantsOfKind(SyntaxKind.VariableDeclaration).length > 0) {
   //localCtx.hasLocalVars = true;
@@ -212,6 +218,7 @@ export function visitMethodDeclaration(
   }
 
   context.curFunc = curFunc;
+  if (isDebugTestNormal) code += `  set rb _testCounter\n`;
   //if(md.getDescendantsOfKind(SyntaxKind.VariableDeclaration).length > 0)
   code += `  sub rbp 1\n  set rsp rbp\n  state pop\n  set rbp ra\n`;
 

@@ -9,13 +9,14 @@ import '../../types';
 //   flat[ptr + 2 + i*2 + 1]   = val
 //
 // Calling conventions:
-//   _rec_alloc : r0=capacity (0→default 16)          → rb=ptr
-//   _rec_hash  : r0=key_str_ptr                       → rb=hash
-//   _rec_get   : r0=hash, r1=rec_ptr                  → rb=val, rc=1 if found
-//   _rec_set   : r0=hash, r1=rec_ptr, r2=val          → (resizes at 75% load)
-//   _rec_del   : r0=hash, r1=rec_ptr                  → tombstones slot
-//   _rec_free  : r0=rec_ptr                           → frees the block
-//   _rec_resize: r0=old_ptr                           → rb=new_ptr (internal)
+//   _rec_alloc    : r0=capacity (0→default 16)          → rb=ptr
+//   _rec_hash     : r0=key_str_ptr                       → rb=hash
+//   _rec_get      : r0=hash, r1=rec_ptr                  → rb=val, rc=1 if found
+//   _rec_set_raw  : r0=hash, r1=rec_ptr, r2=val          → (no resize check, internal)
+//   _rec_resize   : r0=old_ptr                           → rb=new_ptr (internal)
+//   _rec_set      : r0=hash, r1=rec_ptr, r2=val          → (resizes at 75% load)
+//   _rec_del      : r0=hash, r1=rec_ptr                  → tombstones slot
+//   _rec_free     : r0=rec_ptr                           → frees the block
 
 // Allocate a new record block.
 // r0 = desired capacity; 0 means use default (16). Must be a power of 2.
@@ -101,28 +102,12 @@ whilel r4 r2 {
 `);
 }
 
-// Insert or update a key-value pair.
+// Internal: linear probe insertion without load-factor check.
 // r0=hash, r1=rec_ptr, r2=val
-// Resizes (doubles) when count exceeds 75% of capacity.
-function _rec_set(): void {
+// Used by both _rec_set (after optional resize) and _rec_resize (during rehash).
+function _rec_set_raw(): void {
     CONUnsafe(`
-// Check load factor: resize if count > capacity * 3 / 4
-set r3 flat[r1]        // r3 = capacity
-set r4 flat[r1]
-mul r4 3
-div r4 4               // r4 = 75% threshold
-set r5 r1
-add r5 1
-set r6 flat[r5]        // r6 = count
-ifg r6 r4 {
-    state pushr3
-    set r0 r1
-    state _rec_resize
-    set r1 rb
-    state popr3
-    set r3 flat[r1]    // refresh capacity after resize
-}
-// Linear probe to find empty/tombstone/matching slot
+set r3 flat[r1]        // capacity
 set r4 r3
 sub r4 1               // mask = cap-1
 and r4 r0              // initial slot
@@ -155,7 +140,9 @@ whilel r6 r3 {
         // increment count
         set ri r1
         add ri 1
-        add flat[ri] 1
+        set ra flat[ri]
+        add ra 1
+        setarray flat[ri] ra
         set r6 r3       // break
     }
     // tombstone
@@ -164,9 +151,9 @@ whilel r6 r3 {
         ife r7 -1
             set r7 r4   // remember first tombstone
         add r4 1
-        and r4 flat[r1] // r4 = (r4+1) & (cap-1) — NOTE: uses cap, fix below
+        and r4 flat[r1]
     }
-    // existing match: update
+    // existing match: update value in place
     ife r9 r0 {
         add r8 1
         setarray flat[r8] r2
@@ -182,6 +169,93 @@ whilel r6 r3 {
     }
     add r6 1
 }
+`);
+}
+
+// Internal: double the capacity and rehash all live entries into a new block.
+// r0=old_ptr → rb=new_ptr
+// Calls _rec_set_raw (defined above) — no forward reference.
+function _rec_resize(): void {
+    CONUnsafe(`
+set r2 flat[r0]        // old capacity
+set r3 r2
+mul r3 2               // new capacity
+// allocate new block
+state pushr4
+set r4 r3
+mul r4 2
+add r4 2
+state pushr2
+set r1 4
+state alloc
+state popr2
+state popr4
+// rb = new block ptr
+setarray flat[rb] r3   // new capacity
+set ri rb
+add ri 1
+setarray flat[ri] 0    // count = 0
+// rehash all live slots from old block
+set r4 0               // slot index
+set r5 r0
+add r5 2               // old slot base
+set r6 rb              // save new ptr (rb may be clobbered by _rec_set_raw)
+whilel r4 r2 {
+    set r7 r4
+    mul r7 2
+    add r7 r5          // &old_slot[r4].hash
+    set r8 flat[r7]    // old hash
+    // skip empty and tombstones
+    ife r8 0 { add r4 1 }
+    set r9 -1
+    ife r8 r9 { add r4 1 }
+    ifn r8 0 {
+        ifn r8 r9 {
+            add r7 1
+            set r10 flat[r7]   // old val
+            // save r0-r6 (old_ptr, old_cap, new_cap, slot_idx, old_base, new_ptr)
+            // so _rec_set_raw can freely use r0-r10
+            state pushr6
+            set r0 r8
+            set r1 r6
+            set r2 r10
+            state _rec_set_raw
+            state popr6
+            add r4 1
+        }
+    }
+}
+// free old block (r0 = old_ptr, restored by final popr6 above)
+state pushr1
+state free
+state popr1
+set rb r6
+`);
+}
+
+// Insert or update a key-value pair.
+// r0=hash, r1=rec_ptr, r2=val
+// Resizes (doubles) when count exceeds 75% of capacity.
+// Calls _rec_resize and _rec_set_raw — both defined above.
+function _rec_set(): void {
+    CONUnsafe(`
+// Check load factor: resize if count > capacity * 3 / 4
+set r3 flat[r1]        // r3 = capacity
+set r4 flat[r1]
+mul r4 3
+div r4 4               // r4 = 75% threshold
+set r5 r1
+add r5 1
+set r6 flat[r5]        // r6 = count
+ifg r6 r4 {
+    state pushr3
+    set r0 r1
+    state _rec_resize
+    set r1 rb
+    state popr3
+    set r3 flat[r1]    // refresh capacity after resize
+}
+state _rec_set_raw
 `);
 }
 
@@ -212,7 +286,9 @@ whilel r5 r2 {
         // decrement count
         set ri r1
         add ri 1
-        sub flat[ri] 1
+        set ra flat[ri]
+        sub ra 1
+        setarray flat[ri] ra
         set r5 r2      // break
     }
     ifn r7 r0 {
@@ -229,68 +305,7 @@ whilel r5 r2 {
 function _rec_free(): void {
     CONUnsafe(`
 state pushr1
-set r0 r0
 state free
 state popr1
-`);
-}
-
-// Internal: double the capacity and rehash.
-// r0=old_ptr → rb=new_ptr
-function _rec_resize(): void {
-    CONUnsafe(`
-set r2 flat[r0]        // old capacity
-set r3 r2
-mul r3 2               // new capacity
-// allocate new block
-state pushr4
-set r4 r3
-mul r4 2
-add r4 2
-state pushr2
-set r1 4
-state alloc
-state popr2
-state popr4
-// rb = new block ptr
-setarray flat[rb] r3   // new capacity
-set ri rb
-add ri 1
-setarray flat[ri] 0    // count = 0
-// rehash all live slots from old block
-set r4 0               // slot index
-set r5 r0
-add r5 2               // old slot base
-set r6 rb              // new ptr (save rb)
-whilel r4 r2 {
-    set r7 r4
-    mul r7 2
-    add r7 r5          // &old_slot[r4].hash
-    set r8 flat[r7]    // old hash
-    // skip empty and tombstones
-    ife r8 0 { add r4 1 }
-    set r9 -1
-    ife r8 r9 { add r4 1 }
-    ifn r8 0 {
-        ifn r8 r9 {
-            add r7 1
-            set r10 flat[r7]   // old val
-            // insert into new block
-            state pushr4
-            set r0 r8
-            set r1 r6
-            set r2 r10
-            state _rec_set
-            state popr4
-            add r4 1
-        }
-    }
-}
-// free old block
-state pushr1
-set r0 r0
-state free
-state popr1
-set rb r6
 `);
 }

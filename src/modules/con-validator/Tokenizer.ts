@@ -4,6 +4,7 @@ export type TokenKind =
   | 'keyword'
   | 'identifier'
   | 'integer'
+  | 'float'
   | 'lbrace'
   | 'rbrace'
   | 'lbracket'
@@ -139,11 +140,16 @@ export class Tokenizer {
       return { kind: 'integer', value: '0x' + val, line: startLine, col: startCol };
     }
 
-    // Negative integer or digit
+    // Negative integer or digit — detect float literals (N.N) as errors
     if (isDigit(c) || (c === '-' && isDigit(this.text[this.pos + 1] || ''))) {
       let val = '';
       if (c === '-') val += this.advance();
       while (isDigit(this.ch())) val += this.advance();
+      if (this.ch() === '.' && isDigit(this.text[this.pos + 1] ?? '')) {
+        val += this.advance(); // consume '.'
+        while (isDigit(this.ch())) val += this.advance();
+        return { kind: 'float', value: val, line: startLine, col: startCol };
+      }
       return { kind: 'integer', value: val, line: startLine, col: startCol };
     }
 

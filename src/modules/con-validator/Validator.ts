@@ -156,6 +156,13 @@ export class Validator {
   }
 
   private _validateToken(t: Token, tok: Tokenizer, stack: BlockFrame[]): void {
+    if (t.kind === 'float') {
+      this.diag.push({ severity: 'error', line: t.line, col: t.col,
+        code: 'ERROR_FLOAT_LITERAL',
+        message: `Float literal '${t.value}' is not valid in CON — the compiler should have converted this to a fixed-point integer. Check the source for untyped float literals passed to FP-aware functions.` });
+      return;
+    }
+
     const lower = t.value.toLowerCase();
     const meta  = KEYWORDS.get(lower);
 
@@ -275,13 +282,32 @@ export class Validator {
         // Inside a block: call a previously declared state
         const nameToken = tok.peek();
         if (nameToken.kind === 'identifier') {
-          if (!this.syms.isKnownState(nameToken.value)) {
+          const defLine = this.syms.getStateLine(nameToken.value);
+          if (defLine === undefined) {
             this.diag.push({ severity: 'warning', line: nameToken.line, col: nameToken.col,
               code: 'WARNING_UNKNOWN_STATE',
               message: `State '${nameToken.value}' referenced but not declared in this file (may be in a linked module)` });
           }
+          // Forward references are valid CON — the engine registers all defstates before execution.
         }
+      }
+    }
+
+    // ── arithmetic ops with array destination are invalid ────────────────────
+    // Arrays may only be written via setarray; `add flat[ri] x` is not valid CON.
+    if (stack.length > 0 && ARRAY_DST_OPS.has(lower)) {
+      const dstToken = tok.peek();
+      if (dstToken.kind === 'identifier' && dstToken.value.includes('[')) {
+        this.diag.push({ severity: 'error', line: dstToken.line, col: dstToken.col,
+          code: 'ERROR_ARRAY_ARITH_DST',
+          message: `Array element '${dstToken.value}' cannot be used as an arithmetic destination; use setarray` });
       }
     }
   }
 }
+
+// Arithmetic/assignment instructions whose first operand is a write destination.
+const ARRAY_DST_OPS = new Set([
+  'set','add','sub','mul','div','mod','and','or','xor','shiftl','shiftr',
+  'abs','inv','divr','randvar',
+]);

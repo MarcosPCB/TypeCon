@@ -2,6 +2,7 @@ import '../../../include/TCSet100/types';
 
 class TestSectorsNew extends CEvent {
     constructor() { super('NewGame'); }
+    // debug-test
     public Append(): void {
         // ── ceiling new fields ─────────────────────────────────────────────
         let ceilZGoal: number = sectors[0].ceiling.zGoal;

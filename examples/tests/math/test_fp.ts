@@ -27,6 +27,7 @@ class DisplayRestFP extends CEvent {
 class TestFP extends CEvent {
     constructor() { super('InitComplete'); }
 
+    // debug-test
     public Append(): void {
         let zoom: FP16 = 1.5;    // 98304
         let half: FP16 = 0.5;    // 32768
@@ -74,6 +75,12 @@ class TestFP extends CEvent {
         checkFpEq("fp16FromString(zoom)", 98304, fp16FromString(s1));
         checkFpEq("fp16FromString(half)", 32768, fp16FromString(s2));
         checkFpEq("fp16FromString(cx)", 10485760, fp16FromString(s3));
+
+        // ── Float literal FP16 scaling (the bug: 90.0 was emitted as 90) ────
+        // zoom = 1.5 (98304 raw)
+        checkEq("fp16ToInt(zoom*90.0)", 135, fp16ToInt(zoom * 90.0));   // 1.5 * 90 = 135
+        checkFpEq("zoom+90.0", 5996544, zoom + 90.0);                   // (98304 + 5898240) = 5996544
+        checkFpEq("zoom/2.0", 49152, zoom / 2.0);                       // 1.5 / 2.0 = 0.75 → 49152
 
         // ── FP auto-conversion in string concat ───────────────────────────
         // zoom/half/cx are FP16 — the + operator should call _convertFP2String
