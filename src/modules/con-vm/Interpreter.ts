@@ -24,8 +24,8 @@ function readOperand(op: Operand, state: VMState): number {
       const arr = state.arrays.get(op.name);
       if (!arr) return 0;
       const idx = readOperand(op.index, state);
-      if (idx < 0 || idx > 20_000_000) {
-        console.error(`[CONVM] BOUNDS ERROR read ${op.name}[${idx}] — rsp=${state.vars.get('rsp')} rbp=${state.vars.get('rbp')} ri=${state.vars.get('ri')} ra=${state.vars.get('ra')} rb=${state.vars.get('rb')} in:${_vmLS}`);
+      if (idx < 0 || idx >= arr.length) {
+        console.error(`[CONVM] BOUNDS ERROR read ${op.name}[${idx}] (size=${arr.length}) — rsp=${state.vars.get('rsp')} rbp=${state.vars.get('rbp')} ri=${state.vars.get('ri')} ra=${state.vars.get('ra')} rb=${state.vars.get('rb')} in:${_vmLS}`);
         return 0;
       }
       return arr[idx] ?? 0;
@@ -56,7 +56,12 @@ function writeOperand(op: Operand, value: number, state: VMState): void {
         console.error(`[CONVM] BOUNDS ERROR write ${op.name}[${idx}] = ${v} — rsp=${state.vars.get('rsp')} rbp=${state.vars.get('rbp')} ri=${state.vars.get('ri')} ra=${state.vars.get('ra')} rb=${state.vars.get('rb')} in:${_vmLS}`);
         return;
       }
-      // Grow array on demand
+      // Grow array on demand — but warn when growing beyond the declared initial
+      // size (resizearray should have been called first; if not it means the CON
+      // program is relying on auto-grow which EDuke32 does not support)
+      if (idx >= arr.length && op.name === 'flat') {
+        console.warn(`[CONVM] WARNING: write flat[${idx}] exceeds current flat size (${arr.length}) without a prior resizearray — this will fail in EDuke32`);
+      }
       while (arr.length <= idx) arr.push(0);
       arr[idx] = v;
       if (op.name === 'flat') {

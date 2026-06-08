@@ -32,9 +32,9 @@ export class CONInit {
     public markerDefines: string[] = [];
     constructor(public readonly stackSize = 8192,
         public readonly heapPageSize = 4,
-        public readonly heapNumPages = 512,
+        public readonly heapNumPages = 14336,
         public readonly precompiled = true,
-        public readonly heapSize = 4 * 512,
+        public readonly heapSize = 4 * 14336,
         public readonly globalStaticSize = 0,
         public readonly acceptConModules = false,
     ) {
@@ -555,9 +555,11 @@ defstate _GetFreePages
                 set _HEAPl heaptables
                 sub _HEAPl _HEAPk
 
-                //No pages left
+                //No pages left — measure space from _HEAPj to the CURRENT heap end.
+                //Must use the 'heapsize' gamevar (not the compile-time ${heapSize}
+                //constant) so that space in grown regions is correctly detected.
                 ife _HEAPl 1 {
-                    set _HEAPl ${heapSize}
+                    set _HEAPl heapsize
                     add _HEAPl ${stackSize}
                     sub _HEAPl _HEAPj
 
@@ -568,6 +570,18 @@ defstate _GetFreePages
                 add _HEAPk 1
             }
             
+            // After the inner loop: if no space was found yet, check whether
+            // there is space from _HEAPj to the current heap boundary.
+            // This covers the case where the freed page IS the last page
+            // (_HEAPk starts at heaptables so the inner whilel never runs).
+            ife _HEAP_pointer -1 {
+                set _HEAPl heapsize
+                add _HEAPl ${stackSize}
+                sub _HEAPl _HEAPj
+                ifge _HEAPl _HEAP_request
+                    set _HEAP_pointer _HEAPj
+            }
+
             ifn _HEAP_pointer -1
                 exit
         } else {

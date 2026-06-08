@@ -36,7 +36,7 @@ let init_file = 'init.con';
 let initFunc = false;
 let precompiled_modules = true;
 let heap_page_size = 4;
-let heap_page_number = 512;
+let heap_page_number = 14336; // gives flat[] = 8192 + 57344 = 65536 (EDuke32 max array size)
 let eduke_init = false;
 let share_context = false;
 let compile_only = false;
