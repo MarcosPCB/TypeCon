@@ -169,6 +169,8 @@ export class CONParser {
 
       if (low === 'defstate') {
         this.parseDefstate();
+      } else if (low === 'appendstate' || low === 'prependstate') {
+        this.parseAppendstate(low === 'prependstate');
       } else if (low === 'gamevar' || low === 'var') {
         const stmt = this.parseGamevar();
         if (stmt) initStatements.push(stmt);
@@ -208,6 +210,19 @@ export class CONParser {
     }
     this.sc.next(); // 'ends'
     this.stateMap.set(name, body);
+  }
+
+  private parseAppendstate(prepend: boolean): void {
+    this.sc.next(); // 'appendstate' or 'prependstate'
+    const name = this.sc.next() ?? '__unnamed';
+    const extra: Statement[] = [];
+    while (!this.sc.eof() && this.sc.peek()?.toLowerCase() !== 'ends') {
+      const stmt = this.parseStatement();
+      if (stmt) extra.push(stmt);
+    }
+    this.sc.next(); // 'ends'
+    const existing = this.stateMap.get(name) ?? [];
+    this.stateMap.set(name, prepend ? [...extra, ...existing] : [...existing, ...extra]);
   }
 
   private parseGamevar(): Statement | null {

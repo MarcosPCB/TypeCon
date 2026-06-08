@@ -442,38 +442,52 @@ export class Linker {
         }
 
         // Remaining nodes are in cycles or blocked by cycle nodes.
-        // Among these, put the most-depended-upon nodes first to minimise
-        // forward references from dag-blocked nodes (e.g. constructor → parseValue).
+        // Strategy: emit an empty `defstate X\nends` stub for every remaining
+        // state at the very top so all names are registered before any call to
+        // them.  The real implementations are emitted as `appendstate X` after
+        // all Kahn-sorted states, which appends the body to the (empty) stub.
+        // This eliminates every forward reference — including mutually-recursive
+        // ones that cannot be resolved by reordering alone.
         const sortedSet = new Set(sorted);
         const remaining = blocks.filter(b => !sortedSet.has(b.name));
 
-        if (remaining.length > 0) {
-            const remNames = new Set(remaining.map(b => b.name));
-            // Count how many remaining nodes depend on each remaining node
-            const revCount = new Map<string, number>();
-            for (const b of remaining) revCount.set(b.name, 0);
-            for (const [name, deps] of calls) {
-                if (remNames.has(name)) {
-                    for (const dep of deps) {
-                        if (remNames.has(dep)) {
-                            revCount.set(dep, (revCount.get(dep) ?? 0) + 1);
-                        }
+        // Build the Kahn-sorted implementation map (defstate keyword unchanged)
+        const kahnBlockMap = new Map(blocks.map(b => [b.name, b.content.join('\n')]));
+
+        // For remaining (cycle/blocked) states, convert first line from
+        // `defstate NAME` to `appendstate NAME` for the real implementation.
+        const appendBlockMap = new Map(remaining.map(b => {
+            const impl = b.content.slice();
+            impl[0] = impl[0].replace(/^(\s*)defstate(\s+)/, '$1appendstate$2');
+            return [b.name, impl.join('\n')];
+        }));
+
+        // Sort remaining states: most-depended-upon first so forward refs
+        // within the appendstate section are also minimised.
+        const remNames = new Set(remaining.map(b => b.name));
+        const revCount = new Map<string, number>();
+        for (const b of remaining) revCount.set(b.name, 0);
+        for (const [name, deps] of calls) {
+            if (remNames.has(name)) {
+                for (const dep of deps) {
+                    if (remNames.has(dep)) {
+                        revCount.set(dep, (revCount.get(dep) ?? 0) + 1);
                     }
                 }
             }
-            // Stable sort: most-depended-upon first, ties broken by original block order
-            const remSorted = remaining.slice().sort(
-                (a, b) => (revCount.get(b.name) ?? 0) - (revCount.get(a.name) ?? 0)
-            );
-            for (const b of remSorted) sorted.push(b.name);
         }
+        const remSorted = remaining.slice().sort(
+            (a, b) => (revCount.get(b.name) ?? 0) - (revCount.get(a.name) ?? 0)
+        );
 
-        // Reconstruct the output — trailing newline ensures the next section
-        // (event/actor blocks) starts on its own line
-        const blockMap = new Map(blocks.map(b => [b.name, b.content.join('\n')]));
+        // Assemble: preamble → stubs → Kahn-sorted (defstate) → cycle (appendstate)
+        const stubs = remaining.map(b => `defstate ${b.name}\nends`);
+
         return [
             preamble.join('\n'),
-            ...sorted.map(n => blockMap.get(n) ?? ''),
+            ...stubs,
+            ...sorted.map(n => kahnBlockMap.get(n) ?? ''),
+            ...remSorted.map(b => appendBlockMap.get(b.name) ?? ''),
         ].join('\n') + '\n';
     }
 
