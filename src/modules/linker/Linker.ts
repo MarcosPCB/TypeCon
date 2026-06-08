@@ -273,10 +273,11 @@ export class Linker {
 
         const header = this.buildHeader(sortedModules, finalInit, globalSize, globalArrayName, true);
 
-        const modules = sortedModules.map(mod => ({
-            name: mod.name,
-            code: this.patchModule(mod, globalArrayName)
-        }));
+        const modules = sortedModules.map(mod => {
+            const raw = this.patchModule(mod, globalArrayName);
+            const { defstates, events } = Linker.separateEventBlocks(raw);
+            return { name: mod.name, code: defstates + events };
+        });
 
         return { header, modules };
     }
@@ -293,11 +294,67 @@ export class Linker {
         const fullHeader = this.buildHeader(sortedModules, finalInit, globalSize, globalArrayName, true);
         let output = this.headerless ? "" : fullHeader;
 
+        // Collect defstate code and event/actor code separately so all defstates
+        // appear before any appendevent/onevent/useractor/actor blocks. EDuke32
+        // validates state references as it parses, so a defstate that calls a
+        // helper defined later in the file would fail without this reordering.
+        let defstateCode = '';
+        let eventCode = '';
+
         sortedModules.forEach(mod => {
-            output += `// Module: ${mod.name}\n${this.patchModule(mod, globalArrayName)}\n`;
+            const modCode = `// Module: ${mod.name}\n${this.patchModule(mod, globalArrayName)}\n`;
+            const { defstates, events } = Linker.separateEventBlocks(modCode);
+            defstateCode += defstates;
+            eventCode += events;
         });
 
+        output += defstateCode + eventCode;
+
         return { code: output, header: fullHeader };
+    }
+
+    // Split a CON code string into defstate blocks and event/actor blocks.
+    // All defstates must appear before event handlers so EDuke32 can resolve
+    // forward state references during its single-pass parsing step.
+    private static separateEventBlocks(code: string): { defstates: string; events: string } {
+        const lines = code.split('\n');
+        const defstateLines: string[] = [];
+        const eventLines: string[] = [];
+
+        let inBlock = false;
+        let currentBuffer: string[] = [];
+
+        for (const line of lines) {
+            const trimmed = line.trimStart().toLowerCase();
+
+            if (!inBlock) {
+                // Detect the start of an event or actor block
+                if (trimmed.startsWith('appendevent ') || trimmed.startsWith('onevent ') ||
+                    trimmed === 'appendevent' || trimmed === 'onevent' ||
+                    trimmed.startsWith('useractor ') || trimmed.startsWith('actor ')) {
+                    inBlock = true;
+                    currentBuffer = [line];
+                } else {
+                    defstateLines.push(line);
+                }
+            } else {
+                currentBuffer.push(line);
+                const t = trimmed.split(/\s/)[0];
+                if (t === 'endevent' || t === 'enda') {
+                    inBlock = false;
+                    eventLines.push(currentBuffer.join('\n'));
+                    currentBuffer = [];
+                }
+            }
+        }
+
+        // Any unclosed block goes to events (shouldn't happen in valid CON)
+        if (currentBuffer.length > 0) eventLines.push(currentBuffer.join('\n'));
+
+        return {
+            defstates: defstateLines.join('\n'),
+            events: eventLines.join('\n'),
+        };
     }
 
     private generateGlobalArrayName(firstModName: string): string {

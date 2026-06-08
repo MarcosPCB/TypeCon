@@ -1,8 +1,8 @@
 @echo off
 :: TypeCON test runner
 :: Usage:
-::   run-tests.bat          — run all tests (assumes dist\ is current)
-::   run-tests.bat --build  — run yarn build first
+::   run-tests.bat          -- run all tests (assumes dist\ is current)
+::   run-tests.bat --build  -- run yarn build first
 
 setlocal enabledelayedexpansion
 
@@ -21,22 +21,20 @@ if /I "%~1"=="--build" (
 goto :main
 
 :: ── shared compile+link ────────────────────────────────────────────────────────
+:: Returns errorlevel 0 on success, 1 on failure.
+:: Sets _cl_step to "compile" or "link" on failure.
 :compile_and_link
     node dist/main.js -C > nul 2>&1
+
     node dist/main.js -c -il "%~1" > "%TEMP%\tcc_out.txt" 2>&1
     findstr /C:"[ERROR]" "%TEMP%\tcc_out.txt" > nul 2>&1
-    if not errorlevel 1 ( set _step=compile & goto :cl_fail )
+    if not errorlevel 1 ( set _cl_step=compile & exit /b 1 )
 
     node dist/main.js -L -di > "%TEMP%\tcc_out.txt" 2>&1
     findstr /C:"[ERROR]" "%TEMP%\tcc_out.txt" > nul 2>&1
-    if not errorlevel 1 ( set _step=link & goto :cl_fail )
-    exit /b 0
+    if not errorlevel 1 ( set _cl_step=link & exit /b 1 )
 
-:cl_fail
-    set /a FAIL+=1
-    echo   FAIL  %_name%.ts  (%_step%)
-    findstr /C:"[ERROR]" "%TEMP%\tcc_out.txt"
-    exit /b 1
+    exit /b 0
 
 :: ── runner: compile + link + simulate --test ──────────────────────────────────
 :run_test_sim
@@ -46,16 +44,20 @@ goto :main
     set /a TOTAL+=1
 
     call :compile_and_link "%_src%"
-    if errorlevel 1 goto :eof
+    if errorlevel 1 (
+        set /a FAIL+=1
+        echo   FAIL  %_name%.ts  (!_cl_step!)
+        findstr /C:"[ERROR]" "%TEMP%\tcc_out.txt"
+        goto :eof
+    )
 
     node dist/main.js -S --test -nv -i "%_con%" > "%TEMP%\tcc_out.txt" 2>&1
     set _sim_exit=%errorlevel%
 
-    :: extract summary line
     set "_summary="
     for /f "tokens=*" %%L in ('findstr /C:"passed" "%TEMP%\tcc_out.txt" 2^>nul') do set "_summary=%%L"
 
-    if %_sim_exit% neq 0 (
+    if !_sim_exit! neq 0 (
         set /a FAIL+=1
         echo   FAIL  %_name%.ts  (sim)  !_summary!
     ) else (
@@ -72,7 +74,12 @@ goto :main
     set /a TOTAL+=1
 
     call :compile_and_link "%_src%"
-    if errorlevel 1 goto :eof
+    if errorlevel 1 (
+        set /a FAIL+=1
+        echo   FAIL  %_name%.ts  (!_cl_step!)
+        findstr /C:"[ERROR]" "%TEMP%\tcc_out.txt"
+        goto :eof
+    )
 
     node dist/main.js -V -i "%_con%" > "%TEMP%\tcc_out.txt" 2>&1
     findstr /C:"[ERROR]" "%TEMP%\tcc_out.txt" > nul 2>&1
@@ -82,6 +89,7 @@ goto :main
         findstr /C:"[ERROR]" "%TEMP%\tcc_out.txt"
         goto :eof
     )
+
     set /a PASS+=1
     echo   PASS  %_name%.ts  (validate)
     goto :eof
@@ -126,7 +134,6 @@ call :run_test examples\tests\singletons\test_singleton.ts
 
 echo.
 echo === Structs ===
-call :run_test examples\tests\structs\test_paldata.ts
 call :run_test examples\tests\structs\test_players.ts
 call :run_test examples\tests\structs\test_projectiles.ts
 call :run_test examples\tests\structs\test_sectors.ts

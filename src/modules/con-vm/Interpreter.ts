@@ -259,7 +259,10 @@ export function executeStatements(
             state.testResults.push({ stateName: s.name, total, passed });
           }
         }
-        // Unknown states are silently skipped
+        // Unknown state: warn so the user can spot undefined state calls
+        else {
+          console.warn(`[CONVM] WARNING: state '${s.name}' not found — not defined in this CON (called from: ${_vmLS})`);
+        }
         break;
       }
 
