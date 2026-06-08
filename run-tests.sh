@@ -117,7 +117,7 @@ run_test examples/tests/input/test_input.ts
 printf "\n${BLD}${CYN}=== JSON ===${R}\n"
 run_test_sim examples/tests/json/test_json.ts
 run_test_sim examples/tests/json/test_json_alias.ts
-run_test     examples/tests/json/test_json_alias2.ts
+run_test_sim examples/tests/json/test_json_alias2.ts
 run_test_sim examples/tests/json/test_record.ts
 
 printf "\n${BLD}${CYN}=== Math ===${R}\n"

@@ -15,5 +15,6 @@ test
 texturecache
 *.index
 pkg
+!basecon/*.con
 src/sets/TCSet100/precompile/CON/*.con
 src/sets/TCSet100/precompile/generated/*.con

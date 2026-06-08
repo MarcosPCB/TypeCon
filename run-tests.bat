@@ -118,7 +118,7 @@ echo.
 echo === JSON ===
 call :run_test_sim examples\tests\json\test_json.ts
 call :run_test_sim examples\tests\json\test_json_alias.ts
-call :run_test     examples\tests\json\test_json_alias2.ts
+call :run_test_sim examples\tests\json\test_json_alias2.ts
 call :run_test_sim examples\tests\json\test_record.ts
 
 echo.

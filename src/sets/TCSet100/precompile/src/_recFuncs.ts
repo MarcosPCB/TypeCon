@@ -38,6 +38,8 @@ setarray flat[rb] r0
 set ri rb
 add ri 1
 setarray flat[ri] 0
+// Preserve rb (heap ptr) through the CONUnsafe epilogue "set rb ra"
+set ra rb
 `);
 }
 
@@ -70,8 +72,8 @@ set rc 0
 set rb 0
 set r2 flat[r1]       // r2 = capacity
 set r3 r2
-sub r3 1              // r3 = mask (cap-1)
-and r3 r0             // r3 = initial slot
+sub r3 1              // r3 = mask = cap-1
+and r3 r0             // r3 = initial slot = hash & mask
 set r4 0              // probe counter
 set r5 r1
 add r5 2              // r5 = slot base ptr
@@ -94,11 +96,14 @@ whilel r4 r2 {
     }
     ifn r7 r0 {
         add r3 1
-        and r3 flat[r1]  // wrap: r3 & (cap-1)  (flat[r1]=cap, but mask=cap-1; recompute)
+        set r8 r2
+        sub r8 1
+        and r3 r8      // wrap: r3 = (r3+1) & (capacity-1)
     }
     add r4 1
 }
-// fix mask reuse: wrap was computed using cap not mask above; corrected below
+// Put result in ra so the CONUnsafe epilogue "set rb ra" preserves rb correctly
+set ra rb
 `);
 }
 
@@ -151,7 +156,9 @@ whilel r6 r3 {
         ife r7 -1
             set r7 r4   // remember first tombstone
         add r4 1
-        and r4 flat[r1]
+        sub r3 1
+        and r4 r3      // wrap: r4 = (r4+1) & (capacity-1)
+        add r3 1
     }
     // existing match: update value in place
     ife r9 r0 {
@@ -163,7 +170,9 @@ whilel r6 r3 {
         ifn r9 r10 {
             ifn r9 r0 {
                 add r4 1
-                and r4 flat[r1]
+                sub r3 1
+                and r4 r3      // wrap: r4 = (r4+1) & (capacity-1)
+                add r3 1
             }
         }
     }
@@ -230,6 +239,8 @@ state pushr1
 state free
 state popr1
 set rb r6
+// Preserve rb (new block ptr) through the CONUnsafe epilogue "set rb ra"
+set ra rb
 `);
 }
 

@@ -24,6 +24,7 @@ asm
 *.py
 *.gdb
 *.con
+!basecon/*.con
 pkg/linux/**/.*
 pkg/linux/tcc
 pkg/mac/**/.*

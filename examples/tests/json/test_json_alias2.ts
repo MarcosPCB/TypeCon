@@ -1,11 +1,17 @@
 import { JSON } from '../../../src/sets/TCSet100/JSON';
 import { CJson } from '../../../src/sets/TCSet100/CJson';
 
-const node: CJson = JSON.parse('{"x":10}');
+class TestJsonAlias2 extends CEvent {
+    constructor() { super('NewGame'); }
+    // debug-test
+    public Append(): void {
+        const node: CJson = JSON.parse('{"x":10}');
 
-const xNode: CJson = node.Find("x");
-const xVal: number = xNode.GetInt();
+        const xNode: CJson = node.Find("x");
+        const xVal: number = xNode.GetInt();
 
-console.log("x=" + xVal);
+        checkEq("x", 10, xVal);
 
-node.Free();
+        node.Free();
+    }
+}

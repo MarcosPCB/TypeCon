@@ -9,12 +9,11 @@
  - Implement remaining TS classes and methods
 
  ## CON Script interpreter
- - Create tests for all CORE codes 
+ - Create tests for all CORE features
 
 ## DEBUG mode
  - Add a DEBUG mode for checking stack, heap and other values during runtime
  - Add the values on screen (can be toggled by the player in game)
- - Memory pass in CON Validator
 
  ## Weapons example
   - Add DN3D drawing routines in TypeCON as an example
@@ -29,7 +28,9 @@
 ## Examples for each extra module
  - Example for AnimUtils
  - Example for CFile
+ - Test with JSON and CFile
 
-## Finish New Wwapon System
+## Finish New Weapon System
 
 ## New enemy example
+ - A sort of chamaleon enemy

@@ -118,8 +118,8 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
           }
           code += recLoad;       // r1 = rec_ptr
           code += `set r2 ra\n`; // r2 = value
-          code += `state popr3\n`;
           code += `state _rec_set\n`;
+          code += `state popr3\n`;
         } else {
           // val = r["key"]
           code += `state pushr2\n`;
@@ -130,8 +130,8 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
             code += `state pushr1\nstate _rec_hash\nstate popr1\nset r0 rb\n`;
           }
           code += recLoad;       // r1 = rec_ptr
-          code += `state popr2\n`;
           code += `state _rec_get\n`;
+          code += `state popr2\n`;
           code += `set ${reg} rb\n`;
           context.curExpr = (sym as SymbolDefinition).record_value_type ?? ESymbolType.number;
           context.curFpBits = (sym as SymbolDefinition).record_value_fpbits ?? 0;
