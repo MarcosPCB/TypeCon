@@ -731,7 +731,10 @@ set ra rb
 
     private _freeNode(type: number, val: number): void {
         if (type == CJsonType.String) {
-            CONUnsafe('set r0 r1\nstate free\n');
+            CONUnsafe(`
+set r0 r1
+state free
+`);
             return;
         }
         if (type == CJsonType.Array) {
