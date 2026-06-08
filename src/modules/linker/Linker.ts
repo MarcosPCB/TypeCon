@@ -276,7 +276,7 @@ export class Linker {
         const modules = sortedModules.map(mod => {
             const raw = this.patchModule(mod, globalArrayName);
             const { defstates, events } = Linker.separateEventBlocks(raw);
-            return { name: mod.name, code: defstates + events };
+            return { name: mod.name, code: Linker.sortDefstates(defstates) + events };
         });
 
         return { header, modules };
@@ -308,7 +308,10 @@ export class Linker {
             eventCode += events;
         });
 
-        output += defstateCode + eventCode;
+        // Topologically sort all defstates so each state is defined before any
+        // state that calls it. EDuke32 validates state references as it parses
+        // defstate bodies, so forward references cause load-time errors.
+        output += Linker.sortDefstates(defstateCode) + eventCode;
 
         return { code: output, header: fullHeader };
     }
@@ -355,6 +358,123 @@ export class Linker {
             defstates: defstateLines.join('\n'),
             events: eventLines.join('\n'),
         };
+    }
+
+    // Topologically sort defstate blocks so each state is defined before the states
+    // that call it. This ensures EDuke32's single-pass parser never encounters a
+    // `state X` call before X's `defstate` has been processed.
+    // Cycles (mutually-recursive states) are left in their original relative order.
+    private static sortDefstates(defstateCode: string): string {
+        const lines = defstateCode.split('\n');
+        const preamble: string[] = [];   // lines before the first defstate
+        const blocks: Array<{ name: string; content: string[] }> = [];
+        let current: { name: string; content: string[] } | null = null;
+
+        for (const line of lines) {
+            const t = line.trimStart().toLowerCase();
+            if (t.startsWith('defstate ')) {
+                // Close any open block first (shouldn't happen in valid CON)
+                if (current) blocks.push(current);
+                const name = line.trim().split(/\s+/)[1] ?? '';
+                current = { name, content: [line] };
+            } else if (current) {
+                current.content.push(line);
+                // "ends" closes the defstate; allow "ends " prefix too
+                if (t === 'ends' || t.startsWith('ends ') || t.startsWith('ends\t')) {
+                    blocks.push(current);
+                    current = null;
+                }
+            } else {
+                preamble.push(line);
+            }
+        }
+        if (current) blocks.push(current); // unclosed block — keep as-is
+
+        if (blocks.length === 0) return defstateCode;
+
+        // Build a set of all defstate names defined in this section
+        const allNames = new Set(blocks.map(b => b.name));
+
+        // For each defstate, collect the set of other defstates it calls
+        const calls = new Map<string, Set<string>>();
+        for (const block of blocks) {
+            const deps = new Set<string>();
+            const body = block.content.join('\n');
+            const re = /\bstate\s+(\S+)/g;
+            let m: RegExpExecArray | null;
+            while ((m = re.exec(body)) !== null) {
+                const callee = m[1];
+                if (allNames.has(callee) && callee !== block.name) deps.add(callee);
+            }
+            calls.set(block.name, deps);
+        }
+
+        // Kahn's algorithm: output a defstate only after all its dependencies
+        // have been output.  Build an in-degree map and a reverse-adjacency map.
+        const inDegree  = new Map<string, number>();
+        const revAdj    = new Map<string, string[]>();
+        for (const b of blocks) {
+            inDegree.set(b.name, 0);
+            revAdj.set(b.name, []);
+        }
+        for (const [name, deps] of calls) {
+            for (const dep of deps) {
+                // dep must appear before name → edge dep → name
+                inDegree.set(name, (inDegree.get(name) ?? 0) + 1);
+                revAdj.get(dep)!.push(name);
+            }
+        }
+
+        // Queue: all blocks with no outstanding dependencies, in original order
+        const queue: string[] = blocks
+            .filter(b => (inDegree.get(b.name) ?? 0) === 0)
+            .map(b => b.name);
+
+        const sorted: string[] = [];
+        while (queue.length > 0) {
+            const name = queue.shift()!;
+            sorted.push(name);
+            for (const dependent of revAdj.get(name) ?? []) {
+                const deg = (inDegree.get(dependent) ?? 1) - 1;
+                inDegree.set(dependent, deg);
+                if (deg === 0) queue.push(dependent);
+            }
+        }
+
+        // Remaining nodes are in cycles or blocked by cycle nodes.
+        // Among these, put the most-depended-upon nodes first to minimise
+        // forward references from dag-blocked nodes (e.g. constructor → parseValue).
+        const sortedSet = new Set(sorted);
+        const remaining = blocks.filter(b => !sortedSet.has(b.name));
+
+        if (remaining.length > 0) {
+            const remNames = new Set(remaining.map(b => b.name));
+            // Count how many remaining nodes depend on each remaining node
+            const revCount = new Map<string, number>();
+            for (const b of remaining) revCount.set(b.name, 0);
+            for (const [name, deps] of calls) {
+                if (remNames.has(name)) {
+                    for (const dep of deps) {
+                        if (remNames.has(dep)) {
+                            revCount.set(dep, (revCount.get(dep) ?? 0) + 1);
+                        }
+                    }
+                }
+            }
+            // Stable sort: most-depended-upon first, ties broken by original block order
+            const remSorted = remaining.slice().sort(
+                (a, b) => (revCount.get(b.name) ?? 0) - (revCount.get(a.name) ?? 0)
+            );
+            for (const b of remSorted) sorted.push(b.name);
+        }
+
+        // Reconstruct the output — trailing newline ensures the next section
+        // (event/actor blocks) starts on its own line
+        const blockMap = new Map(blocks.map(b => [b.name, b.content.join('\n')]));
+        return [
+            preamble.join('\n'),
+            ...sorted.map(n => blockMap.get(n) ?? ''),
+        ].join('\n') + '\n';
     }
 
     private generateGlobalArrayName(firstModName: string): string {

@@ -284,11 +284,14 @@ export class Validator {
         if (nameToken.kind === 'identifier') {
           const defLine = this.syms.getStateLine(nameToken.value);
           if (defLine === undefined) {
+            this.diag.push({ severity: 'error', line: nameToken.line, col: nameToken.col,
+              code: 'ERROR_UNKNOWN_STATE',
+              message: `State '${nameToken.value}' is never declared in this CON file` });
+          } else if (defLine > nameToken.line) {
             this.diag.push({ severity: 'warning', line: nameToken.line, col: nameToken.col,
-              code: 'WARNING_UNKNOWN_STATE',
-              message: `State '${nameToken.value}' referenced but not declared in this file (may be in a linked module)` });
+              code: 'WARN_FORWARD_STATE',
+              message: `State '${nameToken.value}' is called before its defstate at line ${defLine} (forward reference — may cause issues on strict CON parsers)` });
           }
-          // Forward references are valid CON — the engine registers all defstates before execution.
         }
       }
     }
