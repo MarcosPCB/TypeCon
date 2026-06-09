@@ -90,8 +90,15 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
         `Record requires substantial heap (stack_size=${s}, heap_page_number=${p}). ` +
         `Recommended: stack_size >= 4096, heap_page_number >= 256 in typecon.json.`);
 
-    // Allocate hash table (r0=0 → default capacity 16; rb = new ptr)
-    code += `set r0 0\nstate _rec_alloc\n`;
+    // If there's a non-literal initializer (e.g. r = someFunc()), use its result
+    // instead of allocating a new empty Record.
+    const recInit = decl.getInitializer();
+    if (recInit && !recInit.isKind(SyntaxKind.ObjectLiteralExpression)) {
+      code += visitExpression(recInit as Expression, context, 'rb');
+    } else {
+      // Allocate hash table (r0=0 → default capacity 16; rb = new ptr)
+      code += `set r0 0\nstate _rec_alloc\n`;
+    }
 
     if (isGlobal) {
       if (context.options.mode === 'module') {

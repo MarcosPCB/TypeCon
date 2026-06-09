@@ -1,7 +1,7 @@
-import { CJson, CJsonType } from '../../../src/sets/TCSet100/CJson';
+import { CJson, CJsonType } from '../../../include/TCSet100/CJson';
 
 class TestJson extends CEvent {
-    constructor() { super('NewGame'); }
+    constructor() { super('Init'); }
     // debug-test
     public Append(): void {
         const j: CJson = new CJson('{"x":10,"y":1.5,"items":[1,2,3],"ok":true,"nothing":null}');

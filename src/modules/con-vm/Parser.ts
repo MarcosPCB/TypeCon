@@ -1,4 +1,6 @@
 import { Operand, Statement, ConditionalOp } from './Types';
+import * as fs from 'fs';
+import * as path from 'path';
 
 interface Token { value: string; line: number; }
 
@@ -36,11 +38,20 @@ function tokenize(source: string): TokenizeResult {
   return { toks, rawLines };
 }
 
+export interface ActorHeader {
+  extra: number;          // initial sprite.extra value (0 = none)
+  firstAction: string | null;  // action label name, null if not set
+  firstMove: string | null;    // move label name, null if not set
+  flags: number;          // actor spawn flags
+}
+
 export interface ParseResult {
   stateMap: Map<string, Statement[]>;
   defines: Map<string, number>;
   initStatements: Statement[];
   eventBodies: Map<string, Statement[]>; // EVENT_Name → concatenated body (all handlers)
+  actorBodies: Map<string, Statement[]>; // picnum string → actor/useractor body
+  actorHeaders: Map<string, ActorHeader>; // picnum string → actor header values
 }
 
 // Set of conditional opcodes for fast lookup
@@ -58,7 +69,9 @@ const TOP_KEYWORDS = new Set<string>([
   'sin','cos','sqrt','mulscale','divscale','setarray','getarraysize','resizearray','copy','setarrayseq','getarrayseq',
   'ifvarl','ifvarle','ifvare','ifvarn','ifvarg','ifvarge','ifvarand','ifvaror',
   'ifl','ifle','ife','ifn','ifg','ifge','ifand','ifor','ifeither',
-  'whilevarn','whilevarl','whilel','whilen','switch','case','default','else',
+  'ifhitweapon',
+  'readarrayfromfile','writearraytofile',
+  'whilevarn','whilevarl','whilel','whilen','switch','endswitch','case','default','else',
   'break','continue','terminate','exit','return','debug','nullop','noop',
   'qputs','qstrcpy','qstrcat','qstrncat','qsprintf','sqprintf','qsubstr','qgetsysstr',
   'quote','userquote','echo','addlogvar','al',
@@ -150,12 +163,44 @@ function parseOperand(tok: string, defines: Map<string, number>): Operand {
 
 export class CONParser {
   private sc: CONScanner;
-  private defines = new Map<string, number>();
-  private stateMap = new Map<string, Statement[]>();
-  private eventBodies = new Map<string, Statement[]>();
+  private defines: Map<string, number>;
+  private stateMap: Map<string, Statement[]>;
+  private eventBodies: Map<string, Statement[]>;
+  private actorBodies: Map<string, Statement[]>;
+  private actorHeaders: Map<string, ActorHeader>;
+  private searchDirs: string[];
+  private visited: Set<string>;
 
-  constructor(source: string) {
+  constructor(
+    source: string,
+    searchDirs: string[] = [],
+    // Shared maps allow recursive includes to write into the same collections
+    shared?: {
+      defines: Map<string, number>;
+      stateMap: Map<string, Statement[]>;
+      eventBodies: Map<string, Statement[]>;
+      actorBodies: Map<string, Statement[]>;
+      actorHeaders: Map<string, ActorHeader>;
+      visited: Set<string>;
+    }
+  ) {
     this.sc = new CONScanner(source);
+    this.searchDirs = searchDirs;
+    if (shared) {
+      this.defines      = shared.defines;
+      this.stateMap     = shared.stateMap;
+      this.eventBodies  = shared.eventBodies;
+      this.actorBodies  = shared.actorBodies;
+      this.actorHeaders = shared.actorHeaders;
+      this.visited      = shared.visited;
+    } else {
+      this.defines      = new Map();
+      this.stateMap     = new Map();
+      this.eventBodies  = new Map();
+      this.actorBodies  = new Map();
+      this.actorHeaders = new Map();
+      this.visited      = new Set();
+    }
   }
 
   parse(): ParseResult {
@@ -167,7 +212,9 @@ export class CONParser {
 
       const low = tok.toLowerCase();
 
-      if (low === 'defstate') {
+      if (low === 'defstate' || low === 'state') {
+        // 'state NAME ... ends' is the old-style defstate declaration used in real
+        // Duke3D CON files (e.g. baseCON/GAME.CON). Treat identically to defstate.
         this.parseDefstate();
       } else if (low === 'appendstate' || low === 'prependstate') {
         this.parseAppendstate(low === 'prependstate');
@@ -183,12 +230,16 @@ export class CONParser {
         const stmt = this.parseDefinequote();
         if (stmt) initStatements.push(stmt);
       } else if (low === 'actor' || low === 'useractor') {
-        this.skipUntil('enda');
-      } else if (low === 'onevent' || low === 'appendevent' || low === 'on') {
-        this.parseEventBlock();
+        this.parseActor();
+      } else if (low === 'onevent' || low === 'on') {
+        this.parseEventBlock(true);   // onevent/on → prepend (runs before appendevent)
+      } else if (low === 'appendevent') {
+        this.parseEventBlock(false);  // appendevent → append
       } else if (low === 'include') {
-        this.sc.next();
-        this.sc.next(); // filename
+        this.sc.next(); // 'include'
+        const raw = this.sc.next() ?? ''; // filename (may be quoted)
+        const filename = raw.replace(/^["']|["']$/g, '');
+        this.parseInclude(filename, initStatements);
       } else {
         const stmt = this.parseStatement();
         if (stmt && stmt.op !== 'noop' && stmt.op !== 'nullop') {
@@ -197,7 +248,7 @@ export class CONParser {
       }
     }
 
-    return { stateMap: this.stateMap, defines: this.defines, initStatements, eventBodies: this.eventBodies };
+    return { stateMap: this.stateMap, defines: this.defines, initStatements, eventBodies: this.eventBodies, actorBodies: this.actorBodies, actorHeaders: this.actorHeaders };
   }
 
   private parseDefstate(): void {
@@ -280,7 +331,7 @@ export class CONParser {
     return { op: 'qputs', quote: { kind: 'immediate', value: idx }, text };
   }
 
-  private parseEventBlock(): void {
+  private parseEventBlock(prepend: boolean): void {
     this.sc.next(); // 'appendevent' / 'onevent' / 'on'
     const eventName = this.sc.next() ?? ''; // e.g. EVENT_InitComplete
     const body: Statement[] = [];
@@ -289,10 +340,76 @@ export class CONParser {
       if (stmt) body.push(stmt);
     }
     this.sc.next(); // 'endevent'
-    // Accumulate: multiple classes can handle the same event
     const key = eventName.toUpperCase();
     const existing = this.eventBodies.get(key) ?? [];
-    this.eventBodies.set(key, [...existing, ...body]);
+    // onevent/on prepend so they always run before appendevent bodies;
+    // appendevent appends to maintain declaration order within each group.
+    this.eventBodies.set(key, prepend ? [...body, ...existing] : [...existing, ...body]);
+  }
+
+  private parseActor(): void {
+    const keyword = this.sc.next()!.toLowerCase(); // 'actor' or 'useractor'
+    let picnum: string;
+    if (keyword === 'useractor') {
+      this.sc.next(); // ENEMY flag (0=notenemy,1=enemy,2=enemystayput) — skip
+      picnum = this.sc.next() ?? '0'; // PICNUM is the 2nd arg
+    } else {
+      picnum = this.sc.next() ?? '0'; // PICNUM is the 1st arg for 'actor'
+    }
+    // Parse optional header tokens on the same line: EXTRA FIRSTACTION FIRSTMOVE FLAGS
+    const headerLine = this.sc.currentLine();
+    const headerToks: string[] = [];
+    while (!this.sc.eof() && this.sc.peekLine() === headerLine) {
+      headerToks.push(this.sc.next()!);
+    }
+    const extra = this.resolveLiteral(headerToks[0] ?? '0');
+    const firstAction = (headerToks[1] && headerToks[1] !== '0') ? headerToks[1] : null;
+    const firstMove   = (headerToks[2] && headerToks[2] !== '0') ? headerToks[2] : null;
+    const flags = this.resolveLiteral(headerToks[3] ?? '0');
+    this.actorHeaders.set(picnum, { extra, firstAction, firstMove, flags });
+
+    const body: Statement[] = [];
+    while (!this.sc.eof() && this.sc.peek()?.toLowerCase() !== 'enda') {
+      const stmt = this.parseStatement();
+      if (stmt) body.push(stmt);
+    }
+    this.sc.next(); // 'enda'
+    // Last definition for a picnum wins (matches EDuke32 behaviour)
+    this.actorBodies.set(picnum, body);
+  }
+
+  private parseInclude(filename: string, initStatements: Statement[]): void {
+    if (!filename || this.searchDirs.length === 0) return;
+    // Search each directory in order (CON file dir first, then fallbacks like baseCON)
+    let resolved: string | null = null;
+    for (const dir of this.searchDirs) {
+      const candidate = path.resolve(dir, filename);
+      if (fs.existsSync(candidate)) { resolved = candidate; break; }
+    }
+    if (!resolved) {
+      console.warn(`[CONVM] WARNING: include file not found: ${filename} (searched: ${this.searchDirs.join(', ')})`);
+      return;
+    }
+    if (this.visited.has(resolved)) return; // prevent circular includes
+    let source: string;
+    try {
+      source = fs.readFileSync(resolved, 'utf-8');
+    } catch {
+      console.warn(`[CONVM] WARNING: could not read include file: ${resolved}`);
+      return;
+    }
+    this.visited.add(resolved);
+    // Child inherits the same searchDirs so recursive includes (e.g. GAME.CON → DEFS.CON) resolve too
+    const child = new CONParser(source, this.searchDirs, {
+      defines: this.defines,
+      stateMap: this.stateMap,
+      eventBodies: this.eventBodies,
+      actorBodies: this.actorBodies,
+      actorHeaders: this.actorHeaders,
+      visited: this.visited,
+    });
+    const childResult = child.parse();
+    initStatements.push(...childResult.initStatements);
   }
 
   private skipUntil(endKeyword: string): void {
@@ -330,6 +447,26 @@ export class CONParser {
     }
 
     const low = tok.toLowerCase();
+
+    // Game structure access: geta[INDEX].FIELD DST  /  seta[INDEX].FIELD SRC  etc.
+    const structRe = /^(geta|seta|getp|setp|getsector|setsector|getwall|setwall)\[([^\]]*)\]\.(\w+)$/i;
+    const structMatch = tok.match(structRe);
+    if (structMatch) {
+      this.sc.next(); // consume the compound token
+      const [, opcode, idxStr, field] = structMatch;
+      const isGet = opcode.toLowerCase().startsWith('get');
+      const structNames: Record<string, 'actor' | 'player' | 'sector' | 'wall'> = {
+        geta: 'actor', seta: 'actor',
+        getp: 'player', setp: 'player',
+        getsector: 'sector', setsector: 'sector',
+        getwall: 'wall', setwall: 'wall',
+      };
+      const struct = structNames[opcode.toLowerCase()];
+      const index = parseOperand(idxStr === '' ? 'THISACTOR' : idxStr, this.defines);
+      const reg = this.parseOperand();
+      if (isGet) return { op: 'getstruct', struct, index, field, dst: reg };
+      else        return { op: 'setstruct', struct, index, field, src: reg };
+    }
 
     // Arithmetic binary ops
     if (['set','add','sub','mul','div','mod','and','or','xor','shiftl','shiftr','divr'].includes(low)) {
@@ -403,8 +540,9 @@ export class CONParser {
 
     if (low === 'getarraysize') {
       this.sc.next();
-      const dst = this.parseOperand();
+      // CON syntax: getarraysize ARRAY DESTINATION (array first, dest second)
       const arr = this.sc.next() ?? 'flat';
+      const dst = this.parseOperand();
       return { op: 'getarraysize', dst, arr };
     }
 
@@ -413,6 +551,13 @@ export class CONParser {
       const arr = this.sc.next() ?? 'flat';
       const size = this.parseOperand();
       return { op: 'resizearray', arr, size };
+    }
+
+    if (low === 'readarrayfromfile' || low === 'writearraytofile') {
+      const op = this.sc.next()! as 'readarrayfromfile' | 'writearraytofile';
+      const arr = this.sc.next() ?? 'flat';
+      const quote = this.parseOperand();
+      return { op, arr, quote };
     }
 
     if (low === 'copy') {
@@ -482,6 +627,18 @@ export class CONParser {
       return { op, a, b, body, elseBody };
     }
 
+    // ifhitweapon — no operands; applies damage (htextra → extra) then tests hit
+    if (low === 'ifhitweapon') {
+      this.sc.next();
+      const body = this.parseBody();
+      let elseBody: Statement[] | undefined;
+      if (this.sc.peek()?.toLowerCase() === 'else') {
+        this.sc.next();
+        elseBody = this.parseBody();
+      }
+      return { op: 'ifhitweapon', body, elseBody };
+    }
+
     // While loops
     if (low === 'whilevarn' || low === 'whilevarl' || low === 'whilel' || low === 'whilen') {
       this.sc.next();
@@ -502,7 +659,8 @@ export class CONParser {
       const cases: { value: number; body: Statement[] }[] = [];
       let defaultBody: Statement[] | undefined;
 
-      while (!this.sc.eof() && this.sc.peek() !== '}') {
+      // Support both brace-style { } and old-style endswitch terminators
+      while (!this.sc.eof() && this.sc.peek() !== '}' && this.sc.peek()?.toLowerCase() !== 'endswitch') {
         const t = this.sc.peek()?.toLowerCase();
         if (t === 'case') {
           this.sc.next();
@@ -512,7 +670,7 @@ export class CONParser {
           const body: Statement[] = [];
           while (!this.sc.eof()) {
             const p = this.sc.peek()?.toLowerCase();
-            if (p === 'case' || p === 'default' || p === '}') break;
+            if (p === 'case' || p === 'default' || p === '}' || p === 'endswitch') break;
             body.push(this.parseStatement());
           }
           cases.push({ value: caseVal, body });
@@ -522,7 +680,7 @@ export class CONParser {
           const body: Statement[] = [];
           while (!this.sc.eof()) {
             const p = this.sc.peek()?.toLowerCase();
-            if (p === 'case' || p === '}') break;
+            if (p === 'case' || p === '}' || p === 'endswitch') break;
             body.push(this.parseStatement());
           }
           defaultBody = body;
@@ -530,7 +688,7 @@ export class CONParser {
           this.sc.next(); // skip unknown token in switch
         }
       }
-      if (this.sc.peek() === '}') this.sc.next();
+      if (this.sc.peek() === '}' || this.sc.peek()?.toLowerCase() === 'endswitch') this.sc.next();
       return { op: 'switch', val, cases, default: defaultBody };
     }
 

@@ -29,10 +29,11 @@ ife r0 0
 set r2 r0
 mul r2 2
 add r2 2
-state pushr2
+state pushr2         // saves r0=capacity
+set r0 r2            // r0 = block size for alloc
 set r1 4
-state alloc          // rb = allocated block (zeroed)
-state popr2
+state alloc          // rb = allocated block (block_size words reserved)
+state popr2          // restores r0=capacity
 // store capacity and count=0
 setarray flat[rb] r0
 set ri rb

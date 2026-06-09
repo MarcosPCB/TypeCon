@@ -1,0 +1,11 @@
+{
+    "trooper": {
+        "health": 30,
+        "damage": 10
+    },
+    "commander": {
+        "health": 50,
+        "damage": 20
+    },
+    "drops": [100, 50, 25]
+}

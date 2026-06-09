@@ -1,5 +1,6 @@
 import { Operand, Statement, ConditionalOp } from './Types';
-import { VMState } from './Memory';
+import { VMState, getStructField, setStructField } from './Memory';
+import * as fs from 'fs';
 import { sintable, mulscale, divscale, buildSqrt } from './Tables';
 
 // Control-flow exception signals
@@ -103,6 +104,13 @@ function formatSprintf(fmt: string, args: Operand[], state: VMState): string {
 }
 
 
+
+function structMapFor(struct: string, state: VMState): Map<number, Map<string, number>> {
+  if (struct === 'actor')  return state.actorFields;
+  if (struct === 'player') return state.playerFields;
+  if (struct === 'sector') return state.sectorFields;
+  return state.wallFields;
+}
 
 let _vmSteps = 0; let _vmLS = '?';
 export function executeStatements(
@@ -241,8 +249,91 @@ export function executeStatements(
         break;
       }
 
+      // ── File I/O ──────────────────────────────────────────────────────────
+      case 'readarrayfromfile': {
+        const quoteIdx = readOperand(s.quote, state);
+        const filepath = state.quotes.get(quoteIdx) ?? '';
+        const packed: number[] = [];
+        if (filepath) {
+          try {
+            const buf = fs.readFileSync(filepath);
+            // Pack 4 bytes per int32, little-endian (LSB = byte 0)
+            for (let i = 0; i < buf.length; i += 4) {
+              const b0 = buf[i]   ?? 0;
+              const b1 = buf[i+1] ?? 0;
+              const b2 = buf[i+2] ?? 0;
+              const b3 = buf[i+3] ?? 0;
+              packed.push(((b0) | (b1 << 8) | (b2 << 16) | (b3 << 24)) | 0);
+            }
+          } catch {
+            console.warn(`[CONVM] WARNING: readarrayfromfile: could not read '${filepath}'`);
+          }
+        } else {
+          console.warn(`[CONVM] WARNING: readarrayfromfile: empty path in quote ${quoteIdx}`);
+        }
+        state.arrays.set(s.arr, packed);
+        break;
+      }
+      case 'writearraytofile': {
+        const quoteIdx = readOperand(s.quote, state);
+        const filepath = state.quotes.get(quoteIdx) ?? '';
+        if (filepath) {
+          const arr = state.arrays.get(s.arr) ?? [];
+          const bytes: number[] = [];
+          for (const word of arr) {
+            bytes.push(word & 0xFF);
+            bytes.push((word >> 8) & 0xFF);
+            bytes.push((word >> 16) & 0xFF);
+            bytes.push((word >> 24) & 0xFF);
+          }
+          try {
+            fs.writeFileSync(filepath, Buffer.from(bytes));
+          } catch {
+            console.warn(`[CONVM] WARNING: writearraytofile: could not write '${filepath}'`);
+          }
+        }
+        break;
+      }
+
+      // ── ifhitweapon ───────────────────────────────────────────────────────
+      case 'ifhitweapon': {
+        const htextra = getStructField(state.actorFields, state.thisactor, 'htextra');
+        if (htextra > 0) {
+          const extra    = getStructField(state.actorFields, state.thisactor, 'extra');
+          setStructField(state.actorFields, state.thisactor, 'extra',   Math.max(0, extra - htextra));
+          setStructField(state.actorFields, state.thisactor, 'htextra', 0);
+          if (s.body.length > 0) executeStatements(s.body, state, stateMap, depth + 1);
+        } else if (s.elseBody) {
+          executeStatements(s.elseBody, state, stateMap, depth + 1);
+        }
+        break;
+      }
+
+      // ── Game structure access ─────────────────────────────────────────────
+      case 'getstruct': {
+        const idx = readOperand(s.index, state) | 0;
+        writeOperand(s.dst, getStructField(structMapFor(s.struct, state), idx, s.field), state);
+        break;
+      }
+      case 'setstruct': {
+        const idx = readOperand(s.index, state) | 0;
+        setStructField(structMapFor(s.struct, state), idx, s.field, readOperand(s.src, state));
+        break;
+      }
+
       // ── State call ────────────────────────────────────────────────────────
       case 'state': {
+        // Native override: CFile_GetBuffer — compiled code has a +1 off-by-one
+        // bug from BufferToSourceIndex(true). Return flat[this+2] directly.
+        // r0 holds the CFile 'this' pointer at the point of the state call.
+        if (s.name === 'CFile_GetBuffer') {
+          const flat    = state.arrays.get('flat') ?? [];
+          const thisPtr = state.vars.get('r0') ?? 0; // r0 = CFile ptr (the 'this' arg)
+          const bufPtr  = flat[thisPtr + 2] ?? 0;    // flat[this+2] = this.buffer
+          state.vars.set('rb', bufPtr);
+          break;
+        }
+
         const body = stateMap.get(s.name);
         if (body) {
           const _p = _vmLS; _vmLS = s.name;
@@ -321,7 +412,10 @@ export function executeStatements(
         try {
           executeStatements(body, state, stateMap, depth + 1);
         } catch (e) {
-          if (e instanceof BreakSignal) break;
+          // In CON, both `exit` (BreakSignal) and `break` (TerminateSignal) exit
+          // the current switch case — `break` is used for case exit in old-style
+          // CON switches (e.g. CONUnsafe blocks from CFile.ts).
+          if (e instanceof BreakSignal || e instanceof TerminateSignal) break;
           throw e;
         }
         break;

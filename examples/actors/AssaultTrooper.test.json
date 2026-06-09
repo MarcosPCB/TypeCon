@@ -1,0 +1,34 @@
+{
+    "name": "AssaultTrooper Tests",
+    "source": ["AssaultTrooper.ts"],
+    "linePrint": true,
+    "defaultInclusion": true,
+    "memTest": true,
+    "validate": false,
+    "tests": [
+        {
+            "name": "Default spawn — completes without crash",
+            "runActor": "1680"
+        },
+        {
+            "name": "Damaged state — extra stays <= 5",
+            "runActor": "1680",
+            "setup": {
+                "actorFields": { "0": { "extra": 5 } }
+            },
+            "expect": {
+                "actorFields": { "0": { "extra": { "le": 5 } } }
+            }
+        },
+        {
+            "name": "Damage taken - actor is dead",
+            "runActor": "1680",
+            "setup": {
+                "actorFields":  { "0": { "htextra": 40 } }
+            },
+            "expect": {
+                "actorFields": { "0": { "extra": { "le": 1 } } }
+            }
+        }
+    ]
+}

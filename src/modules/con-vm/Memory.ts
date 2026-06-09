@@ -30,6 +30,13 @@ export interface VMState {
   snapAfterEvents?: MemorySnapshot;
   // Test results collected when DEBUG-TEST marker is encountered
   testResults: TestResult[];
+  // Game structure storage: index → field name → value (all default to 0)
+  actorFields:  Map<number, Map<string, number>>;
+  playerFields: Map<number, Map<string, number>>;
+  sectorFields: Map<number, Map<string, number>>;
+  wallFields:   Map<number, Map<string, number>>;
+  thisactor:    number;
+  thisplayer:   number;
 }
 
 export function createVMState(): VMState {
@@ -45,7 +52,22 @@ export function createVMState(): VMState {
     _phaseFlatIdx: 0,
     _phaseRsp: 0,
     testResults: [],
+    actorFields:  new Map(),
+    playerFields: new Map(),
+    sectorFields: new Map(),
+    wallFields:   new Map(),
+    thisactor:    0,
+    thisplayer:   0,
   };
+}
+
+export function getStructField(map: Map<number, Map<string, number>>, idx: number, field: string): number {
+  return map.get(idx)?.get(field) ?? 0;
+}
+
+export function setStructField(map: Map<number, Map<string, number>>, idx: number, field: string, value: number): void {
+  if (!map.has(idx)) map.set(idx, new Map());
+  map.get(idx)!.set(field, value);
 }
 
 export function resetPhasePeaks(state: VMState): void {

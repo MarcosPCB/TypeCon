@@ -368,10 +368,29 @@ export class Linker {
         const lines = defstateCode.split('\n');
         const preamble: string[] = [];   // lines before the first defstate
         const blocks: Array<{ name: string; content: string[] }> = [];
+        // appendstate / prependstate blocks: collected separately and emitted
+        // AFTER all defstates so they never cause forward references.
+        const appendBlocks: Array<{ content: string[] }> = [];
         let current: { name: string; content: string[] } | null = null;
+        let currentAppend: { content: string[] } | null = null;
 
         for (const line of lines) {
             const t = line.trimStart().toLowerCase();
+            // Collect appendstate / prependstate blocks (must come after defstates)
+            if (t.startsWith('appendstate ') || t.startsWith('prependstate ')) {
+                if (current) { blocks.push(current); current = null; }
+                if (currentAppend) appendBlocks.push(currentAppend);
+                currentAppend = { content: [line] };
+                continue;
+            }
+            if (currentAppend) {
+                currentAppend.content.push(line);
+                if (t === 'ends' || t.startsWith('ends ') || t.startsWith('ends\t')) {
+                    appendBlocks.push(currentAppend);
+                    currentAppend = null;
+                }
+                continue;
+            }
             if (t.startsWith('defstate ')) {
                 // Close any open block first (shouldn't happen in valid CON)
                 if (current) blocks.push(current);
@@ -389,8 +408,13 @@ export class Linker {
             }
         }
         if (current) blocks.push(current); // unclosed block — keep as-is
+        if (currentAppend) appendBlocks.push(currentAppend);
 
-        if (blocks.length === 0) return defstateCode;
+        if (blocks.length === 0 && appendBlocks.length === 0) return defstateCode;
+        if (blocks.length === 0) {
+            // Only appendstate blocks — output them as-is after preamble
+            return [preamble.join('\n'), appendBlocks.map(a => a.content.join('\n')).join('\n\n')].filter(Boolean).join('\n\n');
+        }
 
         // Build a set of all defstate names defined in this section
         const allNames = new Set(blocks.map(b => b.name));
@@ -481,6 +505,8 @@ export class Linker {
         );
 
         // Assemble: preamble → stubs → Kahn-sorted (defstate) → cycle (appendstate)
+        // → appendstate/prependstate blocks (always last so all defstates they
+        //   depend on are guaranteed to be defined first)
         const stubs = remaining.map(b => `defstate ${b.name}\nends`);
 
         return [
@@ -488,6 +514,7 @@ export class Linker {
             ...stubs,
             ...sorted.map(n => kahnBlockMap.get(n) ?? ''),
             ...remSorted.map(b => appendBlockMap.get(b.name) ?? ''),
+            ...appendBlocks.map(a => a.content.join('\n')),
         ].join('\n') + '\n';
     }
 

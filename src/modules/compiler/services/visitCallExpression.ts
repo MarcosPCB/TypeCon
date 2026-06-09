@@ -326,13 +326,19 @@ set rb ra
         //code += `set r${j} ra\n`;
         resolvedLiterals.push(null);
       } else if (expected & CON_NATIVE_FLAGS.VARIABLE) {
-        // For i=0: evaluate directly into r0 (the standard accumulator path).
-        // For i>0: evaluate into ra first, then move to r${i}. This ensures the
-        // result always lands in the correct register — visitExpression sometimes
-        // evaluates into ra without a final move when the target is r1, r2, etc.
+        // For i=0: evaluate into r0. When the expression is a stack-frame local,
+        // visitExpression loads into ra but doesn't emit the final `set r0 ra`.
+        // Detect that case by inspecting the last generated instruction and emit
+        // the move explicitly. For i>0: evaluate into ra then move to r${i}.
         context.nativeArgFpHint = (nativeFn.arg_fp_bits?.[i] ?? 0) as (0 | 11 | 14 | 16 | 30);
         if (i === 0) {
-          code += visitExpression(args[i] as Expression, context, `r0`);
+          const argCode = visitExpression(args[i] as Expression, context, `r0`);
+          code += argCode;
+          // If the last instruction wrote to ra (not r0), emit the missing move.
+          const lastLine = argCode.trimEnd().split('\n').at(-1)?.trim() ?? '';
+          if (lastLine.length > 0 && !lastLine.startsWith('set r0') && !lastLine.startsWith('add r0')) {
+            code += `set r0 ra\n`;
+          }
         } else {
           code += visitExpression(args[i] as Expression, context, 'ra');
           code += `set r${i} ra\n`;

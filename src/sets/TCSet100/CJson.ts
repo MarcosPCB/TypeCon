@@ -338,16 +338,26 @@ set ra rb
     /**
      * Convert an Object node into a native Record<string, number> hash map.
      * Values are stored as raw integers (FP16 raw, int, bool, or heap ptr).
+     * Nested JSON objects are recursively converted to nested Records.
+     *
+     * NOTE: child = Find(k) is called for every key (not just objects) to keep
+     * the stack frame balanced across both if/else branches. TypeCON generates
+     * a single `sub rsp N` cleanup after an if-else; if the two branches push
+     * different numbers of locals the counter gets corrupted.
      */
-    ToRecord(): Record<string, number> {
-        const r: Record<string, number> = {};
+    ToRecord(): Record<string, any> {
+        const r: Record<string, any> = {};
         if (this._type == CJsonType.Object) {
             const n: number = this.GetLength();
             let i: number = 0;
             while (i < n) {
                 const k: string = this.GetKey(i);
-                const v: number = this.GetValAt(i);
-                r[k] = v;
+                const child: CJson = this.Find(k);   // push BEFORE if-else: equal stack depth in both branches
+                if (this.GetTypeAt(i) == CJsonType.Object) {
+                    r[k] = child.ToRecord();
+                } else {
+                    r[k] = this.GetValAt(i);
+                }
                 i = i + 1;
             }
         }

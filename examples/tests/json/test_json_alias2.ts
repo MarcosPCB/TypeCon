@@ -1,8 +1,8 @@
-import { JSON } from '../../../src/sets/TCSet100/JSON';
-import { CJson } from '../../../src/sets/TCSet100/CJson';
+import { JSON } from '../../../include/TCSet100/JSON';
+import { CJson } from '../../../include/TCSet100/CJson';
 
 class TestJsonAlias2 extends CEvent {
-    constructor() { super('NewGame'); }
+    constructor() { super('Init'); }
     // debug-test
     public Append(): void {
         const node: CJson = JSON.parse('{"x":10}');

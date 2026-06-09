@@ -14,8 +14,10 @@ const packConfig = require('../package.json');
 import https from 'https';
 import semver from 'semver';
 import { loadConfig, runMake, MakeStep } from './modules/make/index';
+import { compiledFiles } from './modules/compiler/framework';
 import { runMakeCreate } from './modules/make/create';
 import { runMakeConfig } from './modules/make/config';
+import { runTestScript, runTestTs } from './modules/test-runner/index';
 
 let fileName = '';
 let input_folder = '';
@@ -38,7 +40,8 @@ let precompiled_modules = true;
 let heap_page_size = 4;
 let heap_page_number = 14336; // gives flat[] = 8192 + 57344 = 65536 (EDuke32 max array size)
 let eduke_init = false;
-let share_context = false;
+let share_context = false;   // -sc: pass full context between files (opt-in symbol sharing)
+let sep_compile = false;     // -sep (compiler): reset import cache per file (fully independent)
 let compile_only = false;
 let headerWritten = false;
 let accept_con_modules = false;
@@ -46,13 +49,20 @@ let con_module = false;
 let compile_mode: 'single' | 'module' = 'single';
 let intermediate_code = false;
 let clean = false;
+let cleanPrecompiled = false;
 let validateOnly = false;
 let simulateOnly = false;
 let simState: string | undefined;
+let simEvent: string | undefined;
+let simActor: string | undefined;
 let simNoInit = false;
 let simNoValidate = false;
 let simShowMemory = false;
 let simTestMode = false;
+let simActorFields:  string | undefined;
+let simPlayerFields: string | undefined;
+let simSectorFields: string | undefined;
+let simWallFields:   string | undefined;
 
 export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
     switch (color) {
@@ -95,6 +105,22 @@ Usage:
     \x1b[32mmake link\x1b[0m:     Link .tco files into the output .con only
     \x1b[32mmake validate\x1b[0m: Validate the output .con only
 
+    Test:
+    \x1b[32mtest <file.ts>\x1b[0m: Clean → compile → link → validate → simulate (--test --mem).
+        Quick single-file test runner.
+    \x1b[32mtest <script.test.json>\x1b[0m: Run a JSON multi-scenario test script.
+        Compiles the declared TypeScript sources, then runs each test scenario
+        in sequence. Each scenario targets an actor (runActor), event (runEvent),
+        or defstate (runState) and can pre-seed any game struct fields via a
+        "setup" block. Exit code 0 = all passed, 1 = any failed.
+        JSON schema:
+          { "name": "Suite name", "source": ["MyActor.ts"],
+            "tests": [
+              { "name": "Normal spawn", "runActor": "1680" },
+              { "name": "Damaged",      "runActor": "1680",
+                "setup": { "actorFields": { "0": { "extra": 5 } } } }
+            ] }
+
     Common options (Works on both):
     \x1b[31m-i or --input\x1b[0m:  Input file path
     \x1b[32m-il or --input-list\x1b[0m: List of files to be processed (compilation or linking)
@@ -106,7 +132,8 @@ Usage:
     \x1b[31m-c or --compile\x1b[0m:  Compile input files to .tco (Intermediate) format for separate linking.
     \x1b[37m-if or --input-folder\x1b[0m: Compile all files within a folder
     \x1b[96m-m or --module\x1b[0m: (Compiler) Enable module mode for single file compilation
-    \x1b[35m-sc or --share-context\x1b[0m: Share context between modules during compilation
+    \x1b[35m-sc or --share-context\x1b[0m: Share full symbol context between files (file2 can use file1's symbols).
+        Default: each file gets a fresh context; shared imports are deduplicated automatically.
     \x1b[36m-ic or --intermediate-code\x1b[0m: Generate intermediate code (CON with markers) in 'asm' folder
     \x1b[35m-dl or --detail-lines\x1b[0m: Write the original TS lines inside the CON code as comments
 
@@ -121,12 +148,14 @@ Usage:
     \x1b[91m-hl or --headerless\x1b[0m: Don't insert the header code (init code and states) inside the output CON 
     \x1b[92m-h or --header\x1b[0m: Create the framework header file 
     \x1b[93m-ci or --create-init\x1b[0m: Create header and init files with list of CON files provided via -il
-    \x1b[96m-sep or --separate\x1b[0m: (Used with -L) Output linked modules as separate CON files instead of one big file
+    \x1b[96m-sep or --separate\x1b[0m: (Compiler) Compile each file fully independently (resets import cache between files).
+        (Linker) Output linked modules as separate .con files instead of one big file.
     \x1b[94m-di or --default-inclusion\x1b[0m: Default inclusion (GAME.CON)  
     \x1b[95m-ei or --eduke-init\x1b[0m: Init file is EDUKE.CON
     \x1b[95m-Cm or --con-module\x1b[0m: (Linker) Output as a relocatable CON module (generates global array storage)
     \x1b[96m-np or --no-precompiled\x1b[0m: Disable automatic linking of pre-compiled system modules
-    \x1b[91m-C or --clean\x1b[0m: Empty build folders (obj, asm, compiled) and exit
+    \x1b[91m-C or --clean\x1b[0m: Remove *.tco from obj/, *.icc from asm/, *.con from compiled/ and exit
+    \x1b[91m-C precompiled\x1b[0m: Also remove *.con from precompile/generated/ (clears baked actor code)
 
     Validator options:
     \x1b[32m-V or --validate\x1b[0m: Validate a compiled .con file against EDuke32 CON rules
@@ -141,11 +170,21 @@ Usage:
     \x1b[33m--state NAME\x1b[0m: Run a specific defstate instead of the default event sequence.
         The game-lifecycle sequence (EVENT_INIT → EVENT_INITCOMPLETE →
         EVENT_SETDEFAULTS → EVENT_NEWGAME) still runs first to bootstrap VM state.
-    \x1b[33m--no-init\x1b[0m: Skip the lifecycle bootstrap when using --state (raw execution).
+    \x1b[33m--event NAME\x1b[0m: Run a specific event body directly (e.g. EVENT_SPAWN, EVENT_JUMP).
+        The lifecycle bootstrap still runs first unless --no-init is set.
+    \x1b[33m--actor PICNUM\x1b[0m: Run a specific actor's useractor/actor body directly by tile number.
+        The lifecycle bootstrap still runs first unless --no-init is set.
+    \x1b[33m--no-init\x1b[0m: Skip the lifecycle bootstrap when using --state/--event/--actor.
     \x1b[33m--no-validate\x1b[0m / \x1b[33m-nv\x1b[0m: Skip the pre-simulation validation step.
     \x1b[33m--mem\x1b[0m / \x1b[33m-mem\x1b[0m: Print a memory usage report after simulation (stack ptr, heap HWM, flat HWM).
     \x1b[33m--test\x1b[0m: Run in test mode — requires @DebugTest decorator on functions in the source.
-        Prints a structured pass/fail summary and exits with code 0 (all pass) or 1 (any fail).`
+        Prints a structured pass/fail summary and exits with code 0 (all pass) or 1 (any fail).
+    \x1b[33m--set-field-actor SPEC\x1b[0m: Pre-set actor/sprite fields before simulation.
+        SPEC format: [INDEX]field=value separated by ;
+        [] or [0] = sprite index 0 (THISACTOR). Example: \x1b[90m[]extra=0;[90]cstat=128\x1b[0m
+    \x1b[33m--set-field-player SPEC\x1b[0m: Pre-set player fields. Example: \x1b[90m[]health=100\x1b[0m
+    \x1b[33m--set-field-sector SPEC\x1b[0m: Pre-set sector fields. Example: \x1b[90m[]ceilingz=-1024\x1b[0m
+    \x1b[33m--set-field-wall SPEC\x1b[0m:   Pre-set wall fields.   Example: \x1b[90m[]cstat=0\x1b[0m`
 
 
 
@@ -423,6 +462,20 @@ let compile_options = 0;
 console.log(`\n\x1b[36mTypeCON Compiler \x1b[31mALPHA\x1b[0m \x1b[92mVersion ${packConfig.version}\x1b[0m\x1b[94m
 By ItsMarcos\x1b[0m - Use \x1b[95m'--help or -?'\x1b[0m to get the list of commands`);
 
+function cleanDir(dir: string, ext: string, label: string): void {
+    const full = path.resolve(process.cwd(), dir);
+    if (!fs.existsSync(full)) return;
+    const removed: string[] = [];
+    for (const f of fs.readdirSync(full)) {
+        if (f.endsWith(ext)) {
+            fs.unlinkSync(path.join(full, f));
+            removed.push(f);
+        }
+    }
+    if (removed.length > 0)
+        console.log(`  Cleaned ${label}/  (${removed.length} ${ext} file${removed.length !== 1 ? 's' : ''} removed)`);
+}
+
 async function Main() {
     if (!fs.existsSync(process.cwd() + '/compiled'))
         fs.mkdirSync(process.cwd() + '/compiled');
@@ -437,6 +490,23 @@ async function Main() {
         const cfg = loadConfig(path.join(process.cwd(), 'typecon.json'));
         await runMake(step, cfg);
         process.exit(0);
+    }
+
+    // ── test subcommand ──────────────────────────────────────────────────────
+    if (process.argv[2] === 'test') {
+        const input = process.argv[3];
+        if (!input || !fs.existsSync(input)) {
+            console.log(colorText('Usage: tcc test <file.ts|script.test.json>', 'red'));
+            console.log(colorText('  .ts  file: clean → compile → link → validate → simulate (--test --mem)', 'cyan'));
+            console.log(colorText('  .json file: run structured multi-scenario test script', 'cyan'));
+            process.exit(1);
+        }
+        if (input.endsWith('.ts')) {
+            await runTestTs(input, __dirname);
+        } else {
+            await runTestScript(input, __dirname);
+        }
+        process.exit(process.exitCode ?? 0);
     }
 
     for (let i = 0; i < process.argv.length; i++) {
@@ -547,8 +617,12 @@ async function Main() {
         if (a == '--share-context' || a == '-sc')
             share_context = true;
 
-        if (a == '--separate' || a == '-sep')
-            separate = true;
+        // -sep in compile mode: fully independent per-file (resets import cache)
+        // -sep in linker mode: output each module as a separate .con file
+        if (a == '--separate' || a == '-sep') {
+            separate = true;        // linker: separate output files
+            sep_compile = true;     // compiler: independent per-file
+        }
 
         if (a == '--default-inclusion' || a == '-di')
             default_inclusion = true;
@@ -573,8 +647,13 @@ async function Main() {
             compile_only = true;
         }
 
-        if (a == '--clean' || a == '-C')
+        if (a == '--clean' || a == '-C') {
             clean = true;
+            if (process.argv[i + 1] === 'precompiled') {
+                cleanPrecompiled = true;
+                i++;
+            }
+        }
 
         if (a == '--validate' || a == '-V')
             validateOnly = true;
@@ -584,6 +663,12 @@ async function Main() {
 
         if (a == '--state')
             simState = process.argv[i + 1];
+
+        if (a == '--event')
+            simEvent = process.argv[i + 1];
+
+        if (a == '--actor')
+            simActor = process.argv[i + 1];
 
         if (a == '--no-init')
             simNoInit = true;
@@ -596,6 +681,11 @@ async function Main() {
 
         if (a == '--test')
             simTestMode = true;
+
+        if (a == '--set-field-actor')  simActorFields  = process.argv[i + 1];
+        if (a == '--set-field-player') simPlayerFields = process.argv[i + 1];
+        if (a == '--set-field-sector') simSectorFields = process.argv[i + 1];
+        if (a == '--set-field-wall')   simWallFields   = process.argv[i + 1];
 
         if (a == 'setup') {
             initFunc = true;
@@ -645,7 +735,11 @@ async function Main() {
             console.log(colorText('Error: -V requires at least one .con input file via -i or -il', 'red'));
             process.exit(1);
         }
-        const baseCONDir = path.join(process.cwd(), 'baseCON');
+        const _vBaseCON    = path.join(process.cwd(), 'baseCON');
+        const _vPkgBaseCON = path.join(__dirname, '..', 'baseCON');
+        const _vBaseCONDirs = [_vBaseCON, _vPkgBaseCON].filter(
+            (d, i, arr) => fs.existsSync(d) && arr.indexOf(d) === i
+        );
         let allOk = true;
         for (const file of validateFiles) {
             if (!fs.existsSync(file)) {
@@ -655,8 +749,7 @@ async function Main() {
             }
             const text = fs.readFileSync(file, 'utf-8');
             const conDir = path.dirname(path.resolve(file));
-            const baseDirs = [conDir];
-            if (fs.existsSync(baseCONDir)) baseDirs.push(baseCONDir);
+            const baseDirs = [conDir, ..._vBaseCONDirs];
             const result = validateCON(text, { baseDirs });
 
             // Report each included file
@@ -692,13 +785,32 @@ async function Main() {
         process.exit(allOk ? 0 : 1);
     }
 
+    function parseFieldOverrides(input: string): Map<number, Map<string, number>> {
+        const out = new Map<number, Map<string, number>>();
+        for (const seg of input.split(';').map(s => s.trim()).filter(Boolean)) {
+            const m = seg.match(/^\[(\d*)\](\w+)=(-?\d+)$/);
+            if (!m) { console.warn(`[SIM] Invalid field spec: "${seg}" (expected format: [INDEX]field=value)`); continue; }
+            const idx   = m[1] === '' ? 0 : parseInt(m[1], 10);
+            const field = m[2];
+            const val   = parseInt(m[3], 10);
+            if (!out.has(idx)) out.set(idx, new Map());
+            out.get(idx)!.set(field, val);
+        }
+        return out;
+    }
+
     if (simulateOnly) {
         const simFiles = files.length > 0 ? files : fileName ? [fileName] : [];
         if (simFiles.length === 0) {
             console.log(colorText('Error: -S requires at least one .con input file via -i or -il', 'red'));
             process.exit(1);
         }
-        const baseCONDir = path.join(process.cwd(), 'baseCON');
+        // Collect baseCON search dirs: project baseCON (user setup) and package-bundled baseCON
+        const baseCONDir  = path.join(process.cwd(), 'baseCON');
+        const pkgBaseCON  = path.join(__dirname, '..', 'baseCON');
+        const baseCONDirs = [baseCONDir, pkgBaseCON].filter(
+            (d, i, arr) => fs.existsSync(d) && arr.indexOf(d) === i
+        );
         for (const file of simFiles) {
             if (!fs.existsSync(file)) {
                 console.log(colorText(`Error: File not found: ${file}`, 'red'));
@@ -709,8 +821,7 @@ async function Main() {
             // Validate before simulating (skip with --no-validate / -nv)
             if (!simNoValidate) {
                 const conDir = path.dirname(path.resolve(file));
-                const baseDirs = [conDir];
-                if (fs.existsSync(baseCONDir)) baseDirs.push(baseCONDir);
+                const baseDirs = [conDir, ...baseCONDirs];
                 const valResult = validateCON(source, { baseDirs });
                 for (const inc of valResult.includedFiles) {
                     const hasErrors = inc.diagnostics.some(d => d.severity === 'error');
@@ -734,8 +845,20 @@ async function Main() {
                 }
             }
 
-            console.log(colorText(`Simulating: ${file}`, 'cyan') + (simState ? ` (state: ${simState})` : ''));
-            const vmResult = runVM(source, { entryState: simState, noInit: simNoInit, showMemory: simShowMemory, testMode: simTestMode });
+            const simEntry = simState ? ` (state: ${simState})` : simEvent ? ` (event: ${simEvent})` : simActor ? ` (actor: ${simActor})` : '';
+            console.log(colorText(`Simulating: ${file}`, 'cyan') + simEntry);
+            const conDir = path.dirname(path.resolve(file));
+            // baseCON dirs come FIRST so real game files (e.g. baseCON/GAME.CON) are
+            // found before any same-named TypeCON linker output in the compiled/ dir.
+            const searchDirs = [...baseCONDirs, conDir];
+            const vmResult = runVM(source, {
+                entryState: simState, entryEvent: simEvent, entryActor: simActor,
+                noInit: simNoInit, showMemory: simShowMemory, testMode: simTestMode, searchDirs,
+                actorFieldOverrides:  simActorFields  ? parseFieldOverrides(simActorFields)  : undefined,
+                playerFieldOverrides: simPlayerFields ? parseFieldOverrides(simPlayerFields) : undefined,
+                sectorFieldOverrides: simSectorFields ? parseFieldOverrides(simSectorFields) : undefined,
+                wallFieldOverrides:   simWallFields   ? parseFieldOverrides(simWallFields)   : undefined,
+            });
             if (simTestMode && vmResult.exitCode !== 0) {
                 process.exit(vmResult.exitCode);
             }
@@ -745,12 +868,14 @@ async function Main() {
 
     if (clean) {
         console.log(colorText('Cleaning build folders...', 'red'));
-        const foldersToClean = ['obj', 'asm', 'compiled'];
-        for (const folder of foldersToClean) {
-            if (fs.existsSync(folder)) {
-                console.log(`Cleaning ${folder}...`);
-                fsExtra.emptyDirSync(folder);
-            }
+        cleanDir('obj',      '.tco', 'obj');
+        cleanDir('asm',      '.icc', 'asm');
+        cleanDir('compiled', '.con', 'compiled');
+        if (cleanPrecompiled) {
+            const genDir = path.join(__dirname, '..', 'include', 'TCSet100', 'precompile', 'generated');
+            const srcGenDir = path.join(__dirname, '..', 'src', 'sets', 'TCSet100', 'precompile', 'generated');
+            cleanDir(genDir,    '.con', 'include/precompile/generated');
+            cleanDir(srcGenDir, '.con', 'src/precompile/generated');
         }
         process.exit(0);
     }
@@ -883,10 +1008,14 @@ async function Main() {
         }
 
         console.log(colorText(`Compiling modules to ${intermediate_code ? 'intermediate CON' : '.tco'}...`, 'cyan'));
+        // sharedContext: only set when -sc is active (explicit symbol sharing between files).
+        // By default each file gets a fresh context; the compiledFiles cache handles
+        // import deduplication and injects cached symbols automatically (Compiler.ts line 388).
         let sharedContext: any;
         for (const f of files) {
+            if (sep_compile) compiledFiles.clear();   // -sep: fully independent per file
             const fContent = fs.readFileSync(f, 'utf8');
-            const result = compiler.compileModule(fContent.toString(), f, sharedContext);
+            const result = compiler.compileModule(fContent.toString(), f, share_context ? sharedContext : undefined);
             if (result && result.module) {
                 sharedContext = result.context;
 

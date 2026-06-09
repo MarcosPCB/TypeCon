@@ -252,11 +252,15 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
     const methodsForPreReg = cd.getInstanceMethods();
     for (const m of methodsForPreReg) {
       const mName = m.getName();
+      const retText = m.getReturnTypeNode()?.getText();
+      const retClassSym = retText ? context.symbolTable.get(retText) as SymbolDefinition : undefined;
+      const retIsClass = retClassSym && (retClassSym.type & ESymbolType.class);
       context.symbolTable.set(mName, {
         name: `${className}_${mName}`,
         type: ESymbolType.function,
         offset: 0,
         parentClass: className,
+        returns: retIsClass ? ESymbolType.class : (retText && retText !== 'void' ? ESymbolType.number : undefined),
       });
       cls.children[mName] = context.symbolTable.get(mName) as SymbolDefinition;
     }

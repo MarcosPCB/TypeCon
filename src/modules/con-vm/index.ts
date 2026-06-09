@@ -1,16 +1,43 @@
 import { CONParser } from './Parser';
-import { createVMState, resetPhasePeaks, takeSnapshot, VMState, TestResult } from './Memory';
+import { createVMState, resetPhasePeaks, takeSnapshot, VMState, TestResult, setStructField } from './Memory';
 import { executeStatements, TerminateSignal, ExitStateSignal, BreakSignal } from './Interpreter';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface VMRunOptions {
-  entryState?: string;  // explicit defstate to run (--state NAME)
+  entryState?: string;  // --state NAME: run a specific defstate
+  entryEvent?: string;  // --event NAME: run a specific event body directly (e.g. EVENT_SPAWN)
+  entryActor?: string;  // --actor PICNUM: run a specific actor/useractor body directly
   noInit?: boolean;     // skip EVENT_INIT → EVENT_INITCOMPLETE → EVENT_SETDEFAULTS → EVENT_NEWGAME preamble
   showMemory?: boolean; // print memory usage report after simulation
   testMode?: boolean;   // print structured pass/fail summary and return exit code
+  searchDirs?: string[]; // directories to search for include files (CON dir, baseCON, …)
+  // Pre-seed game structure fields before simulation (index → field → value)
+  actorFieldOverrides?:  Map<number, Map<string, number>>;
+  playerFieldOverrides?: Map<number, Map<string, number>>;
+  sectorFieldOverrides?: Map<number, Map<string, number>>;
+  wallFieldOverrides?:   Map<number, Map<string, number>>;
 }
 
 export interface VMRunResult {
   exitCode: number; // 0 = all tests passed (or no tests), 1 = failures
+  // Final VM state — exposed for post-simulation assertions in tcc test
+  vars:         Map<string, number>;
+  actorFields:  Map<number, Map<string, number>>;
+  playerFields: Map<number, Map<string, number>>;
+  sectorFields: Map<number, Map<string, number>>;
+  wallFields:   Map<number, Map<string, number>>;
+}
+
+function stateResult(exitCode: number, state: VMState): VMRunResult {
+  return { exitCode, vars: state.vars, actorFields: state.actorFields,
+           playerFields: state.playerFields, sectorFields: state.sectorFields,
+           wallFields: state.wallFields };
+}
+
+function emptyResult(exitCode: number): VMRunResult {
+  return { exitCode, vars: new Map(), actorFields: new Map(),
+           playerFields: new Map(), sectorFields: new Map(), wallFields: new Map() };
 }
 
 // Default event run order when no --state is provided
@@ -23,11 +50,52 @@ const DEFAULT_EVENTS = [
 ];
 
 export function runVM(source: string, opts: VMRunOptions = {}): VMRunResult {
-  const parser = new CONParser(source);
-  const { stateMap, defines, initStatements, eventBodies } = parser.parse();
+  const searchDirs = opts.searchDirs ?? [];
+
+  // Auto-load baseCON/GAME.CON if it exists in any search directory and the
+  // main source doesn't already include it. This makes standard game states
+  // (jib_sounds, drop_ammo, standard_jibs, etc.) available even for
+  // TypeCON-generated CON files that have no explicit include directives.
+  let effectiveSource = source;
+  const sourceLower = source.toLowerCase();
+  const alreadyIncludesGame = /\binclude\s+game\.con\b/i.test(sourceLower);
+  if (!alreadyIncludesGame && searchDirs.length > 0) {
+    for (const dir of searchDirs) {
+      if (fs.existsSync(path.join(dir, 'GAME.CON'))) {
+        effectiveSource = 'include GAME.CON\n' + source;
+        break;
+      }
+    }
+  }
+
+  const parser = new CONParser(effectiveSource, searchDirs);
+  const { stateMap, defines, initStatements, eventBodies, actorBodies, actorHeaders } = parser.parse();
 
   const state = createVMState();
   state.defines = defines;
+
+  // Auto-apply actor header values (extra, etc.) when running with --actor
+  // Done before CLI overrides so that --set-field-actor takes precedence
+  if (opts.entryActor) {
+    const header = actorHeaders.get(opts.entryActor);
+    if (header) {
+      if (header.extra !== 0) setStructField(state.actorFields, state.thisactor, 'extra', header.extra);
+      const parts: string[] = [`extra=${header.extra}`];
+      if (header.firstAction) parts.push(`action=${header.firstAction}`);
+      if (header.firstMove)   parts.push(`move=${header.firstMove}`);
+      if (header.flags !== 0) parts.push(`flags=${header.flags}`);
+      console.log(`[CONVM] Actor ${opts.entryActor} header: ${parts.join(', ')}`);
+    }
+  }
+
+  // Apply game structure field overrides from CLI flags
+  if (opts.actorFieldOverrides)  mergeStructFields(state.actorFields,  opts.actorFieldOverrides);
+  if (opts.playerFieldOverrides) mergeStructFields(state.playerFields, opts.playerFieldOverrides);
+  if (opts.sectorFieldOverrides) mergeStructFields(state.sectorFields, opts.sectorFieldOverrides);
+  if (opts.wallFieldOverrides)   mergeStructFields(state.wallFields,   opts.wallFieldOverrides);
+  // Expose THISACTOR / THISPLAYER as vars so geta[THISACTOR].field resolves correctly
+  state.vars.set('THISACTOR',  state.thisactor);
+  state.vars.set('THISPLAYER', state.thisplayer);
 
   // Initialise declared arrays and non-zero gamevar defaults
   for (const [key, body] of stateMap) {
@@ -62,8 +130,8 @@ export function runVM(source: string, opts: VMRunOptions = {}): VMRunResult {
   // Snapshot 1: after init statements (starting baseline)
   state.snapAfterInit = takeSnapshot(state);
 
-  if (opts.entryState) {
-    // Phase 2: game-lifecycle events
+  if (opts.entryState || opts.entryEvent || opts.entryActor) {
+    // Phase 2: game-lifecycle events (bootstrap)
     resetPhasePeaks(state);
     if (!opts.noInit) {
       for (const ev of DEFAULT_EVENTS) {
@@ -71,17 +139,34 @@ export function runVM(source: string, opts: VMRunOptions = {}): VMRunResult {
         if (body) { runSafe(body, ev); }
       }
     }
-    // Snapshot 2: after init events, before entry state
+    // Snapshot 2: after init events, before entry point
     state.snapAfterEvents = takeSnapshot(state);
 
-    // Phase 3: entry state
+    // Phase 3: run the requested entry point
     resetPhasePeaks(state);
-    const body = stateMap.get(opts.entryState);
-    if (!body) {
-      console.error(`[CONVM] State '${opts.entryState}' not found`);
-      return { exitCode: 1 };
+    if (opts.entryState) {
+      const body = stateMap.get(opts.entryState);
+      if (!body) {
+        console.error(`[CONVM] State '${opts.entryState}' not found`);
+        return emptyResult(1);
+      }
+      runSafe(body, opts.entryState);
+    } else if (opts.entryEvent) {
+      const key = opts.entryEvent.toUpperCase();
+      const body = eventBodies.get(key);
+      if (!body) {
+        console.error(`[CONVM] Event '${opts.entryEvent}' not found in this CON`);
+        return emptyResult(1);
+      }
+      runSafe(body, key);
+    } else if (opts.entryActor) {
+      const body = actorBodies.get(opts.entryActor);
+      if (!body) {
+        console.error(`[CONVM] Actor picnum '${opts.entryActor}' not found in this CON`);
+        return emptyResult(1);
+      }
+      runSafe(body, `actor_${opts.entryActor}`);
     }
-    runSafe(body, opts.entryState);
   } else {
     // Phase 2: default event sequence
     resetPhasePeaks(state);
@@ -115,42 +200,81 @@ export function runVM(source: string, opts: VMRunOptions = {}): VMRunResult {
     return printTestReport(state);
   }
 
-  return { exitCode: 0 };
+  return stateResult(0, state);
+}
+
+function mergeStructFields(
+  dst: Map<number, Map<string, number>>,
+  src: Map<number, Map<string, number>>
+): void {
+  for (const [idx, fields] of src) {
+    if (!dst.has(idx)) dst.set(idx, new Map());
+    for (const [f, v] of fields) dst.get(idx)!.set(f, v);
+  }
 }
 
 function printMemoryReport(state: VMState): void {
-  const rds = state.vars.get('rds') ?? 0;
-  const snap1 = state.snapAfterInit;
-  const snap2 = state.snapAfterEvents;
+  const rds        = state.vars.get('rds') ?? 0;
+  const snap1      = state.snapAfterInit;
+  const snap2      = state.snapAfterEvents;
+  const allocTable = state.arrays.get('allocTable') ?? [];
+  const pageSizes  = state.arrays.get('pageSizes')  ?? [];
+  const heaptables = state.vars.get('heaptables')   ?? allocTable.length;
 
-  function heapOf(flatIdx: number) { return flatIdx >= rds ? flatIdx - rds + 1 : 0; }
+  const W  = 12;
+  const W2 = 8;
+  const pad  = (n: number | string) => String(n).padStart(W);
+  const pad2 = (n: number | string) => String(n).padStart(W2);
+  const hr = '─'.repeat(70);
 
-  const W = 11;
-  const pad = (n: number) => String(n).padStart(W);
-  const hr = '─'.repeat(68);
-
+  // ── Stack table ───────────────────────────────────────────────────────────
   console.log(`\n${hr}`);
   console.log(` Memory report  (stack base rds = ${rds} words = ${rds * 4} bytes)`);
   console.log(`${hr}`);
-  console.log(`  ${''.padEnd(16)}${'stack end'.padStart(W)}${'stack HWM'.padStart(W)}${'heap end'.padStart(W)}${'heap HWM'.padStart(W)}`);
+  console.log(`  ${''.padEnd(16)}${'stack end'.padStart(W)}${'stack HWM'.padStart(W)}`);
 
-  if (snap1) {
-    const stackEnd = snap1.rsp;
-    const stackHWM = snap1.phaseRspHWM;
-    const heapEnd  = heapOf(snap1.flatLen - 1);
-    const heapHWM  = heapOf(snap1.phaseFlatHWM);
-    console.log(`  ${'After init:'.padEnd(16)}${pad(stackEnd)}${pad(stackHWM)}${pad(heapEnd)}${pad(heapHWM)}`);
+  if (snap1)
+    console.log(`  ${'After init:'.padEnd(16)}${pad(snap1.rsp)}${pad(snap1.phaseRspHWM)}`);
+  if (snap2)
+    console.log(`  ${'After events:'.padEnd(16)}${pad(snap2.rsp)}${pad(snap2.phaseRspHWM)}`);
+  console.log(`  ${'Peak:'.padEnd(16)}${pad(state.peakRsp)}${pad(state.peakRsp)}`);
+
+  // ── Heap page table ───────────────────────────────────────────────────────
+  // allocTable bit layout (from framework.ts):
+  //   0          → free (never used or reclaimed)
+  //   type > 0   → allocated (live)
+  //   type|1024  → marked to be freed (GC first-pass candidate)
+  const MARK_BIT = 1024;
+
+  let liveCount = 0,   liveWords = 0;
+  let markCount = 0,   markWords = 0;
+  let freeCount = 0,   freeWords = 0;
+
+  for (let i = 0; i < heaptables; i++) {
+    const type = allocTable[i] ?? 0;
+    const size = pageSizes[i]  ?? 0;
+    if (type & MARK_BIT) {
+      markCount++;
+      markWords += size;
+    } else if (type !== 0) {
+      liveCount++;
+      liveWords += size;
+    } else if (size !== 0) {
+      // allocTable[i]==0 AND pageSizes[i]!=0 → previously allocated, now reclaimed
+      freeCount++;
+      freeWords += size;
+    }
   }
-  if (snap2) {
-    const stackEnd = snap2.rsp;
-    const stackHWM = snap2.phaseRspHWM;
-    const heapEnd  = heapOf(snap2.flatLen - 1);
-    const heapHWM  = heapOf(snap2.phaseFlatHWM);
-    console.log(`  ${'After events:'.padEnd(16)}${pad(stackEnd)}${pad(stackHWM)}${pad(heapEnd)}${pad(heapHWM)}`);
-  }
-  // Peak row uses all-time maximums
-  const peakFlatLen = state.arrays.get('flat')?.length ?? 0;
-  console.log(`  ${'Peak:'.padEnd(16)}${pad(state.peakRsp)}${pad(state.peakRsp)}${pad(heapOf(peakFlatLen - 1))}${pad(heapOf(state.peakFlatIdx))}`);
+
+  const totalCount = liveCount + markCount + freeCount;
+  const totalWords = liveWords + markWords + freeWords;
+
+  console.log(`\n  Heap pages  (${heaptables} slots total)`);
+  console.log(`  ${''.padEnd(24)}${'pages'.padStart(W2)}${'words'.padStart(W2)}${'bytes'.padStart(W2)}`);
+  console.log(`  ${'Allocated (live):'.padEnd(24)}${pad2(liveCount)}${pad2(liveWords)}${pad2(liveWords * 4)}`);
+  console.log(`  ${'Marked to be freed:'.padEnd(24)}${pad2(markCount)}${pad2(markWords)}${pad2(markWords * 4)}`);
+  console.log(`  ${'Free (reclaimed):'.padEnd(24)}${pad2(freeCount)}${pad2(freeWords)}${pad2(freeWords * 4)}`);
+  console.log(`  ${'Total used:'.padEnd(24)}${pad2(totalCount)}${pad2(totalWords)}${pad2(totalWords * 4)}`);
   console.log(`${hr}\n`);
 }
 
@@ -158,7 +282,7 @@ function printTestReport(state: VMState): VMRunResult {
   const results = state.testResults;
   if (results.length === 0) {
     console.log('\n[TEST] No @DebugTest functions were executed.');
-    return { exitCode: 0 };
+    return stateResult(0, state);
   }
 
   const hr = '─'.repeat(60);
@@ -191,7 +315,7 @@ function printTestReport(state: VMState): VMRunResult {
   }
   console.log(`${hr}\n`);
 
-  return { exitCode: failedAll === 0 ? 0 : 1 };
+  return stateResult(failedAll === 0 ? 0 : 1, state);
 }
 
 // Re-export Statement for callers that need the type

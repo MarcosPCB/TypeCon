@@ -349,8 +349,15 @@ export class TsToConCompiler {
 
     const outputLines: string[] = [];
 
-    if (compiledFiles.get(Buffer.from(file).toString('base64url'))) {
-      const cached = compiledFiles.get(Buffer.from(file).toString('base64url'));
+    // Normalize cache key: src/sets/TCSet100/ and include/TCSet100/ are the same
+    // files (include/ is a generated copy of src/sets/).  Canonicalize to the
+    // include/ path so imports via either prefix share one cache entry.
+    const cacheKey = Buffer.from(
+      file.replace(/[/\\]src[/\\]sets[/\\]TCSet100[/\\]/g, '/include/TCSet100/')
+    ).toString('base64url');
+
+    if (compiledFiles.get(cacheKey)) {
+      const cached = compiledFiles.get(cacheKey);
       if (context) {
         for (const [name, sym] of cached.context.symbolTable) {
           if (!context.symbolTable.has(name))
@@ -360,7 +367,7 @@ export class TsToConCompiler {
       return null;
     }
 
-    compiledFiles.set(Buffer.from(file).toString('base64url'), {
+    compiledFiles.set(cacheKey, {
       path: file,
       code: '',
       declaration: false,
@@ -369,7 +376,7 @@ export class TsToConCompiler {
       dependency: []
     })
 
-    context.currentFile = compiledFiles.get(Buffer.from(file).toString('base64url'));
+    context.currentFile = compiledFiles.get(cacheKey);
 
     const imports = sf.getImportDeclarations();
 
@@ -385,8 +392,21 @@ export class TsToConCompiler {
           continue;
         }
 
-        if (compiledFiles.has(Buffer.from(resolved).toString('base64url')))
+        const resolvedKey = Buffer.from(
+          resolved.replace(/[/\\]src[/\\]sets[/\\]TCSet100[/\\]/g, '/include/TCSet100/')
+        ).toString('base64url');
+        if (compiledFiles.has(resolvedKey)) {
+          // Import already compiled in a previous file — inject its symbols so
+          // the current file can reference its types, but skip re-emitting code.
+          const cachedImport = compiledFiles.get(resolvedKey);
+          if (cachedImport?.context?.symbolTable) {
+            for (const [name, sym] of cachedImport.context.symbolTable) {
+              if (!context.symbolTable.has(name))
+                context.symbolTable.set(name, sym);
+            }
+          }
           continue;
+        }
 
         try {
           const modName = path.basename(resolved, '.ts'); // Use basename for now as identifier

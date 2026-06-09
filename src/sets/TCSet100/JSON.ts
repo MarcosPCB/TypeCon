@@ -11,7 +11,7 @@ import { CJson, CJsonType } from './CJson';
  *   JSON.parse(text)   ≡ new CJson(text)
  *   JSON.stringify(obj) ≡ obj.Stringify()
  */
-namespace JSON {
+export namespace JSON {
     /**
      * Parse a JSON string and return the root node as a CJson instance.
      * Equivalent to `new CJson(text)`.

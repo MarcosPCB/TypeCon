@@ -1,0 +1,11 @@
+{
+    "name": "CJson Test Suite",
+    "source": ["test_json.ts"],
+    "tests": [
+        {
+            "name": "JSON parse and query",
+            "runEvent": "EVENT_INIT",
+            "noInit": true
+        }
+    ]
+}

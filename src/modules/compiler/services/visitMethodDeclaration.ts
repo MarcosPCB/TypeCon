@@ -186,7 +186,7 @@ export function visitMethodDeclaration(
     parentClass: className,
     param_fp_bits: paramFpBitsArr,
     returns_fp_bits: retFpBits,
-    returns: retIsClass ? ESymbolType.class : undefined,
+    returns: retIsClass ? ESymbolType.class : (retTypeText && retTypeText !== 'void' ? ESymbolType.number : undefined),
     returns_class_name: retIsClass ? retTypeText : undefined,
   });
 

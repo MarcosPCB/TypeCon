@@ -1,7 +1,7 @@
-import { JSON } from '../../../src/sets/TCSet100/JSON';
+import { JSON } from '../../../include/TCSet100/JSON';
 
 class TestJsonAlias extends CEvent {
-    constructor() { super('NewGame'); }
+    constructor() { super('Init'); }
     // debug-test
     public Append(): void {
         const node = JSON.parse('{"x":10,"label":"duke"}');

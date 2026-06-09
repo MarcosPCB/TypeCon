@@ -266,13 +266,15 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
 
     const args = expr.getArguments();
 
-    code += `state pushr${args.length > 12 ? 'all' : args.length}\n`
+    if (args.length > 0)
+      code += `state pushr${args.length > 12 ? 'all' : args.length}\n`;
     args.forEach((a, i) => {
       code += visitExpression(a as Expression, context);
       code += `set r${i} ra\n`;
     });
     code += `state ${className}_constructor\nset ra rb\n`;
-    code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
+    if (args.length > 0)
+      code += `state popr${args.length > 12 ? 'all' : args.length}\n`;
     context.curExpr = ESymbolType.class;
     context.curSymRet = sym;
     if (className === 'CJson') {

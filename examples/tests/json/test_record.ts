@@ -1,5 +1,5 @@
 class TestRecord extends CEvent {
-    constructor() { super('NewGame'); }
+    constructor() { super('Init'); }
     // debug-test
     public Append(): void {
         const r: Record<string, number> = {};

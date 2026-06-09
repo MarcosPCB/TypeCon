@@ -109,7 +109,9 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
         if (assignment) {
           // r["key"] = val  (ra holds the value to store)
+          // Save value to r2 BEFORE the key-hash computation — _rec_hash corrupts ra.
           code += `state pushr3\n`;
+          code += `set r2 ra\n`; // r2 = value (captured before _rec_hash can corrupt ra)
           if (isLitKey) {
             code += `set r0 ${fnv1a32((idxExpr as StringLiteral).getLiteralText())}\n`;
           } else {
@@ -117,11 +119,10 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
             code += `state pushr1\nstate _rec_hash\nstate popr1\nset r0 rb\n`;
           }
           code += recLoad;       // r1 = rec_ptr
-          code += `set r2 ra\n`; // r2 = value
           code += `state _rec_set\n`;
           code += `state popr3\n`;
         } else {
-          // val = r["key"]
+          // val = r["key1"]["key2"]...  — handle chained index segments
           code += `state pushr2\n`;
           if (isLitKey) {
             code += `set r0 ${fnv1a32((idxExpr as StringLiteral).getLiteralText())}\n`;
@@ -131,6 +132,21 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
           }
           code += recLoad;       // r1 = rec_ptr
           code += `state _rec_get\n`;
+          // Chain any additional index segments: r["a"]["b"]["c"]...
+          for (let si = 2; si < segments.length; si++) {
+            const nextSeg = segments[si];
+            if (nextSeg.kind !== 'index') break;
+            const nextExpr = (nextSeg as SegmentIndex).expr;
+            const isNextLit = nextExpr.isKind(SyntaxKind.StringLiteral);
+            code += `set r1 rb\n`;  // r1 = nested Record ptr from previous _rec_get
+            if (isNextLit) {
+              code += `set r0 ${fnv1a32((nextExpr as StringLiteral).getLiteralText())}\n`;
+            } else {
+              code += visitExpression(nextExpr, context, 'r0');
+              code += `state pushr1\nstate _rec_hash\nstate popr1\nset r0 rb\n`;
+            }
+            code += `state _rec_get\n`;
+          }
           code += `state popr2\n`;
           code += `set ${reg} rb\n`;
           context.curExpr = (sym as SymbolDefinition).record_value_type ?? ESymbolType.number;
@@ -436,7 +452,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
               return `set ${reg} ${pSym.literal}\n`;
 
             if (pSym.type & ESymbolType.object || (pSym.type & ESymbolType.array && segments.at(-1).kind != 'index'))
-              return code + `set ${reg} ri\n`;
+              return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} ri\n`);
 
             return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
           }

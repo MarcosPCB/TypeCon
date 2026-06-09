@@ -1,6 +1,5 @@
 import * as fs   from 'fs';
 import * as path from 'path';
-import fsExtra   = require('fs-extra');
 import { MakeConfig, MakeModuleEntry } from './types';
 import { TsToConCompiler } from '../compiler/Compiler';
 import { Linker }          from '../linker/Linker';
@@ -15,6 +14,14 @@ const C = {
 };
 
 export type MakeStep = 'clean' | 'compile' | 'link' | 'validate' | 'all';
+
+function cleanDirByExt(dir: string, ext: string, label: string): void {
+  if (!fs.existsSync(dir)) return;
+  const removed = fs.readdirSync(dir).filter(f => f.endsWith(ext));
+  removed.forEach(f => fs.unlinkSync(path.join(dir, f)));
+  if (removed.length > 0)
+    console.log(`  ${label}/  — ${removed.length} ${ext} file${removed.length !== 1 ? 's' : ''} removed`);
+}
 
 export function loadConfig(configPath: string): MakeConfig {
   if (!fs.existsSync(configPath)) {
@@ -114,13 +121,9 @@ export async function runMake(step: MakeStep, cfg: MakeConfig): Promise<void> {
   // ── CLEAN (only when explicitly requested — not part of the full pipeline) ─
   if (step === 'clean') {
     console.log(C.yellow('Clearing build folders...'));
-    for (const folder of [objDir, 'asm', outputDir]) {
-      const full = path.join(cwd, folder);
-      if (fs.existsSync(full)) {
-        console.log(`  Clearing ${folder}/`);
-        fsExtra.emptyDirSync(full);
-      }
-    }
+    cleanDirByExt(path.join(cwd, objDir),    '.tco', objDir);
+    cleanDirByExt(path.join(cwd, 'asm'),     '.icc', 'asm');
+    cleanDirByExt(path.join(cwd, outputDir), '.con', outputDir);
     return;
   }
 

@@ -38,6 +38,10 @@ export type Statement =
   | { op: 'quote' | 'userquote'; quote: Operand }
   | { op: 'echo'; val: Operand }
   | { op: 'addlogvar'; val: Operand }
+  | { op: 'getstruct'; struct: 'actor' | 'player' | 'sector' | 'wall'; index: Operand; field: string; dst: Operand }
+  | { op: 'setstruct'; struct: 'actor' | 'player' | 'sector' | 'wall'; index: Operand; field: string; src: Operand }
+  | { op: 'ifhitweapon'; body: Statement[]; elseBody?: Statement[] }
+  | { op: 'readarrayfromfile' | 'writearraytofile'; arr: string; quote: Operand }
   | { op: 'defstate'; name: string; body: Statement[] }
   | { op: 'marker'; name: string }
   | { op: 'nullop' | 'noop' };

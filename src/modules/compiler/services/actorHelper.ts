@@ -11,6 +11,8 @@ export function FindLabel(segments: MemberSegment[], ctx: CompilerContext) {
   if (segments[0].kind == 'this')
     segments.shift();
 
+  if (segments.length === 0) return;
+
   let sym: SymbolDefinition | EnumDefinition = ctx.symbolTable.get(segments[0].name);
 
   if (!sym) return;
