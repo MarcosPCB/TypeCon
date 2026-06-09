@@ -13,9 +13,14 @@ Welcome to the TypeCON Compiler! This tool leverages the power of TypeScript to 
 - **Modern TypeScript Support**: Use classes, interfaces, enums, and modern operators like **Spread (...)** for objects and arrays.
 - **Virtual Machine**: Implements a virtual register machine, stack, and heap with a Mark-and-Sweep Garbage Collector.
 - **Separate Compilation & Linking**: Compile individual files to `.tco` (Intermediate) format and link them later, or compile a whole project at once.
-- **Fixed-Point Math (FP11 / FP14 / FP16 / FP30)**: First-class fixed-point types with automatic `mulscale`/`divscale` code generation.
+- **Fixed-Point Math (FP11 / FP14 / FP16 / FP30)**: First-class fixed-point types with automatic `mulscale`/`divscale` code generation, explicit cast functions, and float-literal auto-scaling.
 - **Math & Anim Libraries**: Built-in `Math` and `Anim` global objects with trig, rounding, easing curves, interpolation, and more — all dispatched as CON `defstate` calls.
 - **Full-Precision Sprite & Text Rendering**: `RotateSpriteF` and `ScreenTextF` accept normalized screen coordinates (FP16) and sub-degree angles (FP11), automatically setting `ROTATESPRITE_FULL16`.
+- **Native `Record<string, T>` Hash Map**: Compiler-generated hash map backed by the CON heap; supports compile-time key hashing and chained access.
+- **`JSON` Namespace**: `JSON.parse(text)` and `JSON.stringify(obj)` mirror JavaScript's JSON global, backed by the `CJson` class.
+- **CON VM Simulator**: Built-in bytecode interpreter (`tcc -S`) for running and unit-testing compiled CON output without EDuke32.
+- **Debug-Test Framework**: Mark any event or function with `// debug-test` to enable `checkEq`/`checkFpEq` pass/fail tracking; `--test` prints structured results.
+- **`tcc test` Runner**: JSON-driven multi-scenario test harness with setup/expect blocks and game-struct field assertions.
 - **Hand-written CON Integration**: Use `CON()` and `CONUnsafe()` for direct engine instruction injection.
 - **VS Code Development Support**: Includes a TypeScript plugin for real-time validation and Duke 3D type safety.
 
@@ -27,7 +32,7 @@ The compiler is a command-line tool (`tcc`) with a robust set of parameters for 
 
 ### Banner
 ```text
-TypeCON Compiler BETA Version 0.8.0
+TypeCON Compiler BETA Version 0.9.0
 By ItsMarcos - Use '--help' or '-?' to get the list of commands
 ```
 
@@ -137,6 +142,43 @@ Anim.pulse(t, period, duty: number): number
 
 ---
 
+## 🗺 Record\<string, T\>
+
+`Record<string, T>` is a native hash map backed by the CON heap. Declare it like any TypeScript type — the compiler emits `_rec_alloc` automatically.
+
+```typescript
+let scores: Record<string, number> = {};
+scores["player1"] = 500;
+scores["player2"] = 300;
+let s: number = scores["player1"];  // 500
+```
+
+Chained access and nested records are also supported:
+
+```typescript
+let nested: Record<string, number> = {};
+// populate via CJson.ToRecord() or direct assignment
+let v: number = nested["key1"];
+```
+
+---
+
+## 🔣 JSON Namespace
+
+`JSON` mirrors JavaScript's built-in JSON global, backed by the `CJson` class.
+
+```typescript
+// Parse a JSON string (from CFile.Read or a literal)
+let doc: CJson = JSON.parse(myString);
+
+// Stringify a CJson node back to a string
+let out: string = JSON.stringify(doc);
+```
+
+`JSON.parse` is an alias for `new CJson(text)`, and `JSON.stringify` is an alias for `obj.Stringify()`.
+
+---
+
 ## 🖼 Full-Precision Rendering
 
 ### `RotateSpriteF`
@@ -179,7 +221,7 @@ TypeCON works with two build stages: **compile** each TypeScript file independen
 ### Step 1 — Compile each file to `.tco`
 
 ```bash
-tcc -c -il templates/AssaultTrooper.ts templates/BattleLord.ts
+tcc -c -il examples/actors/AssaultTrooper.ts examples/actors/BattleLord.ts
 ```
 
 This produces `obj/AssaultTrooper.tco` and `obj/BattleLord.tco`.  
@@ -284,6 +326,106 @@ Any field key listed in `locked[]` is shown in `tcc make config` but cannot be e
 
 ---
 
+## 🧪 CON VM Simulator
+
+TypeCON includes a built-in CON bytecode interpreter (`tcc -S`) that runs compiled `.con` output without EDuke32. It is the backbone of the automated test system.
+
+```bash
+# Compile, link, then simulate
+tcc -c -il examples/tests/math/test_math.ts && tcc -L -di
+tcc -S compiled/EDUKE.CON --test
+
+# Run a specific defstate instead of the full init sequence
+tcc -S compiled/EDUKE.CON --state _myFunction
+
+# Print memory report (stack HWM + heap page accounting)
+tcc -S compiled/EDUKE.CON --mem
+
+# Pre-seed game struct fields before simulation
+tcc -S compiled/EDUKE.CON --set-field-actor "[0]extra=42" --set-field-player "[0]health=100"
+```
+
+### Simulator CLI flags
+
+| Flag | Description |
+|---|---|
+| `-S`, `--sim` | Run the CON VM simulator on the compiled output |
+| `--state NAME` | Run a specific `defstate` instead of the full init sequence |
+| `--no-init` | Skip init events; useful for unit-testing individual states |
+| `--mem` | Print per-phase stack HWM and page-based heap accounting |
+| `--test` | Aggregate `checkEq`/`checkFpEq` results; exit `0`/`1` |
+| `--set-field-actor [I]f=v` | Pre-seed an actor field for simulation |
+| `--set-field-player [I]f=v` | Pre-seed a player field |
+| `--set-field-sector [I]f=v` | Pre-seed a sector field |
+| `--set-field-wall [I]f=v` | Pre-seed a wall field |
+
+---
+
+## 🧬 Debug-Test Framework
+
+Add a `// debug-test` comment to any `CEvent` class or method `Append()` to enable in-place unit testing. The compiler automatically injects `checkEq` / `checkFpEq` counters.
+
+```typescript
+class TestMath extends CEvent {
+    // debug-test
+    Append() {
+        let a: FP16 = 1.5;
+        let b: FP16 = 0.5;
+        checkEq(a + b, 2.0);       // passes: 98304 == 98304
+        checkFpEq(Math.sin(0.25), /* ~0.707 */ 0.707);
+    }
+}
+```
+
+Run with `--test` to get structured output:
+
+```text
+[PASS] TestMath::Append   2/2
+```
+
+---
+
+## 🗂 tcc test Runner
+
+`tcc test <script.json>` is a multi-scenario test harness that compiles, links, simulates, and asserts — all from a single JSON file.
+
+```bash
+tcc test examples/actors/AssaultTrooper.test.json
+```
+
+### Test script format
+
+```json
+{
+  "source": "examples/actors/AssaultTrooper.ts",
+  "scenarios": [
+    {
+      "name": "actor takes damage",
+      "setup": {
+        "actorFields": { "[0]extra": 100, "[0]hp": 200 }
+      },
+      "expect": [
+        { "type": "eq", "target": "actorField", "index": 0, "field": "hp", "value": 150 }
+      ],
+      "defaultInclusion": false,
+      "memTest": true
+    }
+  ]
+}
+```
+
+| Field | Description |
+|---|---|
+| `source` | TypeScript source file to compile |
+| `setup` | Pre-seeds `actorFields`, `playerFields`, `sectorFields`, `wallFields` |
+| `expect` | Assertions after simulation (`eq`/`ne`/`gt`/`lt`/`ge`/`le`) on vars or struct fields |
+| `linePrint` | Emit TS source lines as CON comments |
+| `defaultInclusion` | Include `GAME.CON` at the top of the output |
+| `memTest` | Print memory report for this scenario |
+| `validate` | Run the CON validator on the linked output |
+
+---
+
 ## 🚥 CLI Parameters
 
 ### Project Setup
@@ -319,28 +461,45 @@ Any field key listed in `locked[]` is shown in `tcc make config` but cannot be e
 - **`-np, --no-precompiled`**: Disables automatic linking of pre-compiled system modules.
 - **`-di, --default-inclusion`**: Includes `GAME.CON` at the top of the output.
 - **`-ei, --eduke-init`**: Sets the initialization filename to `EDUKE.CON`.
-- **`-C, --clean`**: Empty the `obj`, `asm`, and `compiled` folders.
+- **`-C, --clean`**: Deletes compiled artifacts (`*.tco`, `*.icc`, `*.con`) from `obj/`, `asm/`, and `compiled/`. Use `-C precompiled` to also clean `precompile/generated/*.con`.
+
+### Simulator & Test Options
+- **`-S, --sim`**: Run the CON VM simulator on the compiled output.
+- **`--state <name>`**: Run a specific `defstate` instead of the full init sequence.
+- **`--no-init`**: Skip init events during simulation.
+- **`--mem`**: Print per-phase stack HWM and heap page accounting.
+- **`--test`**: Aggregate `checkEq`/`checkFpEq` results and exit `0`/`1`.
+- **`--no-validate, -nv`**: Skip the CON validator when running the simulator.
+- **`--set-field-actor/player/sector/wall <[I]field=value>`**: Pre-seed game struct fields before simulation.
+- **`test <script.json>`**: Run a multi-scenario `.test.json` test script (compile + link + simulate + assert).
 
 ---
 
-## 🧪 Templates & Test Files
+## 🧪 Examples & Test Files
 
-TypeCON ships with several templates under `templates/`:
+TypeCON ships with examples under `examples/`:
 
-| File | Description |
+| Path | Description |
 |---|---|
-| `AssaultTrooper.ts` | Full Duke 3D enemy implementation using `CActor`, AI states, and actions. |
-| `BattleLord.ts` | Another actor example — the Battlelord boss. |
-| `test.ts` | General feature test: objects, arrays, native calls, debugging helpers. |
-| `test_fp.ts` | Fixed-point arithmetic test suite — FP16 lerp, `RotateSprite`, viewport math. |
-| `test_math.ts` | `Math` object dispatch tests — trig, rounding, FP conversions, `checkEq`/`checkFpEq`. |
-| `test_anim.ts` | `Anim` object dispatch tests — easing, interpolation, ping-pong, oscillation. |
+| `examples/actors/AssaultTrooper.ts` | Full Duke 3D enemy using `CActor`, AI states, and actions. |
+| `examples/actors/BattleLord.ts` | Battlelord boss actor example. |
+| `examples/tests/general/test.ts` | General feature test: objects, arrays, native calls. |
+| `examples/tests/math/test_fp.ts` | FP arithmetic: FP16 lerp, `RotateSprite`, viewport math. |
+| `examples/tests/math/test_math.ts` | `Math` object tests — trig, rounding, `checkEq`/`checkFpEq`. |
+| `examples/tests/math/test_anim.ts` | `Anim` object tests — easing, interpolation, ping-pong. |
+| `examples/tests/json/test_file_json.ts` | `CFile.Read → CJson` pipeline test (8 assertions). |
+| `examples/tests/json/test_file_json_record.ts` | Nested `Record` access via `CJson.ToRecord()`. |
+| `examples/tests/structs/` | Struct accessor tests — sectors, walls, sprites, players. |
+| `examples/tests/events/` | Event category compilation tests. |
+| `examples/tests/singletons/` | `userdef` and `player` singleton accessor tests. |
 
-Compile any template to verify your setup:
+Compile any example to verify your setup:
 ```bash
-tcc -c -i templates/test_math.ts
-tcc -c -i templates/test_anim.ts
-tcc -c -i templates/test_fp.ts
+tcc -c -il examples/tests/math/test_math.ts && tcc -L -di
+tcc -S compiled/EDUKE.CON --test
+
+tcc -c -il examples/tests/json/test_file_json.ts && tcc -L -di
+tcc -S compiled/EDUKE.CON --test
 ```
 
 ---

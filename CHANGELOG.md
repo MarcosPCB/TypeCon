@@ -1,5 +1,58 @@
 # Changelog
 
+## [v0.8.3]
+
+### Added
+- **CON VM Simulator (`tcc -S`)**: Full CON bytecode interpreter (`src/modules/con-vm/`) with Parser, Interpreter, Memory, and Tables modules. Supports ~50 CON opcodes: arithmetic, array ops, conditionals, while/switch, state calls, string ops (`qputs`/`qstrcpy`/`qsprintf`), `getangle`, `mulscale`/`divscale`, `sqrt`, `sin`/`cos` via Build Engine sintable. Unified `flat[]` memory model with overflow detection and peak tracking.
+  - CLI flags: `-S`/`--sim` (run simulator), `--state NAME` (run specific defstate), `--no-init` (skip init events), `--mem` (print memory report).
+  - `--mem` report shows per-phase stack HWM and page-based heap accounting: Allocated live / Marked to be freed / Free reclaimed.
+  - Game struct fields: `actorFields`, `playerFields`, `sectorFields`, `wallFields` in `VMState` — pre-seeded via `--set-field-actor/player/sector/wall` CLI flags (`[INDEX]field=value` syntax).
+  - `readarrayfromfile` / `writearraytofile` native override in the simulator.
+  - `ifhitweapon` instruction support.
+- **Debug-Test Framework**: A `// debug-test` comment on a `CEvent`/method `Append()` enables in-place pass/fail tracking.
+  - Compiler emits `//// DEBUG-TEST ////` CON marker, `state _testInit`, and per-call `_testCounter` increments.
+  - `checkEq(a, b)` and `checkFpEq(a, b)` calls count total tests and passes; `_testCounter` encodes `(total << 12) | passed`.
+  - `--test` CLI flag: prints `[PASS]/[FAIL]` per function, aggregates totals across all tested defstates, exits `0`/`1`.
+- **`tcc test` runner** (new module: `src/modules/test-runner/`): multi-scenario JSON test runner that compiles, links, simulates, and asserts in one command.
+  - Test script format (`.test.json`): `setup` block pre-seeds struct fields per scenario; `expect` block runs post-simulation assertions (`eq`/`ne`/`gt`/`lt`/`ge`/`le`) on game vars and struct fields.
+  - Supports `linePrint`, `defaultInclusion`, `memTest`, and `validate` fields per script.
+  - Reference scripts: `examples/actors/AssaultTrooper.test.json`, `examples/tests/json/test_json.test.json`.
+- **Native `Record<string, T>` hash map**: Compiler detects `Record<string, T>` type annotations and automatically emits `_rec_alloc` hash-table setup code. Compile-time FNV-1a hashing for string-literal keys. `ESymbolType.record` added; `SymbolDefinition` extended with `record_value_type` and `record_value_fpbits`. Chained access (`r["a"]["b"]`) emits all `_rec_get` calls correctly.
+- **`JSON` namespace alias** (`src/sets/TCSet100/JSON.ts`): mirrors JavaScript's `JSON` global.
+  - `JSON.parse(text)` → `new CJson(text)`
+  - `JSON.stringify(obj)` → `obj.Stringify()`
+- **CFile + CJson integration**: Full `CFile.Read → CJson` pipeline; `CJson.ToRecord()` supports recursive nested object → `Record<string, number>` conversion.
+- **Explicit FP cast functions**: `FP11(x)`, `FP14(x)`, `FP16(x)`, `FP30(x)` — shift int→FP or FP→FP with correct precision. Declared in `types.ts` and handled in `visitCallExpression`.
+- **Float literal auto-scaling**: Float literals with a decimal point (e.g. `90.0`, `2.0`) now scale to the ambient FP precision in all visitors instead of being emitted as raw integers. Literals without FP context default to FP16.
+- **FP→int auto-truncation**: Assignment `x = y` or `let x: number = y` where `y` is an FP value emits `shiftr ra N`; compile-time constant FP identifiers resolved at compile time.
+- **Multi-file compilation context isolation**: Default fresh context per file with import-cache deduplication (no symbol bleed). `-sc` opts into full context sharing; `-sep` remains fully independent per file.
+
+### Changed
+- `templates/` directory renamed to `examples/`.
+- `-C` clean command now deletes only specific file types (`*.tco`, `*.icc`, `*.con`) rather than emptying directories entirely. `-C precompiled` also cleans `precompile/generated/*.con`.
+- `run_tests` scripts renamed to `run-tests` (both `.sh` and `.bat`).
+- `CRecord.ts` removed; superseded by native `Record<string, T>` support.
+- FP precision mismatch errors downgraded to warnings with automatic coercion (`shiftr`/`shiftl`) emitted.
+- `AnimUtils.pingPong`: rewrote with correct all-integer algorithm. `easeInSine`/`easeOutSine`/`easeInOutSine` updated to use explicit FP14↔FP16 casts.
+
+### Fixed
+- **Linker**: `sortDefstates` now places `appendstate`/`prependstate` blocks after all `defstate` definitions, eliminating `WARN_FORWARD_STATE` forward-reference warnings.
+- **Compiler — visitMemberExpression**: array-type class field assignment generated a load instead of a store; chained `Record` access now generates all `_rec_get` calls; `_rec_hash` no longer corrupts `ra` (saves `r2=ra` immediately after `pushr3`).
+- **Compiler — visitLeafOrLiteral**: `new ClassName()` with 0 arguments no longer emits nonexistent `pushr0`/`popr0`.
+- **Compiler — visitCallExpression**: native arg 0 for stack-frame locals now correctly lands in `r0`.
+- **Compiler — visitClassDeclaration / visitMethodDeclaration**: method pre-registration now sets `returns` for forward calls; primitive-returning methods correctly get `returns = ESymbolType.number`.
+- **Compiler — visitVariableDeclaration**: `Record<string, T>` with a non-literal initializer no longer ignores the right-hand side.
+- **Compiler — visitReturnStatement**: class return type corruption fixed — `|=` into an already-set class type no longer produces a mixed bit value (e.g. 257 from 256|1).
+- **Compiler — visitWhileStatement**: tracks `localVarCount` for variables declared inside the loop body; emits `sub rsp N` at loop end to keep the stack stable across iterations.
+- **Compiler — path normalization**: `src/sets/TCSet100/` and `include/TCSet100/` now share one cache key, preventing duplicate imports.
+- **CON VM Parser**: support for old-style `switch…endswitch` (used in `CFile` `CONUnsafe` blocks); `break` inside old-style switch cases no longer exits the event body early; `getarraysize` argument order fixed.
+- **CON VM Interpreter**: `CFile_GetBuffer` native override fixes off-by-one from `BufferToSourceIndex`.
+- **CON VM actorHelper**: `FindLabel` guarded against empty segments after this-shift.
+- **CJson**: `GetBool()`/`GetNumber()` `CONUnsafe` implementations corrected to preserve `rb`; Stringify inner loop uses `r10` as stable `obj_ptr` copy since `ri` is clobbered by the inner hash-query loop.
+- **CJson `ToRecord`**: `Find(k)` now called before the if-else so both branches push equally (stack balance fix); `_rec_alloc` passes block size (not capacity) to `state alloc`.
+- **Game struct properties**: Corrected field list for `CPlayer`, `TSprite`, and `userdef`.
+- **Validator**: float literal detection (`ERROR_FLOAT_LITERAL` when a float appears in raw CON output); `ERROR_ARRAY_ARITH_DST` for arithmetic ops with array-element destinations; forward-reference handling no longer emits false-positive errors for `state` calls to as-yet-undefined `defstate`s.
+
 ## [v0.8.2]
 
 ### Added
@@ -56,7 +109,7 @@
   - New `-m, --module` for explicit module-mode compilation.
   - New `-C, --clean` for project cleanup.
 - **Modern JS Operators**: Added support for **Spread Operator (...)** in object and array literals.
-- **Documentation**: Comprehensive [Technical Architecture](file:///Users/mp/.gemini/antigravity/brain/f8762337-2946-4431-975c-414cacc7a35f/Architecture.md) guide covering memory, strings, and module sets.
+- **Documentation**: Comprehensive [Technical Architecture](Architecture.md) guide covering memory, strings, and module sets.
 
 ### Changed
 - Improved garbage collection efficiency and stack management.

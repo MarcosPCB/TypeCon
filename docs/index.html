@@ -181,6 +181,25 @@
             <li><a href="#math-module">Math Module</a></li>
             <li><a href="#anim-module">AnimUtils Module</a></li>
             <li>
+                <a href="#record-type">Record&lt;string, T&gt;</a>
+            </li>
+            <li>
+                <a href="#cjson">CJson / JSON</a>
+                <ul>
+                    <li><a href="#cjson-layout">Node Layout</a></li>
+                    <li><a href="#cjson-api">API Reference</a></li>
+                    <li><a href="#cjson-json">JSON Alias</a></li>
+                </ul>
+            </li>
+            <li>
+                <a href="#con-vm">CON VM Simulator</a>
+                <ul>
+                    <li><a href="#con-vm-flags">CLI Flags</a></li>
+                </ul>
+            </li>
+            <li><a href="#debug-test">Debug-Test Framework</a></li>
+            <li><a href="#tcc-test">tcc test Runner</a></li>
+            <li>
                 <a href="#make-module">Make Module</a>
                 <ul>
                     <li><a href="#make-subcommands">Subcommands</a></li>
@@ -200,7 +219,7 @@
 
         <div id="introduction" class="section">
             <h2>Introduction</h2>
-            <p><strong>TypeCON Compiler ALPHA Version 0.8.1</strong></p>
+            <p><strong>TypeCON Compiler BETA Version 0.8.3</strong></p>
             <p>Welcome to the TypeScript to Build Engine CON Compiler! This tool leverages the power of TypeScript to
                 simplify the process of creating or modifying Duke Nukem 3D mods and developing games with the Build
                 Engine. By writing TypeScript code, you can produce CON files that adhere to the Build Engine's
@@ -304,7 +323,19 @@
                 <li><code>-np, --no_precompiled</code>: Disables automatic linking of pre-compiled system modules</li>
                 <li><code>-di, --default_inclusion</code>: Includes <code>GAME.CON</code> at the top of the output</li>
                 <li><code>-ei, --eduke_init</code>: Sets the initialization filename to <code>EDUKE.CON</code></li>
-                <li><code>-C, --clean</code>: Empty build folders (obj, asm, compiled) and exit</li>
+                <li><code>-C, --clean</code>: Delete compiled artifacts (<code>*.tco</code>, <code>*.icc</code>, <code>*.con</code>) from <code>obj/</code>, <code>asm/</code>, and <code>compiled/</code>. Use <code>-C precompiled</code> to also clean <code>precompile/generated/</code>.</li>
+            </ul>
+
+            <h4>Simulator &amp; Test Options</h4>
+            <ul>
+                <li><code>-S, --sim</code>: Run the CON VM simulator on the compiled output</li>
+                <li><code>--state &lt;name&gt;</code>: Run a specific <code>defstate</code> instead of the full init sequence</li>
+                <li><code>--no-init</code>: Skip init events during simulation</li>
+                <li><code>--mem</code>: Print per-phase stack HWM and heap page accounting</li>
+                <li><code>--test</code>: Aggregate <code>checkEq</code>/<code>checkFpEq</code> results; exit <code>0</code> (all pass) or <code>1</code> (any fail)</li>
+                <li><code>--no-validate, -nv</code>: Skip the CON validator when running the simulator</li>
+                <li><code>--set-field-actor/player/sector/wall [I]field=value</code>: Pre-seed game struct fields before simulation</li>
+                <li><code>test &lt;script.json&gt;</code>: Run a multi-scenario <code>.test.json</code> test script (compile → link → simulate → assert)</li>
             </ul>
             <p>For a full list of commands, you can also use the <code>--help</code> or <code>-?</code> flag:</p>
             <div class="code">
@@ -324,8 +355,14 @@
                     like <strong>Spread (...)</strong> for objects and arrays.</li>
                 <li><strong>Virtual Machine</strong>: Implements a virtual register machine, stack, and heap with a
                     Mark-and-Sweep Garbage Collector.</li>
-                <li><strong>Separate Compilation & Linking</strong>: Compile individual files to <code>.tco</code>
+                <li><strong>Separate Compilation &amp; Linking</strong>: Compile individual files to <code>.tco</code>
                     (Intermediate) format and link them later, or compile a whole project at once.</li>
+                <li><strong>Fixed-Point Math (FP11 / FP14 / FP16 / FP30)</strong>: First-class fixed-point types with automatic <code>mulscale</code>/<code>divscale</code> code generation, explicit cast functions (<code>FP16(x)</code> etc.), and float-literal auto-scaling.</li>
+                <li><strong>Native <code>Record&lt;string, T&gt;</code> Hash Map</strong>: Compiler-generated hash map backed by the CON heap; supports compile-time key hashing and chained access.</li>
+                <li><strong>JSON Namespace</strong>: <code>JSON.parse(text)</code> and <code>JSON.stringify(obj)</code> backed by the <code>CJson</code> recursive-descent parser.</li>
+                <li><strong>CON VM Simulator</strong>: Built-in bytecode interpreter (<code>tcc -S</code>) for running and unit-testing compiled CON output without EDuke32.</li>
+                <li><strong>Debug-Test Framework</strong>: Mark any event or function with <code>// debug-test</code> to enable <code>checkEq</code>/<code>checkFpEq</code> pass/fail tracking; <code>--test</code> prints structured results.</li>
+                <li><strong><code>tcc test</code> Runner</strong>: JSON-driven multi-scenario test harness with setup/expect blocks and game-struct field assertions.</li>
                 <li><strong>Hand-written CON Integration</strong>: Use <code>CON()</code> and <code>CONUnsafe()</code>
                     for direct engine instruction injection.</li>
             </ul>
@@ -363,20 +400,23 @@
             <h2>Examples</h2>
 
             <p>The following examples demonstrate how to use TypeCON to create game logic. You can find these files in
-                the <code>templates</code> directory of the project.</p>
+                the <code>examples/</code> directory of the project.</p>
 
             <h3>Compiling the Examples</h3>
-            <p>To compile the examples, you can use the <code>tcc</code> command-line tool. For instance, to compile the
-                <code>AssaultTrooper.ts</code> example, you would run the following command:
+            <p>To compile the examples, use the <code>tcc</code> command-line tool. For instance, to compile the
+                <code>AssaultTrooper.ts</code> example:
             </p>
             <div class="code">
-                tcc --input templates/AssaultTrooper.ts --output assault_trooper.con
+                tcc -c -il examples/actors/AssaultTrooper.ts &amp;&amp; tcc -L -di
             </div>
-            <p>This will create the <code>assault_trooper.con</code> file in the <code>compiled</code> folder, which is
-                the default output directory.</p>
-            <p>Similarly, to compile the <code>test.ts</code> example, you would run:</p>
+            <p>This produces <code>compiled/EDUKE.CON</code>. To also run it through the simulator and verify tests:</p>
             <div class="code">
-                tcc --input templates/test.ts --output test.con
+                tcc -S compiled/EDUKE.CON --test
+            </div>
+            <p>To compile and test a math test file:</p>
+            <div class="code">
+                tcc -c -il examples/tests/math/test_math.ts &amp;&amp; tcc -L -di
+                tcc -S compiled/EDUKE.CON --test
             </div>
 
             <details>
@@ -1649,10 +1689,39 @@ class displayRest extends CEvent {
                     <td>String Stack pointer register. Holds the current string stack value.</td>
                 </tr>
                 <tr>
-                    <td>rbsp</td>
-                    <td>CON_NATIVE_GAMEVAR<'rbsp', number>
-                    </td>
-                    <td>String Base pointer register. Hold the base of the current string stack.</td>
+                    <td>rsbp</td>
+                    <td>CON_NATIVE_GAMEVAR&lt;'rsbp', number&gt;</td>
+                    <td>String Base pointer register. Holds the base of the current string (quote) stack frame.</td>
+                </tr>
+                <tr>
+                    <td>rbbp</td>
+                    <td>CON_NATIVE_GAMEVAR&lt;'rbbp', number&gt;</td>
+                    <td>Block Base Pointer. Set to <code>rbp+1</code> at entry to every <code>actor</code>/<code>useractor</code>/<code>onevent</code>/<code>appendevent</code> block. Used by the <code>break</code> epilogue to unwind back to the outermost frame.</td>
+                </tr>
+                <tr>
+                    <td>rds</td>
+                    <td>CON_NATIVE_GAMEVAR&lt;'rds', number&gt;</td>
+                    <td>Segmentation register. Initialised to <code>stackSize</code>; marks the boundary between the stack/global region and the heap.</td>
+                </tr>
+                <tr>
+                    <td>rfx0</td>
+                    <td>CON_NATIVE_GAMEVAR&lt;'rfx0', number&gt;</td>
+                    <td>Fixed-point scratch register 0. Reserved for pre-compiled <code>defstate</code> modules (e.g. <code>_stringFuncs</code>, <code>_convertFP2String</code>). Do not use in user code.</td>
+                </tr>
+                <tr>
+                    <td>rfx1</td>
+                    <td>CON_NATIVE_GAMEVAR&lt;'rfx1', number&gt;</td>
+                    <td>Fixed-point scratch register 1. Reserved for pre-compiled modules.</td>
+                </tr>
+                <tr>
+                    <td>rfx2</td>
+                    <td>CON_NATIVE_GAMEVAR&lt;'rfx2', number&gt;</td>
+                    <td>Fixed-point scratch register 2. Reserved for pre-compiled modules.</td>
+                </tr>
+                <tr>
+                    <td>rfx3</td>
+                    <td>CON_NATIVE_GAMEVAR&lt;'rfx3', number&gt;</td>
+                    <td>Fixed-point scratch register 3. Reserved for pre-compiled modules.</td>
                 </tr>
             </table>
             <h4>Methods</h4>
@@ -3853,7 +3922,22 @@ class displayRest extends CEvent {
                 <tr><td><code>let a: FP16 = b * c</code> (b=FP16, c=int)</td><td><code>mul rd rhs</code> (scale preserved)</td></tr>
                 <tr><td><code>let a: number = b * c</code> (both int)</td><td><code>mul rd rhs</code></td></tr>
             </table>
-            <p>Mixing two different FP precisions in the same expression (e.g. <code>FP16 * FP11</code>) raises a compile-time error. Use explicit conversion helpers to cross between precisions.</p>
+            <p>Mixing two different FP precisions in the same expression (e.g. <code>FP16 * FP11</code>) raises a compile-time warning and the compiler emits an automatic coercion (<code>shiftr</code>/<code>shiftl</code>). Use explicit cast functions to cross precisions intentionally.</p>
+
+            <h3>Float Literal Auto-Scaling</h3>
+            <p>Float literals with a decimal point (e.g. <code>0.5</code>, <code>90.0</code>) are automatically scaled to the ambient FP precision of the surrounding expression. When there is no FP context, they default to FP16.</p>
+            <div class="code">let angle: FP11 = 0.25;   // → 512 raw (quarter turn)
+let x: FP16 = 0.5;        // → 32768 raw (half screen)</div>
+
+            <h3>Explicit Cast Functions</h3>
+            <p>Use these to convert between integer and FP types explicitly:</p>
+            <table>
+                <tr><th>Function</th><th>Description</th></tr>
+                <tr><td><code>FP11(x)</code></td><td>Shift integer left 11 bits (int → FP11), or adjust shift if x is already FP</td></tr>
+                <tr><td><code>FP14(x)</code></td><td>Shift integer left 14 bits (int → FP14)</td></tr>
+                <tr><td><code>FP16(x)</code></td><td>Shift integer left 16 bits (int → FP16)</td></tr>
+                <tr><td><code>FP30(x)</code></td><td>Shift integer left 30 bits (int → FP30)</td></tr>
+            </table>
 
             <h3>Conversion Helpers</h3>
             <table>
@@ -4030,6 +4114,7 @@ class displayRest extends CEvent {
             <p>In <code>tcc make config</code>, modules are shown as a folder-grouped checkbox list. Files with <code>required: true</code> appear as disabled entries (always checked). When <code>"modules"</code> is in <code>locked[]</code>, only the enable/disable checkbox is shown — the required-status step is skipped.</p>
 
             <h3 id="make-locks">Lock System</h3>
+
             <p>Add any field key to the <code>locked[]</code> array to prevent it from being changed in <code>tcc make config</code>. Locked fields are still displayed alongside their current value so the team can see the setting, but the prompt is skipped.</p>
             <table>
                 <tr><th>Lockable key</th><th>What it protects</th></tr>
@@ -4046,6 +4131,205 @@ class displayRest extends CEvent {
                 <tr><td><code>validate.baseDirs</code></td><td>Validator include directories</td></tr>
                 <tr><td><code>modules</code></td><td>Required module status (only enable/disable available when locked)</td></tr>
                 <tr><td><code>locked</code></td><td>The lock list itself — when present, the lock management UI is hidden in <code>tcc make config</code></td></tr>
+            </table>
+        </div>
+
+        <div id="record-type" class="section">
+            <h2>Record&lt;string, T&gt;</h2>
+            <p><code>Record&lt;string, T&gt;</code> is a compiler-native hash map backed by the <code>_recFuncs</code> pre-compiled module. Declare it like any TypeScript type — the compiler emits <code>_rec_alloc</code> automatically and hashes string literal keys at compile time.</p>
+
+            <h3>Heap Block Layout</h3>
+            <table>
+                <tr><th>Offset</th><th>Description</th></tr>
+                <tr><td><code>ptr + 0</code></td><td>Capacity (power of 2; default 16)</td></tr>
+                <tr><td><code>ptr + 1</code></td><td>Live entry count</td></tr>
+                <tr><td><code>ptr + 2 + i*2 + 0</code></td><td>Hash of entry i (0 = empty; −1 = tombstone)</td></tr>
+                <tr><td><code>ptr + 2 + i*2 + 1</code></td><td>Value of entry i</td></tr>
+            </table>
+            <p>Collisions are resolved by linear probing. The table auto-doubles (<code>_rec_resize</code>) when <code>count &gt; capacity × 75%</code>.</p>
+
+            <h3>Runtime Defstates</h3>
+            <table>
+                <tr><th>Defstate</th><th>Convention</th><th>Description</th></tr>
+                <tr><td><code>_rec_alloc</code></td><td><code>r0</code>=capacity (0→16) → <code>rb</code>=ptr</td><td>Allocates a new hash-table block.</td></tr>
+                <tr><td><code>_rec_hash</code></td><td><code>r0</code>=key_str_ptr → <code>rb</code>=hash</td><td>FNV-1a 32-bit hash; 0 remapped to 1.</td></tr>
+                <tr><td><code>_rec_get</code></td><td><code>r0</code>=hash, <code>r1</code>=rec_ptr → <code>rb</code>=val, <code>rc</code>=found</td><td>Linear-probe lookup.</td></tr>
+                <tr><td><code>_rec_set</code></td><td><code>r0</code>=hash, <code>r1</code>=rec_ptr, <code>r2</code>=val</td><td>Insert or update; resizes at 75% load.</td></tr>
+                <tr><td><code>_rec_del</code></td><td><code>r0</code>=hash, <code>r1</code>=rec_ptr</td><td>Tombstone the slot; decrements count.</td></tr>
+                <tr><td><code>_rec_free</code></td><td><code>r0</code>=rec_ptr</td><td>Free the block.</td></tr>
+            </table>
+
+            <h3>Usage</h3>
+            <div class="code"><pre>let scores: Record&lt;string, number&gt; = {};   // → state _rec_alloc
+scores["alice"] = 1000;                     // literal key → compile-time FNV hash
+scores["bob"]   = 750;
+let n: number   = scores["alice"];          // → state _rec_get; set n rb
+
+// Nested record from JSON
+let data: Record&lt;string, any&gt; = JSON.parse(text).ToRecord();
+let hp: number = data["hp"];</pre></div>
+        </div>
+
+        <div id="cjson" class="section">
+            <h2>CJson / JSON</h2>
+            <p><code>CJson</code> is a full recursive-descent JSON parser written in TypeScript/TypeCON that runs entirely in the CON VM. Each instance represents one parsed node. The <code>JSON</code> alias provides the familiar <code>JSON.parse</code> / <code>JSON.stringify</code> interface.</p>
+
+            <h3 id="cjson-layout">Node Layout (5 words in heap)</h3>
+            <table>
+                <tr><th>Offset</th><th>Field</th><th>Description</th></tr>
+                <tr><td>+0</td><td><code>_src</code></td><td>Pointer to the source heap string being parsed</td></tr>
+                <tr><td>+1</td><td><code>_pos</code></td><td>Current parse cursor (character index into <code>_src</code>)</td></tr>
+                <tr><td>+2</td><td><code>_type</code></td><td><code>CJsonType</code> tag of this node</td></tr>
+                <tr><td>+3</td><td><code>_val</code></td><td>Raw value — integer, FP16 raw, heap-string ptr, or block ptr</td></tr>
+                <tr><td>+4</td><td><code>_owned</code></td><td>1 = owns data (call <code>Free()</code>); 0 = view (do not free)</td></tr>
+            </table>
+
+            <h3>CJsonType Enum</h3>
+            <table>
+                <tr><th>Value</th><th>Name</th><th><code>_val</code> meaning</th></tr>
+                <tr><td>0</td><td><code>Null</code></td><td>0</td></tr>
+                <tr><td>1</td><td><code>Bool</code></td><td>0 or 1</td></tr>
+                <tr><td>2</td><td><code>Int</code></td><td>raw 32-bit integer</td></tr>
+                <tr><td>3</td><td><code>FP16</code></td><td>fixed-point value (65536 = 1.0)</td></tr>
+                <tr><td>4</td><td><code>String</code></td><td>pointer to heap string</td></tr>
+                <tr><td>5</td><td><code>Array</code></td><td>pointer to array block</td></tr>
+                <tr><td>6</td><td><code>Object</code></td><td>pointer to object block</td></tr>
+            </table>
+
+            <h3 id="cjson-api">API Reference</h3>
+            <table>
+                <tr><th>Method</th><th>Returns</th><th>Description</th></tr>
+                <tr><td><code>constructor(json: string)</code></td><td>CJson</td><td>Parse the JSON text immediately. Pass an empty string for a null node.</td></tr>
+                <tr><td><code>GetType()</code></td><td>number</td><td>Return the <code>CJsonType</code> tag of this node.</td></tr>
+                <tr><td><code>IsNull()</code></td><td>boolean</td><td>True if <code>_type == Null</code>.</td></tr>
+                <tr><td><code>GetBool()</code></td><td>boolean</td><td>Return <code>_val != 0</code>.</td></tr>
+                <tr><td><code>GetInt()</code></td><td>number</td><td>Return integer value; auto-converts FP16 → int.</td></tr>
+                <tr><td><code>GetNumber()</code></td><td>FP16</td><td>Return FP16 value; auto-converts int → FP16.</td></tr>
+                <tr><td><code>GetString()</code></td><td>string</td><td>Return heap string pointer.</td></tr>
+                <tr><td><code>GetLength()</code></td><td>number</td><td>Element count for arrays/objects.</td></tr>
+                <tr><td><code>GetItem(i)</code></td><td>CJson</td><td>View node for array element <code>i</code>. Do <strong>not</strong> call <code>Free()</code>.</td></tr>
+                <tr><td><code>Find(key)</code></td><td>CJson</td><td>FNV-1a key lookup on object block. Returns Null node if not found. Do <strong>not</strong> call <code>Free()</code>.</td></tr>
+                <tr><td><code>GetKey(i)</code></td><td>string</td><td>Key string at object index <code>i</code>.</td></tr>
+                <tr><td><code>Stringify()</code></td><td>string</td><td>Recursive serialisation back to compact JSON.</td></tr>
+                <tr><td><code>ToRecord()</code></td><td>Record&lt;string, any&gt;</td><td>Convert an Object node to a native <code>Record</code>; recursively nests child objects.</td></tr>
+                <tr><td><code>Free()</code></td><td>void</td><td>Recursively free all owned heap blocks. Only call on owned nodes (<code>_owned == 1</code>).</td></tr>
+            </table>
+
+            <h3 id="cjson-json">JSON Namespace Alias</h3>
+            <p>Import <code>TCSet100/JSON</code> to use the standard JavaScript names:</p>
+            <div class="code"><pre>import 'include/TCSet100/JSON';
+
+const doc: CJson = JSON.parse(fileContent);   // → new CJson(fileContent)
+const out: string = JSON.stringify(doc);       // → doc.Stringify()
+
+const scores: Record&lt;string, number&gt; = JSON.parse(data).ToRecord();
+const hp: number = scores["hp"];</pre></div>
+        </div>
+
+        <div id="con-vm" class="section">
+            <h2>CON VM Simulator</h2>
+            <p>TypeCON includes a built-in CON bytecode interpreter (<code>tcc -S</code>) that runs compiled <code>.con</code> output without EDuke32. It is the backbone of the automated test system and supports ~50 CON opcodes including arithmetic, array ops, string ops, <code>while</code>/<code>switch</code>, <code>state</code> calls, <code>mulscale</code>/<code>divscale</code>, <code>sqrt</code>, <code>sin</code>/<code>cos</code>, and file I/O.</p>
+
+            <h3 id="con-vm-flags">Simulator CLI Flags</h3>
+            <table>
+                <tr><th>Flag</th><th>Description</th></tr>
+                <tr><td><code>-S</code>, <code>--sim</code></td><td>Run the CON VM simulator on the compiled output</td></tr>
+                <tr><td><code>--state NAME</code></td><td>Run a specific <code>defstate</code> instead of the full init sequence</td></tr>
+                <tr><td><code>--no-init</code></td><td>Skip init events; useful for unit-testing individual states</td></tr>
+                <tr><td><code>--mem</code></td><td>Print per-phase stack HWM and page-based heap accounting (Allocated live / Marked to be freed / Free reclaimed)</td></tr>
+                <tr><td><code>--test</code></td><td>Aggregate <code>checkEq</code>/<code>checkFpEq</code> results; exit <code>0</code>/<code>1</code></td></tr>
+                <tr><td><code>--set-field-actor [I]f=v</code></td><td>Pre-seed an actor struct field before simulation</td></tr>
+                <tr><td><code>--set-field-player [I]f=v</code></td><td>Pre-seed a player struct field</td></tr>
+                <tr><td><code>--set-field-sector [I]f=v</code></td><td>Pre-seed a sector struct field</td></tr>
+                <tr><td><code>--set-field-wall [I]f=v</code></td><td>Pre-seed a wall struct field</td></tr>
+            </table>
+
+            <h3>Example</h3>
+            <div class="code"><pre>tcc -c -il examples/tests/math/test_math.ts &amp;&amp; tcc -L -di
+tcc -S compiled/EDUKE.CON --test --mem
+
+# Run a specific defstate only
+tcc -S compiled/EDUKE.CON --state _myFunction --no-init
+
+# Pre-seed actor fields
+tcc -S compiled/EDUKE.CON --set-field-actor "[0]extra=42" --set-field-player "[0]health=100"</pre></div>
+        </div>
+
+        <div id="debug-test" class="section">
+            <h2>Debug-Test Framework</h2>
+            <p>Add a <code>// debug-test</code> comment to any <code>CEvent</code> class or <code>Append()</code> method body to enable in-place pass/fail unit testing. No separate test file needed — tests live inline with game logic.</p>
+
+            <h3>How it works</h3>
+            <ol>
+                <li>The compiler detects the <code>// debug-test</code> comment and emits a <code>//// DEBUG-TEST ////</code> CON marker, <code>state _testInit</code>, and <code>set rb _testCounter</code> at the top of the block.</li>
+                <li>Every <code>checkEq(a, b)</code> or <code>checkFpEq(a, b)</code> call site gets two injected instructions: <code>add _testCounter 4096</code> (increment total) and, if <code>a == b</code>, <code>add _testCounter 1</code> (increment pass).</li>
+                <li>After simulation <code>--test</code> decodes <code>_testCounter</code> as <code>total = counter &gt;&gt; 12</code>, <code>passed = counter &amp; 0xFFF</code> and prints per-function results.</li>
+            </ol>
+
+            <h3>Usage</h3>
+            <div class="code"><pre>class TestMath extends CEvent {
+    // debug-test
+    Append() {
+        let a: FP16 = 1.5;
+        let b: FP16 = 0.5;
+        checkEq(a + b, 2.0);            // passes
+        checkFpEq(Math.sin(0.25), 0.707);
+    }
+}</pre></div>
+
+            <h3>Output</h3>
+            <div class="code"><pre>tcc -S compiled/EDUKE.CON --test
+
+[PASS] TestMath::Append   2/2
+Result: 2/2 passed</pre></div>
+            <p>Exit code is <code>0</code> if all tests pass, <code>1</code> if any fail — compatible with CI pipelines and <code>run-tests.sh</code> / <code>run-tests.bat</code>.</p>
+        </div>
+
+        <div id="tcc-test" class="section">
+            <h2>tcc test Runner</h2>
+            <p><code>tcc test &lt;script.json&gt;</code> is a multi-scenario test harness that compiles, links, simulates, and asserts — all from a single JSON file. Each scenario can pre-seed game struct fields and assert on vars or struct fields after simulation.</p>
+
+            <h3>Test Script Format</h3>
+            <div class="code"><pre>{
+  "source": "examples/tests/math/test_math.ts",
+  "scenarios": [
+    {
+      "name": "basic math",
+      "setup": {
+        "actorFields":  { "[0]extra": 42 },
+        "playerFields": { "[0]health": 100 }
+      },
+      "expect": [
+        { "type": "eq", "target": "var",        "name":  "_testCounter", "value": 8196 },
+        { "type": "eq", "target": "actorField", "index": 0, "field": "extra", "value": 42 }
+      ],
+      "defaultInclusion": false,
+      "memTest": true,
+      "validate": true
+    }
+  ]
+}</pre></div>
+
+            <h3>Assertion Types</h3>
+            <table>
+                <tr><th>type</th><th>Operators</th><th>target options</th></tr>
+                <tr><td><code>eq</code> / <code>ne</code></td><td>exact / not-equal</td><td><code>var</code>, <code>actorField</code>, <code>playerField</code>, <code>sectorField</code>, <code>wallField</code></td></tr>
+                <tr><td><code>gt</code> / <code>lt</code> / <code>ge</code> / <code>le</code></td><td>numeric comparison</td><td>same</td></tr>
+            </table>
+
+            <h3>Script Fields</h3>
+            <table>
+                <tr><th>Field</th><th>Description</th></tr>
+                <tr><td><code>source</code></td><td>TypeScript source file to compile</td></tr>
+                <tr><td><code>setup.actorFields</code></td><td>Pre-seed actor struct fields as <code>"[INDEX]field": value</code></td></tr>
+                <tr><td><code>setup.playerFields</code></td><td>Pre-seed player struct fields</td></tr>
+                <tr><td><code>setup.sectorFields</code></td><td>Pre-seed sector struct fields</td></tr>
+                <tr><td><code>setup.wallFields</code></td><td>Pre-seed wall struct fields</td></tr>
+                <tr><td><code>expect[]</code></td><td>Post-simulation assertions</td></tr>
+                <tr><td><code>linePrint</code></td><td>Emit TS source lines as CON comments</td></tr>
+                <tr><td><code>defaultInclusion</code></td><td>Include <code>GAME.CON</code> at the top of the output</td></tr>
+                <tr><td><code>memTest</code></td><td>Print memory report for this scenario</td></tr>
+                <tr><td><code>validate</code></td><td>Run the CON validator on the linked output</td></tr>
             </table>
         </div>
 

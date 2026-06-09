@@ -28,7 +28,6 @@
 ## Examples for each extra module
  - Example for AnimUtils
  - Example for CFile
- - Test with JSON and CFile
 
 ## Finish New Weapon System
 

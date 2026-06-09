@@ -5,23 +5,56 @@ This document explains the inner workings of the TypeCON compiler, how it manage
 ---
 
 ## 1. Registers
-TypeCON implements a virtual register machine on top of CON. These are defined as `gamevar` (global variables with flag `132096` to allow per-player/actor context where needed, though mainly used as globals for parameters).
+TypeCON implements a virtual register machine on top of CON. All registers are declared as `gamevar` with flag `132096` (per-player/actor context where needed, though used mainly as globals).
+
+### General-purpose and expression registers
 
 | Register | Name | Purpose |
 | :--- | :--- | :--- |
-| `r0` - `r23` | General Purpose | Used primarily for passing function parameters. |
-| `ra` | Accumulator | Holds the result of the last expression/operation. |
-| `rb` | Base / Return | Used for function return values and base addresses. |
-| `rc` | Counter | Used in loops and internal iteration. |
-| `rd` | Data | Temporary data holder for operations. |
-| `ri` | Index | Used specifically for array/memory indexing in the `flat` array. |
-| `rsi` | Source Index | Special identifier for dispatching Subfunctions and indexing native arrays. |
-| `rsw`, `rswc`, `rswe` | Switch Control | Condition holder, counter, and clause enabler for switches. |
-| `rf` | Flags | Stores state flags (e.g., bit 0 for heap address return). |
-| `rbp` | Base Pointer | Points to the start of the current function's stack frame. |
-| `rsp` | Stack Pointer | Points to the top of the stack in the `flat` memory. |
-| `rsbp` | String Base | Base pointer for the string (quote) stack. |
-| `rssp` | String Stack | Current top pointer for the string (quote) stack. |
+| `r0` – `r23` | General Purpose | Function parameters (`r0`–`r23`); inner loops and pre-compiled defstates also use `r4`–`r10` as scratch. |
+| `ra` | Accumulator | Result of the last expression or operation. Every `CONUnsafe` epilogue does `set rb ra`, so `ra` must hold the intended return value at the end of any inline block. |
+| `rb` | Base / Return | Function return values and heap allocation results (`state alloc` returns address in `rb`). |
+| `rc` | Counter | Loop iteration counters and internal uses. |
+| `rd` | Data | Scratch for binary operations; also used as a pointer offset accumulator. |
+| `ri` | Index | `flat` array index — loaded before any `flat[ri]` access. |
+| `rsi` | Source Index | Subfunction dispatch and native-array indexing. |
+
+### Control-flow registers
+
+| Register | Name | Purpose |
+| :--- | :--- | :--- |
+| `rsw` | Switch Value | Holds the switch expression value during two-pass switch execution. |
+| `rswc` | Switch Counter | Tracks which pass of the two-pass switch is running. |
+| `rswe` | Switch Enable | Enables or disables individual case clauses during the second pass. |
+| `rf` | Flags | Bit-field of runtime state (e.g. bit 0 = heap address return mode). |
+
+### Stack and frame registers
+
+| Register | Name | Purpose |
+| :--- | :--- | :--- |
+| `rbp` | Base Pointer | Start of the current function's stack frame inside `flat[]`. |
+| `rsp` | Stack Pointer | Top of the stack; initialized to `globalStaticSize - 1` so local frames start above the global segment. |
+| `rbbp` | Block Base Pointer | Set to `rbp + 1` at entry to every `actor`/`useractor`/`onevent`/`appendevent` block. Used by the actor `break` epilogue to unwind the stack to the outermost frame (not just the innermost function frame). |
+| `rds` | Segmentation | Initialized to `stackSize`; marks the boundary between the stack/global region and the heap. |
+
+### String stack registers
+
+| Register | Name | Purpose |
+| :--- | :--- | :--- |
+| `rsbp` | String Base Pointer | Base of the current quote-string stack frame (initialized to quote index 1024). |
+| `rssp` | String Stack Pointer | Top of the quote-string stack (initialized to 1023; quotes 1022–1023 are scratch). |
+
+### Fixed-point scratch registers
+
+| Register | Name | Purpose |
+| :--- | :--- | :--- |
+| `rfx0` – `rfx3` | FP Scratch | Fast temporaries reserved for pre-compiled `defstate` modules (`_stringFuncs`, `_convertFP2String`, etc.). Compiler-generated code does not emit these; they exist to give the pre-compiled CON blocks stable scratch space that won't be clobbered by a surrounding `state` call. |
+
+### Test counter
+
+| Register | Name | Purpose |
+| :--- | :--- | :--- |
+| `_testCounter` | Test Counter | Initialized to `-1` (disabled). When `// debug-test` mode is active, `_testInit` sets it to `0`. Encoded as `(total_count << 12) \| pass_count`; decoded after simulation by `--test`. |
 
 ---
 
@@ -282,3 +315,296 @@ fp16FromString(s)   // parse "1.5000" back to FP16
 
 Use `mulscale(a, b, shift)` and `divscale(a, b, shift)` for manual cross-precision math
 when the automatic path is insufficient.
+
+### Explicit cast functions
+
+`FP11(x)`, `FP14(x)`, `FP16(x)`, `FP30(x)` are compiler-recognised call expressions that
+emit a precision-aware shift:
+
+```typescript
+let angle: FP11 = FP11(90);    // emits: shiftl ra 11  (int → FP11)
+let v: FP16 = FP16(someInt);   // emits: shiftl ra 16  (int → FP16)
+```
+
+A cast from one FP type to another emits the appropriate `shiftr`/`shiftl` difference.
+
+### Float literal auto-scaling
+
+Float literals with a decimal point (e.g. `0.5`, `90.0`) are now scaled to the ambient
+FP precision of the surrounding expression rather than being emitted as raw integers.
+When no FP context is present, they default to FP16.
+
+---
+
+## 14. Native `Record<string, T>`
+
+`Record<string, T>` is a compiler-native hash map backed by the `_recFuncs` pre-compiled
+module (`src/sets/TCSet100/precompile/src/_recFuncs.ts`). It lives on the CON heap.
+
+### Heap block layout
+
+```
+flat[ptr + 0]            = capacity  (power-of-2; default 16)
+flat[ptr + 1]            = count     (live entries)
+flat[ptr + 2 + i*2 + 0] = hash      (0 = empty slot; -1 = tombstone)
+flat[ptr + 2 + i*2 + 1] = value
+```
+
+Collisions are resolved by linear probing with wrap-around.
+The table auto-doubles (`_rec_resize`) when `count > capacity * 3 / 4`.
+
+### Runtime defstates
+
+| Defstate | Convention | Description |
+|---|---|---|
+| `_rec_alloc` | `r0`=capacity (0→16) → `rb`=ptr | Allocates a new hash-table block (`2 + capacity*2` words). |
+| `_rec_hash` | `r0`=key_str_ptr → `rb`=hash | FNV-1a 32-bit hash of a heap string; 0 remapped to 1. |
+| `_rec_get` | `r0`=hash, `r1`=rec_ptr → `rb`=val, `rc`=found | Linear-probe lookup; returns `rc=0` if not found. |
+| `_rec_set` | `r0`=hash, `r1`=rec_ptr, `r2`=val | Insert or update; triggers resize at 75% load. |
+| `_rec_del` | `r0`=hash, `r1`=rec_ptr | Tombstones the slot (`hash=-1`, val=0); decrements count. |
+| `_rec_free` | `r0`=rec_ptr | Frees the block. |
+
+### Compile-time behaviour
+
+When the compiler sees `Record<string, T>` in a type annotation it:
+1. Tags the symbol with `ESymbolType.record` and records `record_value_type` / `record_value_fpbits`.
+2. Emits `state _rec_alloc` for the empty-literal initializer (`{}`).
+3. **String-literal key** (`r["score"]`): computes FNV-1a **at compile time** and emits the
+   integer hash constant directly — zero runtime hashing cost for literal keys.
+4. **Runtime key** (variable or expression): emits `state _rec_hash` before the lookup or store.
+5. **Chained access** (`r["a"]["b"]`): recursively emits all `_rec_get` calls in order.
+6. **Write** (`r["k"] = v`): emits `state _rec_set` with the hash in `r0`, the record ptr in `r1`,
+   and the value in `r2`.
+
+### Usage
+
+```typescript
+let scores: Record<string, number> = {};    // → state _rec_alloc; set scores rb
+scores["alice"] = 1000;                     // → set r0 <fnv("alice")>; set r1 scores; set r2 1000; state _rec_set
+scores["bob"]   = 750;
+let n: number   = scores["alice"];          // → set r0 <fnv("alice")>; set r1 scores; state _rec_get; set n rb
+
+// Delete an entry
+// (emit _rec_del manually via CONUnsafe, or let GC collect the whole block)
+
+// Nested record (from JSON)
+let data: Record<string, any> = JSON.parse(text).ToRecord();
+let hp: number = data["hp"];
+```
+
+---
+
+## 15. CJson — Recursive-Descent JSON Parser
+
+`CJson` (`src/sets/TCSet100/CJson.ts`) is a full JSON parser written in TypeScript/TypeCON that runs entirely in the CON VM. It parses a heap-allocated string into a tree of typed nodes, each backed by a compact block in `flat[]`.
+
+### Instance layout (heap object, 5 words)
+
+| Offset | Field | Description |
+|---|---|---|
+| `+0` | `_src` | Pointer to the source heap string being parsed |
+| `+1` | `_pos` | Current parse cursor (character index into `_src`) |
+| `+2` | `_type` | `CJsonType` tag (see below) |
+| `+3` | `_val` | Raw value — int, FP16 raw, heap-string ptr, or block ptr |
+| `+4` | `_owned` | 1 = this instance owns its data (must call `Free()`); 0 = view |
+
+### `CJsonType` enum
+
+| Value | Name | `_val` meaning |
+|---|---|---|
+| `0` | `Null` | `0` |
+| `1` | `Bool` | `0` or `1` |
+| `2` | `Int` | raw 32-bit integer |
+| `3` | `FP16` | fixed-point value (65536 = 1.0) |
+| `4` | `String` | pointer to heap string |
+| `5` | `Array` | pointer to array block |
+| `6` | `Object` | pointer to object block |
+
+### Array block layout
+
+```
+flat[arr + 0]           = element count N
+flat[arr + 1 + i*2 + 0] = type  of element i  (CJsonType)
+flat[arr + 1 + i*2 + 1] = value of element i
+```
+
+Initial allocation: `1 + 16*2 = 33` words.
+
+### Object block layout
+
+```
+flat[obj + 0]           = key count N
+flat[obj + 1 + i*3 + 0] = key string pointer
+flat[obj + 1 + i*3 + 1] = value type  (CJsonType)
+flat[obj + 1 + i*3 + 2] = value
+```
+
+Initial allocation: `1 + 16*3 = 49` words.
+
+### Parser flow
+
+`new CJson(text)` calls `_parseValue()` which dispatches on the first non-whitespace character:
+
+| First char | Action |
+|---|---|
+| `{` | `_parseObject()` — allocates object block, loops over `"key": value` pairs |
+| `[` | `_parseArray()` — allocates array block, loops over values |
+| `"` | `_parseString()` — copies the slice into a fresh heap string |
+| `t` / `f` | sets `_type=Bool`, advances `_pos` by 4 or 5 |
+| `n` | sets `_type=Null`, advances 4 |
+| `-` or `0-9` | `_parseNumber()` — integer or FP16 (via `_stringToFP16` for decimals) |
+
+**Key invariant:** `_type` and `_val` on `this` are overwritten by recursive child parses.
+The private `_parseArray` and `_parseObject` methods save `arrPtr`/`objPtr` to a local before
+recursing, and restore `_type`/`_val` afterwards.
+
+### Navigation API
+
+| Method | Returns | Notes |
+|---|---|---|
+| `GetType()` | `CJsonType` | Tag of this node |
+| `IsNull()` | `bool` | True if `_type == 0` |
+| `GetBool()` | `bool` | Reads `_val != 0`; uses `CONUnsafe` to bypass TS bool restriction |
+| `GetInt()` | `number` | Returns `_val`; auto-converts FP16 → int via `fp16ToInt` |
+| `GetNumber()` | `FP16` | Returns `_val`; auto-converts int → FP16 via `intToFP16` |
+| `GetString()` | `string` | Heap string pointer cast |
+| `GetLength()` | `number` | Element count from array/object block header |
+| `GetItem(i)` | `CJson` | View node for array element `i`; do **not** `Free()` it |
+| `Find(key)` | `CJson` | FNV-1a key lookup on object block; returns `Null` node if missing; do **not** `Free()` it |
+| `GetKey(i)` | `string` | Key string at object index `i` |
+| `Stringify()` | `string` | Recursive serialisation back to compact JSON |
+| `ToRecord()` | `Record<string, any>` | Converts an Object node to a native `Record`; recursively nests child objects |
+| `Free()` | — | Recursively frees all owned heap blocks |
+
+### `Find()` — key lookup detail
+
+`Find(key)` hashes the query string with FNV-1a, restores `obj_ptr` from `this._val`,
+then scans the object block entries, hashing each stored key in turn. When a hash matches
+it reads the type and value and allocates a 5-word **view** block (`_owned=0`). Because
+`ri` is clobbered by the inner per-entry hash loop, a stable copy of `obj_ptr` is kept in
+`r10` for the outer loop.
+
+### `ToRecord()` — stack balance requirement
+
+The TypeCON compiler emits a single `sub rsp N` after an if-else to clean up all locals
+declared in either branch. If the two branches allocate a different number of locals the
+cleanup count is wrong and the stack pointer gets corrupted. `ToRecord()` calls `Find(k)`
+**before** the `if (GetTypeAt(i) == Object)` branch so both branches see the same `child`
+local on the stack — equal `N` in both, preserving the invariant.
+
+### `JSON` alias
+
+`src/sets/TCSet100/JSON.ts` exposes the standard JavaScript names:
+
+```typescript
+JSON.parse(text)        // → new CJson(text)
+JSON.stringify(node)    // → node.Stringify()
+```
+
+---
+
+## 16. CON VM Simulator
+
+The CON VM simulator (`src/modules/con-vm/`) is a full CON bytecode interpreter that can
+run compiled `.con` output entirely within the TypeCON process — no EDuke32 binary needed.
+
+### Module structure
+
+| File | Role |
+|---|---|
+| `Parser.ts` | Tokenises and parses CON source into an AST/instruction list |
+| `Interpreter.ts` | Executes instructions; manages registers, call stack, and game-struct state |
+| `Memory.ts` | `flat[]` model with overflow detection, peak-water-mark tracking, and page-based heap accounting |
+| `Tables.ts` | Build Engine tables: sintable (for `sin`/`cos`), `getangle` lookup |
+| `Types.ts` | Shared types: `VMState`, `VMRunResult`, `StructField` maps |
+
+### Supported opcodes (~50)
+
+Arithmetic (`add`/`sub`/`mul`/`div`, `mulscale`/`divscale`), comparison (`ifvarand`,
+`ifvarl`, …), array ops (`setarray`/`getarraysize`/`resizearray`), string ops
+(`qputs`/`qstrcpy`/`qsprintf`/`qgetsysstr`), control flow (`while`, `switch…endswitch`,
+`state`), math (`sqrt`, `sin`/`cos`), and file I/O (`readarrayfromfile`/`writearraytofile`).
+
+### Game struct support
+
+`VMState` carries four struct-field maps — `actorFields`, `playerFields`, `sectorFields`,
+`wallFields` — pre-seeded from the CLI and updated by `geta`/`seta`, `getp`/`setp`,
+`getsector`/`setsector`, `getwall`/`setwall` instructions during execution.
+
+### Memory report (`--mem`)
+
+After each simulation phase the simulator reports:
+- Per-phase stack high-water mark
+- Heap page accounting: **Allocated live** / **Marked to be freed** / **Free reclaimed**
+
+---
+
+## 17. Debug-Test Framework
+
+The debug-test framework enables in-process unit testing of compiled CON output.
+
+### How it works
+
+1. A `// debug-test` comment on a `CEvent` class or `Append()` method body tells the
+   compiler to enter test mode for that block.
+2. The compiler emits a `//// DEBUG-TEST ////` CON marker, `state _testInit`, and
+   `set rb _testCounter` at the start of the block.
+3. Every `checkEq(a, b)` or `checkFpEq(a, b)` call site gets two injected lines:
+   ```con
+   add _testCounter 4096   ; increment total count (upper 12 bits)
+   ife r1 r2
+   add _testCounter 1      ; increment pass count (lower 12 bits)
+   ```
+4. After simulation the `--test` flag decodes `_testCounter` as
+   `total = counter >> 12`, `passed = counter & 0xFFF` and prints per-function results.
+
+### CLI integration
+
+```bash
+tcc -S compiled/EDUKE.CON --test
+# [PASS] MyTest::Append   4/4
+# [FAIL] MyMath::Test     2/3  (1 failure)
+# Result: 6/7 passed
+```
+
+Exit code `0` means all tests passed; `1` means at least one failed.
+
+---
+
+## 18. `tcc test` Runner
+
+The test runner module (`src/modules/test-runner/`) orchestrates the full
+compile → link → simulate → assert pipeline from a single JSON script.
+
+### Script schema
+
+```json
+{
+  "source": "examples/tests/math/test_math.ts",
+  "scenarios": [
+    {
+      "name": "basic math",
+      "setup": {
+        "actorFields": { "[0]extra": 42 }
+      },
+      "expect": [
+        { "type": "eq", "target": "var",        "name":  "_testCounter", "value": 4096 },
+        { "type": "eq", "target": "actorField", "index": 0, "field": "extra", "value": 42 }
+      ],
+      "defaultInclusion": false,
+      "memTest": false,
+      "validate": true
+    }
+  ]
+}
+```
+
+### Assertion types
+
+| `type` | Operators | `target` options |
+|---|---|---|
+| `eq` / `ne` | exact / not | `var`, `actorField`, `playerField`, `sectorField`, `wallField` |
+| `gt` / `lt` / `ge` / `le` | numeric | same |
+
+The runner exits `0` if all scenarios pass, `1` otherwise — making it compatible with
+CI pipelines and `run-tests.sh` / `run-tests.bat`.
