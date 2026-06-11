@@ -5,6 +5,7 @@ import { TsToConCompiler } from '../compiler/Compiler';
 import { Linker }          from '../linker/Linker';
 import { CONInit }         from '../compiler/framework';
 import { validateCON }     from '../con-validator/index';
+import { runTestScript, runTestTs } from '../test-runner/index';
 
 const C = {
   red:    (s: string) => `\x1b[31m${s}\x1b[0m`,
@@ -13,7 +14,7 @@ const C = {
   cyan:   (s: string) => `\x1b[36m${s}\x1b[0m`,
 };
 
-export type MakeStep = 'clean' | 'compile' | 'link' | 'validate' | 'all';
+export type MakeStep = 'clean' | 'compile' | 'link' | 'validate' | 'test' | 'all';
 
 function cleanDirByExt(dir: string, ext: string, label: string): void {
   if (!fs.existsSync(dir)) return;
@@ -139,7 +140,8 @@ export async function runMake(step: MakeStep, cfg: MakeConfig): Promise<void> {
     if (!fs.existsSync(fullObjDir)) fs.mkdirSync(fullObjDir, { recursive: true });
 
     console.log(C.cyan(`Compiling ${srcFiles.length} file(s) → ${objDir}/`));
-    const compiler = new TsToConCompiler({ lineDetail: false, mode: 'module' });
+    const cfgVars = cfg.vars ? new Map(Object.entries(cfg.vars).map(([k, v]) => [k, Number(v)])) : undefined;
+    const compiler = new TsToConCompiler({ lineDetail: false, mode: 'module', varOverrides: cfgVars });
     let sharedContext: any;
     for (const relPath of srcFiles) {
       const fullPath = path.join(cwd, relPath);
@@ -214,5 +216,42 @@ export async function runMake(step: MakeStep, cfg: MakeConfig): Promise<void> {
       }
       if (!result.ok) process.exit(1);
     }
+  }
+
+  // ── TEST ──────────────────────────────────────────────────────────────────
+  if (step === 'test') {
+    const testFiles = cfg.tests ?? [];
+    if (testFiles.length === 0) {
+      console.log(C.yellow('No tests configured. Add a "tests" array to typecon.json.'));
+      return;
+    }
+
+    // __dirname is dist/modules/make at runtime; go up 3 levels to reach the project root
+    const pkgDir = path.join(__dirname, '..', '..', '..');
+    let anyFailed = false;
+
+    for (const rel of testFiles) {
+      const abs = path.resolve(cwd, rel);
+      if (!fs.existsSync(abs)) {
+        console.error(C.red(`Test file not found: ${rel}`));
+        anyFailed = true;
+        continue;
+      }
+
+      console.log(`\n${C.cyan('Running')} ${rel}`);
+      const prevExitCode = process.exitCode ?? 0;
+      process.exitCode = 0;
+
+      if (abs.endsWith('.test.json')) {
+        await runTestScript(abs, pkgDir);
+      } else {
+        await runTestTs(abs, pkgDir);
+      }
+
+      if ((process.exitCode ?? 0) !== 0) anyFailed = true;
+      process.exitCode = prevExitCode;
+    }
+
+    if (anyFailed) process.exit(1);
   }
 }

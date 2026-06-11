@@ -72,9 +72,11 @@ export class Tokenizer {
   }
 
   /** Discard the rest of the current line (used after directives like definequote). */
-  skipLineRemainder(): void {
+  skipLineRemainder(): string {
     this._peeked = null;
-    while (this.pos < this.text.length && this.ch() !== '\n') this.advance();
+    let buf = '';
+    while (this.pos < this.text.length && this.ch() !== '\n') buf += this.advance();
+    return buf;
   }
 
   private ch(): string {

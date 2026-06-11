@@ -37,6 +37,7 @@ export interface VMState {
   wallFields:   Map<number, Map<string, number>>;
   thisactor:    number;
   thisplayer:   number;
+  strictIntegers: boolean; // when true, throw on NaN or decimal values written to vars/arrays
 }
 
 export function createVMState(): VMState {
@@ -58,6 +59,7 @@ export function createVMState(): VMState {
     wallFields:   new Map(),
     thisactor:    0,
     thisplayer:   0,
+    strictIntegers: false,
   };
 }
 

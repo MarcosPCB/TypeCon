@@ -9,7 +9,12 @@ import { visitStatement } from "./visitStatement";
 import { evaluateLiteralExpression } from "../helper/helpers";
 
  /******************************************************************************
-   * CONSTRUCTOR => skip code, parse object literals for IAction, IMove, IAi, parse super(...) for picnum
+   * CONSTRUCTOR
+   * - CActor/CPlayer: parses super() for picnum/extra/isEnemy; compiles the
+   *   remaining body into context.actorCustomInitCode (emitted in EVENT_SPAWN
+   *   after the _pCptr allocation, so custom properties are accessible).
+   * - CEvent: parses super(eventName) only.
+   * - Plain class: compiles the full constructor body normally.
    ****************************************************************************/
 export function visitConstructorDeclaration(
     ctor: ConstructorDeclaration,
@@ -19,66 +24,58 @@ export function visitConstructorDeclaration(
     let code = '';
     const body = ctor.getBody() as Block;
     if (body) {
-      if (type == 'CActor') {
+      if (type == 'CActor' || type == 'CPlayer') {
         const statements = body.getStatements();
-        if(statements.length > 1) {
-          addDiagnostic(ctor, context, 'warning', `Only super calls are allowed inside CActor constructors`);
-        }
+        // First pass: parse super() to extract picnum/extra/isEnemy
         for (const st of statements) {
-          // expression => super(...)
           if (st.isKind(SyntaxKind.ExpressionStatement)) {
-            const es = st as ExpressionStatement;
-            const expr = es.getExpression();
+            const expr = (st as ExpressionStatement).getExpression();
             if (expr.isKind(SyntaxKind.CallExpression)) {
               const call = expr as CallExpression;
-              if (call.getExpression().getText() === "super") {
-                parseActorSuperCall(call, context);
-              } else {
-                addDiagnostic(ctor, context, 'warning', `Only super calls are allowed inside CActor constructors`);
+              if (call.getExpression().getText() === 'super') {
+                if (type === 'CPlayer') {
+                  const arg = call.getArguments();
+                  if (arg.length > 2)
+                    addDiagnostic(call, context, 'warning', `Too many arguments in CPlayer Constructor: ${call.getText()}`);
+                  let value = evaluateLiteralExpression(arg[0] as Expression, context);
+                  if (value === null) { addDiagnostic(call, context, 'error', `First argument of CPlayer constructor must be a valid constant: ${call.getText()}`); return ''; }
+                  context.currentActorPicnum = value as number;
+                  value = evaluateLiteralExpression(arg[1] as Expression, context);
+                  if (value === null) { addDiagnostic(call, context, 'error', `Second argument of CPlayer constructor must be a valid constant: ${call.getText()}`); return ''; }
+                  context.currentActorExtra = value as number;
+                } else {
+                  parseActorSuperCall(call, context);
+                }
               }
             }
           }
         }
-      } else if (type == 'CPlayer') {
-        const statements = body.getStatements();
-        if(statements.length > 1) {
-          addDiagnostic(ctor, context, 'warning', `Only super calls are allowed inside CPlayer constructors`);
-        }
-        for (const st of statements) {
-          // expression => super(...)
-          if (st.isKind(SyntaxKind.ExpressionStatement)) {
-            const es = st as ExpressionStatement;
-            const expr = es.getExpression();
-            if (expr.isKind(SyntaxKind.CallExpression)) {
-              const call = expr as CallExpression;
-              if (call.getExpression().getText() === "super") {
-                const arg = call.getArguments();
 
-                if (arg.length > 2)
-                  addDiagnostic(call, context, 'warning', `Too many arguments in CPlayer Constructor: ${call.getText()}`);
+        // Second pass: compile all non-super statements into actorCustomInitCode.
+        // This code runs inside EVENT_SPAWN after the _pCptr block is allocated,
+        // so custom properties are already accessible via getactorvar[THISACTOR]._pCptr.
+        // NOTE: actorCustomChildren must be populated before this pass runs —
+        //       call visitConstructorDeclaration AFTER the property collection loop.
+        const initStatements = statements.filter(st => {
+          if (!st.isKind(SyntaxKind.ExpressionStatement)) return true;
+          const expr = (st as ExpressionStatement).getExpression();
+          if (!expr.isKind(SyntaxKind.CallExpression)) return true;
+          return (expr as CallExpression).getExpression().getText() !== 'super';
+        });
 
-                let value = evaluateLiteralExpression(arg[0] as Expression, context);
-
-                if (value === null) {
-                  addDiagnostic(call, context, 'error', `First argument of CPlayer constructor must be a valid constant: ${call.getText()}`);
-                  return '';
-                }
-
-                context.currentActorPicnum = value as number;
-
-                value = evaluateLiteralExpression(arg[1] as Expression, context);
-
-                if (value === null) {
-                  addDiagnostic(call, context, 'error', `Second argument of CPlayer constructor must be a valid constant: ${call.getText()}`);
-                  return '';
-                }
-
-                context.currentActorExtra = value as number;
-              } else {
-                addDiagnostic(ctor, context, 'warning', `Only super calls are allowed inside CActor constructors`);
-              }
-            }
+        if (initStatements.length > 0) {
+          const localCtx: CompilerContext = {
+            ...context,
+            localVarOffset: {},
+            localVarCount: 0,
+            paramMap: {},
+            curFunc: undefined,
+          };
+          let initCode = '';
+          for (const st of initStatements) {
+            initCode += indent(visitStatement(st, localCtx), 0);
           }
+          context.actorCustomInitCode = (context.actorCustomInitCode ?? '') + initCode;
         }
       } else if (type == 'CEvent') {
         const statements = body.getStatements();

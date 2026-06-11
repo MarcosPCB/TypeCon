@@ -135,6 +135,10 @@ var rfx3 0 REG_FLAGS
 //Encoding: (total_count << 12) | pass_count — read rb after test function to decode
 var _testCounter -1 REG_FLAGS
 
+//Per-actor property class pointer (GAMEVAR_PERACTOR = 2).
+//Holds the flat[] heap address of the actor's custom property block, or 0 if none.
+var _pCptr 0 2
+
 //ASCII conversion table
 string 900  
 string 901 !
@@ -729,6 +733,20 @@ defstate _GC
 
         sub rsp 1
 
+        //If not found on stack, check per-actor property blocks (EHeapType.peractor = 16)
+        ife _HEAPk 0 {
+            set ra allocTable[_HEAPi]
+            and ra 16
+            ifn ra 0 {
+                for _HEAPj allsprites {
+                    getactorvar[_HEAPj]._pCptr ra
+                    ife ra _HEAP_pointer {
+                        set _HEAPk 1
+                    }
+                }
+            }
+        }
+
         //If it's being used, check if it's marked to be freed
         ife _HEAPk 1 {
             //Clean the mark
@@ -1258,6 +1276,17 @@ defstate _GapDist
     sub rb sector[ri].ceilingz
     shiftr rb 8
 ends
+
+//Free per-actor property block when an actor is killed.
+//Runs for every actor; the ifn ra 0 guard is a no-op for actors without custom properties.
+appendevent EVENT_KILLIT
+    set ra _pCptr
+    ifn ra 0 {
+        set r0 ra
+        state free
+        set _pCptr 0
+    }
+endevent
 
 `
     }

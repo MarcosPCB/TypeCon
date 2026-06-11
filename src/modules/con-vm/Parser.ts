@@ -448,6 +448,29 @@ export class CONParser {
 
     const low = tok.toLowerCase();
 
+    // Per-actor variable access: getactorvar[INDEX]._pCptr DST  /  setactorvar[INDEX]._pCptr SRC
+    const actorVarRe = /^(getactorvar|setactorvar)\[([^\]]*)\]\.(\w+)$/i;
+    const actorVarMatch = tok.match(actorVarRe);
+    if (actorVarMatch) {
+      this.sc.next();
+      const [, opcode, idxStr, field] = actorVarMatch;
+      const isGet = opcode.toLowerCase().startsWith('get');
+      const index = parseOperand(idxStr === '' ? 'THISACTOR' : idxStr, this.defines);
+      const reg = this.parseOperand();
+      if (isGet) return { op: 'getactorvar', index, field, dst: reg };
+      else        return { op: 'setactorvar', index, field, src: reg };
+    }
+
+    // for VAR allsprites { body } — iterate over all active sprite indices
+    if (low === 'for') {
+      this.sc.next();
+      const loopVar = this.sc.next()!;
+      const iterator = this.sc.next()!; // e.g. 'allsprites'
+      // consume iterator keyword — only allsprites is supported in the VM currently
+      const body = this.parseBody();
+      return { op: 'for_allsprites', loopVar, body };
+    }
+
     // Game structure access: geta[INDEX].FIELD DST  /  seta[INDEX].FIELD SRC  etc.
     const structRe = /^(geta|seta|getp|setp|getsector|setsector|getwall|setwall)\[([^\]]*)\]\.(\w+)$/i;
     const structMatch = tok.match(structRe);

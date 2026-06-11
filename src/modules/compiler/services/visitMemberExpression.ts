@@ -344,6 +344,66 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
             code += `set ri rbp\nadd ri ${sym.offset}\nset ri flat[ri]\n`;
         }
 
+        // CActor/CPlayer custom (non-native) property: access via getactorvar[THISACTOR]._pCptr + flat[] offset.
+        // This check fires before the curClass path so it doesn't interfere with native prop routing.
+        if (obj.kind == 'this' && seg.kind == 'property' && context.actorCustomChildren?.[seg.name]) {
+          let pSym = context.actorCustomChildren[seg.name] as SymbolDefinition;
+          code += `set ri _pCptr\n`;
+          if (pSym.offset != 0) code += `add ri ${pSym.offset}\n`;
+
+          if (pSym.type & ESymbolType.object) {
+            // Inline object: ri points to the start of the object data in the _pCptr block.
+            // Walk remaining segments to add child offsets.
+            for (let i = currSegIndex + 1; i < segments.length; i++) {
+              const childSeg = segments[i] as SegmentProperty;
+              if (childSeg.kind != 'property' || !pSym.children?.[childSeg.name]) break;
+              const childSym = pSym.children[childSeg.name] as SymbolDefinition;
+              if (childSym.offset != 0) code += `add ri ${childSym.offset}\n`;
+              pSym = childSym;
+            }
+            return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
+          }
+
+          if (pSym.type & ESymbolType.array || pSym.type == ESymbolType.string) {
+            // The slot at _pCptr+offset holds a heap pointer to the array/string data.
+            const nextSeg = segments[currSegIndex + 1];
+
+            if (nextSeg) {
+              // Need the actual pointer — dereference the slot: ri = pointer
+              code += `set ri flat[ri]\n`;
+
+              if (nextSeg.kind == 'index') {
+                // this.arr[i] — index into the array past its length header
+                if (assignment) code += `state push\n`;
+                code += visitExpression(nextSeg.expr, context);
+                code += `add ri ra\nadd ri 1\n`;
+                if (assignment) code += `state pop\n`;
+                return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
+              }
+              if (nextSeg.kind == 'property' && nextSeg.name === 'length') {
+                // this.arr.length — flat[pointer] = element count
+                return code + `set ${reg} flat[ri]\n`;
+              }
+              // Fallback for other member accesses on the pointer value
+              return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
+            }
+
+            // No further segments: READ returns the pointer; WRITE stores into the slot.
+            // (No extra dereference — the slot IS the pointer cell.)
+            if (!assignment) {
+              // Tell the enclosing expression that the result is a string/array pointer,
+              // not a plain integer — prevents _convertInt2String from being called on it.
+              context.curExpr = pSym.type & ESymbolType.array
+                ? ESymbolType.array
+                : ESymbolType.string;
+            }
+            return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
+          }
+
+          // Scalar property (number, boolean): ri points directly to the value slot.
+          return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
+        }
+
         if (seg.kind == 'property') {
           if (obj.kind == 'this' && (context.curClass || context.symbolTable.has(seg.name))) {
             if (context.curClass && context.curClass.num_elements == 0) {

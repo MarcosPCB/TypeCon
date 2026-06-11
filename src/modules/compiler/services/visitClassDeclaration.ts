@@ -1,5 +1,6 @@
 import { ClassDeclaration, SyntaxKind, Statement, Block, ObjectLiteralExpression } from "ts-morph";
 import { CompilerContext, SymbolDefinition, ESymbolType, EHeapType } from "../Compiler";
+import { evaluateLiteralExpression } from "../helper/helpers";
 import { indent } from "../helper/indent";
 import { addDiagnostic } from "./addDiagnostic";
 import { EventList, TEvents } from "../types";
@@ -73,9 +74,13 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
     cls = context.symbolTable.get(className) as SymbolDefinition;
   }
 
-  // visit constructor(s)
   const ctors = cd.getConstructors();
-  if (ctors.length > 0 && type != '') {
+  // For CEvent/CInput: run the constructor immediately — it sets currentEventName
+  // which is needed for the appendevent code generated further below.
+  // For CActor/CPlayer: deferred to AFTER property collection (see further below)
+  // so actorCustomChildren is populated before the constructor body is compiled.
+  // For plain classes (type == ''): handled in the defstate constructor section below.
+  if (ctors.length > 0 && (type === 'CEvent' || type === 'CInput')) {
     code += visitConstructorDeclaration(ctors[0], localCtx, type);
   }
 
@@ -227,7 +232,81 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
           }
       }
       cls.num_elements++;
+    } else if ((type == 'CActor' || type == 'CPlayer') && p.getTypeNode()) {
+      // Custom (non-native, non-special) CActor/CPlayer property → heap-allocated via _pCptr.
+      // Skip properties whose type alias starts with 'CON_' (they are native struct fields).
+      const aliasName = p.getType().getAliasSymbol()?.getName() ?? '';
+      const typeText = p.getTypeNode().getText();
+      const isNative = aliasName.startsWith('CON_') || typeText.startsWith('CON_');
+      const isSpecial = typeText.match(/\b(TAction|IAction|TMove|IMove|TAi|IAi|OnEvent|OnVariation)\b/);
+      if (!isNative && !isSpecial && !p.isStatic()) {
+        if (!localCtx.actorCustomChildren) {
+          localCtx.actorCustomChildren = {};
+        }
+        const pName = p.getName();
+        let pTypeRaw = typeText;
+        let isArray = false;
+
+        // Detect array suffix
+        if (pTypeRaw.endsWith('[]')) {
+          isArray = true;
+          pTypeRaw = pTypeRaw.slice(0, -2);
+        }
+
+        // Calculate the current byte offset from the running count of allocated slots
+        const offset = Object.values(localCtx.actorCustomChildren).reduce(
+          (sum, s: SymbolDefinition) => sum + (s.size ?? 1), 0
+        );
+
+        if (isArray || pTypeRaw === 'string') {
+          // Arrays and strings are heap pointers stored in one slot of the _pCptr block.
+          // The actual allocation happens in EVENT_SPAWN.
+          const symType = isArray
+            ? ESymbolType.array | (pTypeRaw === 'string' ? ESymbolType.string : ESymbolType.number)
+            : ESymbolType.string;
+          localCtx.actorCustomChildren[pName] = {
+            name: pName,
+            type: symType,
+            offset,
+            size: 1,
+            heap: true,
+            parentClass: className,
+          };
+        } else if (context.typeAliases.get(pTypeRaw)) {
+          // Known struct/interface type: store INLINE in the _pCptr block.
+          const layout = getObjectTypeLayout(pTypeRaw, context);
+          const objSize = getObjectSize(pTypeRaw, context);
+          localCtx.actorCustomChildren[pName] = {
+            name: pName,
+            type: ESymbolType.object,
+            offset,
+            size: objSize,
+            children: layout,
+            heap: true,
+            parentClass: className,
+          };
+        } else {
+          // Simple scalar (number, boolean, or unrecognised → treat as number)
+          let symType = ESymbolType.number;
+          if (pTypeRaw === 'boolean') symType = ESymbolType.boolean;
+          localCtx.actorCustomChildren[pName] = {
+            name: pName,
+            type: symType,
+            offset,
+            size: 1,
+            heap: true,
+            parentClass: className,
+          };
+        }
+      }
     }
+  }
+
+  // Now that actorCustomChildren is populated, compile the CActor/CPlayer constructor body.
+  // Non-super statements are compiled into localCtx.actorCustomInitCode and emitted
+  // inside EVENT_SPAWN after the _pCptr allocation.
+  if (ctors.length > 0 && (type === 'CActor' || type === 'CPlayer')) {
+    visitConstructorDeclaration(ctors[0], localCtx, type);
   }
 
   let labels = '';
@@ -431,6 +510,64 @@ ${Object.values(localCtx.currentActorLabels).map(e => {
 endevent
 `;
   }
+  // Generate per-actor property allocation in EVENT_SPAWN if the actor has custom props.
+  if (localCtx.actorCustomChildren && Object.keys(localCtx.actorCustomChildren).length > 0) {
+    // Total block size = sum of all prop sizes (objects are stored inline)
+    const totalSize = Object.values(localCtx.actorCustomChildren).reduce(
+      (sum: number, s: SymbolDefinition) => sum + (s.size ?? 1), 0
+    );
+
+    // Build default-value initialization for each slot.
+    // Objects: zero-fill all their inline slots. Arrays/strings: 0 (null pointer, allocated on first use).
+    let initLines = '';
+    for (const p of properties) {
+      const pName = p.getName();
+      const pSym = localCtx.actorCustomChildren[pName];
+      if (!pSym) continue;
+
+      if (pSym.type & ESymbolType.object) {
+        // Zero-fill all inline object slots
+        for (let s = 0; s < (pSym.size ?? 1); s++) {
+          const absOffset = pSym.offset + s;
+          if (absOffset == 0)
+            initLines += `      setarray flat[rb] 0\n`;
+          else
+            initLines += `      set ri rb\n      add ri ${absOffset}\n      setarray flat[ri] 0\n`;
+        }
+      } else {
+        // Scalar, string, or array-pointer slot
+        const initNode = p.getInitializer();
+        const defaultVal = (pSym.type & ESymbolType.array || pSym.type & ESymbolType.string)
+          ? 0  // heap pointer — starts as null; array is allocated on first use
+          : (initNode ? (evaluateLiteralExpression(initNode, localCtx) as number ?? 0) : 0);
+        if (pSym.offset == 0)
+          initLines += `      setarray flat[rb] ${defaultVal}\n`;
+        else
+          initLines += `      set ri rb\n      add ri ${pSym.offset}\n      setarray flat[ri] ${defaultVal}\n`;
+      }
+    }
+
+    const ctorCode = localCtx.actorCustomInitCode
+      ? localCtx.actorCustomInitCode.split('\n').map(l => l ? `      ${l}` : '').join('\n') + '\n'
+      : '';
+
+    prefix += `
+appendevent EVENT_SPAWN
+  ifactor ${localCtx.currentActorPicnum} {
+    set ra _pCptr
+    ife ra 0 {
+      state pushr2
+      set r0 ${totalSize}
+      set r1 ${EHeapType.peractor}
+      state alloc
+      state popr2
+      set _pCptr rb
+${initLines}${ctorCode}    }
+  }
+endevent
+`;
+  }
+
   code = prefix + code;
 
   context.globalVarCount = localCtx.globalVarCount + 2;

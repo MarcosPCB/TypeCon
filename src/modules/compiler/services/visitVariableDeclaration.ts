@@ -24,6 +24,20 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
 
   const isGlobal = !context.curFunc && !context.curClass && !context.isInSubFunction;
 
+  if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'gameVar') {
+    const initNode = decl.getInitializer();
+    const defaultValue = (initNode ? evaluateLiteralExpression(initNode, context) as number : undefined) ?? 0;
+    const overrideValue = context.options?.varOverrides?.get(varName);
+    const initValue = overrideValue !== undefined ? overrideValue : defaultValue;
+    context.gameVarDeclarations.push(`gamevar ${varName} ${initValue} REG_FLAGS\n`);
+    context.symbolTable.set(varName, {
+      name: varName, type: ESymbolType.native, offset: 0, size: 1, CON_code: varName,
+      global: true,
+      parentFunc: undefined
+    });
+    return code;
+  }
+
   if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'CON_NATIVE_GAMEVAR') {
     context.symbolTable.set(varName, {
       name: varName, type: ESymbolType.native, offset: 0, size: 1, CON_code: type.getAliasTypeArguments()[0].getText().replace(/[`'"]/g, ""),

@@ -11,12 +11,59 @@ export interface VMRunOptions {
   noInit?: boolean;     // skip EVENT_INIT → EVENT_INITCOMPLETE → EVENT_SETDEFAULTS → EVENT_NEWGAME preamble
   showMemory?: boolean; // print memory usage report after simulation
   testMode?: boolean;   // print structured pass/fail summary and return exit code
+  twoPassGC?: boolean;        // run GC twice after entry point (completes two-pass deferred deletion)
+  strictIntegers?: boolean;   // throw if NaN or decimal values are written to a CON variable
+  sourceFile?: string;        // original .con file path — included in the JSON report
   searchDirs?: string[]; // directories to search for include files (CON dir, baseCON, …)
   // Pre-seed game structure fields before simulation (index → field → value)
   actorFieldOverrides?:  Map<number, Map<string, number>>;
   playerFieldOverrides?: Map<number, Map<string, number>>;
   sectorFieldOverrides?: Map<number, Map<string, number>>;
   wallFieldOverrides?:   Map<number, Map<string, number>>;
+}
+
+export interface HeapStats {
+  pages: number;
+  words: number;
+  bytes: number;
+}
+
+export interface SimReport {
+  timestamp:  string;
+  source:     string;
+  entryPoint: { type: 'state' | 'event' | 'actor' | 'default'; id?: string };
+  exitCode:   number;
+  memory: {
+    stackBase:  number;
+    stack: { afterInit: number; afterEvents: number; peak: number };
+    heap: {
+      totalSlots:   number;
+      live:         HeapStats;
+      markedToFree: HeapStats;
+      reclaimed:    HeapStats;
+    };
+  };
+  tests: {
+    ran:     boolean;
+    total:   number;
+    passed:  number;
+    failed:  number;
+    results: Array<{ name: string; total: number; passed: number }>;
+  };
+  variables:   Record<string, number>;
+  actorFields: Record<number, Record<string, number>>;
+  flatMemory: {
+    stackBase:          number;   // rds — boundary between stack and heap
+    peakStackPointer:   number;   // highest rsp reached
+    stack:              number[]; // flat[0..peakRsp] — the used stack region
+    heapPages: Array<{
+      address:   number;  // flat[] index where this page starts
+      type:      number;  // raw allocTable type flags
+      typeLabel: string;  // human-readable: "array" | "string" | "object" | "peractor" | "marked"
+      sizeWords: number;
+      data:      number[]; // flat[address..address+sizeWords-1]
+    }>;
+  };
 }
 
 export interface VMRunResult {
@@ -27,6 +74,7 @@ export interface VMRunResult {
   playerFields: Map<number, Map<string, number>>;
   sectorFields: Map<number, Map<string, number>>;
   wallFields:   Map<number, Map<string, number>>;
+  report?:      SimReport; // populated when showMemory or twoPassGC is requested
 }
 
 function stateResult(exitCode: number, state: VMState): VMRunResult {
@@ -73,6 +121,7 @@ export function runVM(source: string, opts: VMRunOptions = {}): VMRunResult {
 
   const state = createVMState();
   state.defines = defines;
+  state.strictIntegers = opts.strictIntegers ?? false;
 
   // Auto-apply actor header values (extra, etc.) when running with --actor
   // Done before CLI overrides so that --set-field-actor takes precedence
@@ -165,7 +214,18 @@ export function runVM(source: string, opts: VMRunOptions = {}): VMRunResult {
         console.error(`[CONVM] Actor picnum '${opts.entryActor}' not found in this CON`);
         return emptyResult(1);
       }
+      // Fire EVENT_SPAWN before the actor body so per-actor custom properties
+      // (_pCptr allocation) are initialised before the main loop reads them.
+      const spawnBody = eventBodies.get('EVENT_SPAWN');
+      if (spawnBody) runSafe(spawnBody, 'EVENT_SPAWN');
       runSafe(body, `actor_${opts.entryActor}`);
+      // Optional two-pass GC: completes the deferred deletion cycle so the
+      // memory report shows truly freed pages rather than "marked to free".
+      // Enable with --2-pass-gc / opts.twoPassGC.
+      if (opts.twoPassGC) {
+        const gcBody = stateMap.get('_GC');
+        if (gcBody) { runSafe(gcBody, '_GC'); runSafe(gcBody, '_GC'); }
+      }
     }
   } else {
     // Phase 2: default event sequence
@@ -197,10 +257,25 @@ export function runVM(source: string, opts: VMRunOptions = {}): VMRunResult {
         runSafe(body, stateName);
       }
     }
-    return printTestReport(state);
+    // Run test-marked actor bodies that haven't been executed yet as the entry point.
+    // If entryActor is set the actor already ran in Phase 3 — skip it to avoid double execution.
+    for (const [picnum, body] of actorBodies) {
+      if (opts.entryActor === picnum) continue; // already ran
+      if (body.length > 0 && body[0].op === 'marker' && (body[0] as any).name === 'DEBUG-TEST') {
+        // Run EVENT_SPAWN first so _pCptr and custom props are initialised
+        const spawnBody = eventBodies.get('EVENT_SPAWN');
+        if (spawnBody) runSafe(spawnBody, 'EVENT_SPAWN');
+        runSafe(body, `actor_${picnum}`);
+      }
+    }
+    const result = printTestReport(state);
+    result.report = buildSimReport(opts, opts.sourceFile ?? '', result.exitCode, state);
+    return result;
   }
 
-  return stateResult(0, state);
+  const result = stateResult(0, state);
+  result.report = buildSimReport(opts, opts.sourceFile ?? '', 0, state);
+  return result;
 }
 
 function mergeStructFields(
@@ -213,67 +288,140 @@ function mergeStructFields(
   }
 }
 
-function printMemoryReport(state: VMState): void {
+function computeHeapStats(state: VMState): SimReport['memory'] {
   const rds        = state.vars.get('rds') ?? 0;
-  const snap1      = state.snapAfterInit;
-  const snap2      = state.snapAfterEvents;
   const allocTable = state.arrays.get('allocTable') ?? [];
   const pageSizes  = state.arrays.get('pageSizes')  ?? [];
   const heaptables = state.vars.get('heaptables')   ?? allocTable.length;
+  const MARK_BIT   = 1024;
 
-  const W  = 12;
-  const W2 = 8;
+  let liveCount = 0, liveWords = 0;
+  let markCount = 0, markWords = 0;
+  let freeCount = 0, freeWords = 0;
+  for (let i = 0; i < heaptables; i++) {
+    const type = allocTable[i] ?? 0;
+    const size = pageSizes[i]  ?? 0;
+    if (type & MARK_BIT)       { markCount++; markWords += size; }
+    else if (type !== 0)       { liveCount++; liveWords += size; }
+    else if (size !== 0)       { freeCount++; freeWords += size; }
+  }
+  return {
+    stackBase: rds,
+    stack: {
+      afterInit:   state.snapAfterInit?.phaseRspHWM   ?? -1,
+      afterEvents: state.snapAfterEvents?.phaseRspHWM ?? -1,
+      peak:        state.peakRsp,
+    },
+    heap: {
+      totalSlots:   heaptables,
+      live:         { pages: liveCount, words: liveWords, bytes: liveWords * 4 },
+      markedToFree: { pages: markCount, words: markWords, bytes: markWords * 4 },
+      reclaimed:    { pages: freeCount, words: freeWords, bytes: freeWords * 4 },
+    },
+  };
+}
+
+function buildSimReport(
+  opts:       VMRunOptions,
+  sourceFile: string,
+  exitCode:   number,
+  state:      VMState,
+): SimReport {
+  const entryType = opts.entryActor ? 'actor'
+                  : opts.entryEvent ? 'event'
+                  : opts.entryState ? 'state'
+                  : 'default';
+  const entryId   = opts.entryActor ?? opts.entryEvent ?? opts.entryState;
+
+  const vars: Record<string, number> = {};
+  for (const [k, v] of state.vars) vars[k] = v;
+
+  const actorFields: Record<number, Record<string, number>> = {};
+  for (const [idx, fields] of state.actorFields) {
+    actorFields[idx] = {};
+    for (const [f, v] of fields) actorFields[idx][f] = v;
+  }
+
+  const testTotal  = state.testResults.reduce((s, r) => s + r.total,  0);
+  const testPassed = state.testResults.reduce((s, r) => s + r.passed, 0);
+
+  // ── Flat memory snapshot ──────────────────────────────────────────────────
+  const flat       = state.arrays.get('flat') ?? [];
+  const peakRsp    = state.peakRsp;
+  const stackData  = Array.from(flat.slice(0, Math.max(0, peakRsp + 1))).map(v => v ?? 0);
+
+  const allocTable = state.arrays.get('allocTable') ?? [];
+  const pageSizes  = state.arrays.get('pageSizes')  ?? [];
+  const lookupHeap = state.arrays.get('lookupHeap') ?? [];
+  const heaptables = state.vars.get('heaptables')   ?? allocTable.length;
+  const MARK_BIT   = 1024;
+  const TYPE_LABELS: Record<number, string> = { 1: 'array', 2: 'string', 4: 'object', 8: 'string_array', 16: 'peractor' };
+
+  const heapPages: SimReport['flatMemory']['heapPages'] = [];
+  for (let i = 0; i < heaptables; i++) {
+    const rawType = allocTable[i] ?? 0;
+    if (rawType === 0) continue; // skip free pages
+    const sizeWords = pageSizes[i] ?? 0;
+    const address   = lookupHeap[i] ?? 0;
+    const baseType  = rawType & ~MARK_BIT;
+    const marked    = (rawType & MARK_BIT) !== 0;
+    const typeLabel = (marked ? 'marked:' : '') + (TYPE_LABELS[baseType] ?? `type${baseType}`);
+    const data      = Array.from(flat.slice(address, address + sizeWords)).map(v => v ?? 0);
+    heapPages.push({ address, type: rawType, typeLabel, sizeWords, data });
+  }
+
+  return {
+    timestamp:  new Date().toISOString(),
+    source:     sourceFile,
+    entryPoint: { type: entryType, ...(entryId ? { id: entryId } : {}) },
+    exitCode,
+    memory:     computeHeapStats(state),
+    tests: {
+      ran:     state.testResults.length > 0,
+      total:   testTotal,
+      passed:  testPassed,
+      failed:  testTotal - testPassed,
+      results: state.testResults.map(r => ({ name: r.stateName, total: r.total, passed: r.passed })),
+    },
+    variables:   vars,
+    actorFields,
+    flatMemory: {
+      stackBase:        state.vars.get('rds') ?? 0,
+      peakStackPointer: peakRsp,
+      stack:            stackData,
+      heapPages,
+    },
+  };
+}
+
+function printMemoryReport(state: VMState): void {
+  const m   = computeHeapStats(state);
+  const rds = m.stackBase;
+  const W   = 12;
+  const W2  = 8;
   const pad  = (n: number | string) => String(n).padStart(W);
   const pad2 = (n: number | string) => String(n).padStart(W2);
   const hr = '─'.repeat(70);
 
-  // ── Stack table ───────────────────────────────────────────────────────────
   console.log(`\n${hr}`);
   console.log(` Memory report  (stack base rds = ${rds} words = ${rds * 4} bytes)`);
   console.log(`${hr}`);
   console.log(`  ${''.padEnd(16)}${'stack end'.padStart(W)}${'stack HWM'.padStart(W)}`);
+  if (state.snapAfterInit)
+    console.log(`  ${'After init:'.padEnd(16)}${pad(state.snapAfterInit.rsp)}${pad(state.snapAfterInit.phaseRspHWM)}`);
+  if (state.snapAfterEvents)
+    console.log(`  ${'After events:'.padEnd(16)}${pad(state.snapAfterEvents.rsp)}${pad(state.snapAfterEvents.phaseRspHWM)}`);
+  console.log(`  ${'Peak:'.padEnd(16)}${pad(m.stack.peak)}${pad(m.stack.peak)}`);
 
-  if (snap1)
-    console.log(`  ${'After init:'.padEnd(16)}${pad(snap1.rsp)}${pad(snap1.phaseRspHWM)}`);
-  if (snap2)
-    console.log(`  ${'After events:'.padEnd(16)}${pad(snap2.rsp)}${pad(snap2.phaseRspHWM)}`);
-  console.log(`  ${'Peak:'.padEnd(16)}${pad(state.peakRsp)}${pad(state.peakRsp)}`);
+  const { live: l, markedToFree: mk, reclaimed: rc } = m.heap;
+  const totalCount = l.pages + mk.pages + rc.pages;
+  const totalWords = l.words + mk.words + rc.words;
 
-  // ── Heap page table ───────────────────────────────────────────────────────
-  // allocTable bit layout (from framework.ts):
-  //   0          → free (never used or reclaimed)
-  //   type > 0   → allocated (live)
-  //   type|1024  → marked to be freed (GC first-pass candidate)
-  const MARK_BIT = 1024;
-
-  let liveCount = 0,   liveWords = 0;
-  let markCount = 0,   markWords = 0;
-  let freeCount = 0,   freeWords = 0;
-
-  for (let i = 0; i < heaptables; i++) {
-    const type = allocTable[i] ?? 0;
-    const size = pageSizes[i]  ?? 0;
-    if (type & MARK_BIT) {
-      markCount++;
-      markWords += size;
-    } else if (type !== 0) {
-      liveCount++;
-      liveWords += size;
-    } else if (size !== 0) {
-      // allocTable[i]==0 AND pageSizes[i]!=0 → previously allocated, now reclaimed
-      freeCount++;
-      freeWords += size;
-    }
-  }
-
-  const totalCount = liveCount + markCount + freeCount;
-  const totalWords = liveWords + markWords + freeWords;
-
-  console.log(`\n  Heap pages  (${heaptables} slots total)`);
+  console.log(`\n  Heap pages  (${m.heap.totalSlots} slots total)`);
   console.log(`  ${''.padEnd(24)}${'pages'.padStart(W2)}${'words'.padStart(W2)}${'bytes'.padStart(W2)}`);
-  console.log(`  ${'Allocated (live):'.padEnd(24)}${pad2(liveCount)}${pad2(liveWords)}${pad2(liveWords * 4)}`);
-  console.log(`  ${'Marked to be freed:'.padEnd(24)}${pad2(markCount)}${pad2(markWords)}${pad2(markWords * 4)}`);
-  console.log(`  ${'Free (reclaimed):'.padEnd(24)}${pad2(freeCount)}${pad2(freeWords)}${pad2(freeWords * 4)}`);
+  console.log(`  ${'Allocated (live):'.padEnd(24)}${pad2(l.pages)}${pad2(l.words)}${pad2(l.bytes)}`);
+  console.log(`  ${'Marked to be freed:'.padEnd(24)}${pad2(mk.pages)}${pad2(mk.words)}${pad2(mk.bytes)}`);
+  console.log(`  ${'Free (reclaimed):'.padEnd(24)}${pad2(rc.pages)}${pad2(rc.words)}${pad2(rc.bytes)}`);
   console.log(`  ${'Total used:'.padEnd(24)}${pad2(totalCount)}${pad2(totalWords)}${pad2(totalWords * 4)}`);
   console.log(`${hr}\n`);
 }

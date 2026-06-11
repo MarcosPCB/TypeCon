@@ -59,10 +59,14 @@ let simNoInit = false;
 let simNoValidate = false;
 let simShowMemory = false;
 let simTestMode = false;
+let simTwoPassGC = false;
+let simStrictInt = false;
+let simReportFile: string | undefined;
 let simActorFields:  string | undefined;
 let simPlayerFields: string | undefined;
 let simSectorFields: string | undefined;
 let simWallFields:   string | undefined;
+let varOverrides: Map<string, number> = new Map();
 
 export function colorText(text: string, color: 'red' | 'green' | 'yellow' | 'blue' | 'magenta' | 'cyan' | 'white' | string) {
     switch (color) {
@@ -179,6 +183,12 @@ Usage:
     \x1b[33m--mem\x1b[0m / \x1b[33m-mem\x1b[0m: Print a memory usage report after simulation (stack ptr, heap HWM, flat HWM).
     \x1b[33m--test\x1b[0m: Run in test mode — requires @DebugTest decorator on functions in the source.
         Prints a structured pass/fail summary and exits with code 0 (all pass) or 1 (any fail).
+    \x1b[33m--2-pass-gc\x1b[0m: Run the GC twice after the entry point so the two-pass deferred deletion
+        completes. Converts "marked to free" pages into "reclaimed" in the memory report.
+    \x1b[33m--strict-int\x1b[0m: Throw a runtime error if a NaN or decimal (non-integer) value is written
+        to any CON variable or array element. Useful for catching compiler bugs early.
+    \x1b[33m--report FILE\x1b[0m: Write a JSON report of the simulation (memory stats, test results,
+        final variable state) to FILE after execution. Ideal for visualization tools.
     \x1b[33m--set-field-actor SPEC\x1b[0m: Pre-set actor/sprite fields before simulation.
         SPEC format: [INDEX]field=value separated by ;
         [] or [0] = sprite index 0 (THISACTOR). Example: \x1b[90m[]extra=0;[90]cstat=128\x1b[0m
@@ -480,14 +490,34 @@ async function Main() {
     if (!fs.existsSync(process.cwd() + '/compiled'))
         fs.mkdirSync(process.cwd() + '/compiled');
 
+    // Pre-scan for --vars before subcommand dispatch (make exits early)
+    for (let i = 0; i < process.argv.length; i++) {
+        if (process.argv[i] === '--vars') {
+            const rawPairs = (process.argv[i + 1] || '').split(',');
+            for (const pair of rawPairs) {
+                const eq = pair.indexOf('=');
+                if (eq > 0) {
+                    const name = pair.slice(0, eq).trim();
+                    const val  = Number(pair.slice(eq + 1).trim());
+                    if (!isNaN(val)) varOverrides.set(name, val);
+                }
+            }
+            break;
+        }
+    }
+
     // ── make subcommand ──────────────────────────────────────────────────────
     if (process.argv[2] === 'make') {
         const sub = process.argv[3];
         if (sub === 'create') { await runMakeCreate(); process.exit(0); }
         if (sub === 'config') { await runMakeConfig(); process.exit(0); }
         const normalised = sub === 'clear' ? 'clean' : sub;
-        const step = (['clean', 'compile', 'link', 'validate'].includes(normalised) ? normalised : 'all') as MakeStep;
+        const step = (['clean', 'compile', 'link', 'validate', 'test'].includes(normalised) ? normalised : 'all') as MakeStep;
         const cfg = loadConfig(path.join(process.cwd(), 'typecon.json'));
+        // CLI --vars merges over typecon.json vars (CLI wins)
+        if (varOverrides.size > 0) {
+            cfg.vars = { ...(cfg.vars ?? {}), ...Object.fromEntries(varOverrides) };
+        }
         await runMake(step, cfg);
         process.exit(0);
     }
@@ -682,6 +712,16 @@ async function Main() {
         if (a == '--test')
             simTestMode = true;
 
+        if (a == '--2-pass-gc')
+            simTwoPassGC = true;
+
+        if (a == '--strict-int')
+            simStrictInt = true;
+
+        if (a == '--report') {
+            simReportFile = process.argv[i + 1];
+        }
+
         if (a == '--set-field-actor')  simActorFields  = process.argv[i + 1];
         if (a == '--set-field-player') simPlayerFields = process.argv[i + 1];
         if (a == '--set-field-sector') simSectorFields = process.argv[i + 1];
@@ -853,12 +893,18 @@ async function Main() {
             const searchDirs = [...baseCONDirs, conDir];
             const vmResult = runVM(source, {
                 entryState: simState, entryEvent: simEvent, entryActor: simActor,
-                noInit: simNoInit, showMemory: simShowMemory, testMode: simTestMode, searchDirs,
+                noInit: simNoInit, showMemory: simShowMemory, testMode: simTestMode,
+                twoPassGC: simTwoPassGC, strictIntegers: simStrictInt,
+                sourceFile: file, searchDirs,
                 actorFieldOverrides:  simActorFields  ? parseFieldOverrides(simActorFields)  : undefined,
                 playerFieldOverrides: simPlayerFields ? parseFieldOverrides(simPlayerFields) : undefined,
                 sectorFieldOverrides: simSectorFields ? parseFieldOverrides(simSectorFields) : undefined,
                 wallFieldOverrides:   simWallFields   ? parseFieldOverrides(simWallFields)   : undefined,
             });
+            if (simReportFile && vmResult.report) {
+                fs.writeFileSync(simReportFile, JSON.stringify(vmResult.report, null, 2));
+                console.log(colorText(`Report written → ${simReportFile}`, 'cyan'));
+            }
             if (simTestMode && vmResult.exitCode !== 0) {
                 process.exit(vmResult.exitCode);
             }
@@ -888,7 +934,7 @@ async function Main() {
     if (stack_size < 1024)
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
-    const compiler = new TsToConCompiler({ lineDetail: line_print, mode: compile_mode, stackSize: stack_size, heapNumPages: heap_page_number });
+    const compiler = new TsToConCompiler({ lineDetail: line_print, mode: compile_mode, stackSize: stack_size, heapNumPages: heap_page_number, varOverrides: varOverrides.size > 0 ? varOverrides : undefined });
     const initSys = new CONInit(stack_size, heap_page_size, heap_page_number, precompiled_modules, heap_page_size * heap_page_number, 0, accept_con_modules);
 
     // --- LINK MODE ---
@@ -959,6 +1005,15 @@ async function Main() {
             if (!outName) {
                 const firstFile = path.basename(inputFiles[0], '.tco');
                 outName = firstFile + '.con';
+            }
+            // Apply --vars overrides to the linked output (covers precompile gamevar declarations)
+            if (varOverrides.size > 0) {
+                for (const [name, value] of varOverrides) {
+                    finalCode = finalCode.replace(
+                        new RegExp(`(gamevar\\s+${name}\\s+)\\d+`, 'g'),
+                        `$1${value}`
+                    );
+                }
             }
             console.log(`${colorText('Writing Linked CON:', 'cyan')} ${output_folder}/${outName}`);
             fs.writeFileSync(`${output_folder}/${outName}`, finalCode);

@@ -51,6 +51,8 @@ export interface CompilerOptions {
 
   stackSize?: number;    // From typecon.json / CLI; used for memory warnings
   heapNumPages?: number; // From typecon.json / CLI; used for memory warnings
+
+  varOverrides?: Map<string, number>; // --vars NAME=VALUE overrides for gameVar initial values
 }
 
 export enum EHeapType {
@@ -58,6 +60,7 @@ export enum EHeapType {
   string = 2,
   object = 4,
   string_array = 8,
+  peractor = 16,   // per-actor property block; GC scans allsprites rather than stack
 }
 
 export enum ESymbolType {
@@ -226,6 +229,16 @@ export interface CompilerContext {
   rfxAllocated: number;               // How many rfx0..rfx3 scratch registers are in use (0..4)
   project: Project;
   headerDefines: string[];
+  gameVarDeclarations: string[]; // CON gamevar lines that must appear at the top of output
+
+  // Non-native CActor/CPlayer property children, keyed by prop name.
+  // Set during CActor/CPlayer class compilation; consumed by visitMemberExpression
+  // to emit getactorvar[THISACTOR]._pCptr + flat[] access for custom props.
+  actorCustomChildren?: Record<string, SymbolDefinition>;
+
+  // CON code from the body of a CActor/CPlayer constructor (after the super() call).
+  // Compiled by visitConstructorDeclaration; emitted into EVENT_SPAWN after _pCptr allocation.
+  actorCustomInitCode?: string;
 }
 
 export interface CompileResult {
@@ -344,7 +357,8 @@ export class TsToConCompiler {
       project: this.project,
 
       globalAllocations: [],
-      headerDefines: []
+      headerDefines: [],
+      gameVarDeclarations: []
     };
 
     const outputLines: string[] = [];
@@ -507,6 +521,14 @@ export class TsToConCompiler {
         + indent('}\nstate popd\n', 1)
         + 'ends\n';
       outputLines.unshift(context.subFunction.code);
+      // Clear the code after emitting so parent compile calls in the import chain
+      // don't re-emit the same dispatch state (preserving index so case numbers don't collide).
+      context.subFunction = { code: '', hash: '', index: context.subFunction.index };
+    }
+
+    if (context.gameVarDeclarations.length > 0) {
+      outputLines.unshift(context.gameVarDeclarations.join(''));
+      context.gameVarDeclarations = [];
     }
 
     if (context.initCode !== '') {

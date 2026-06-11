@@ -57,6 +57,14 @@ declare global {
     /** Explicit FP precision cast to FP30 (Q1.30, 1.0 = 1073741824). Shifts integer→FP or FP→FP. */
     function FP30(x: number): FP30;
 
+    /**
+     * Declares a native EDuke32 gamevar accessible from the in-game console.
+     * Usage: const MY_VAR: gameVar = 0;
+     * Emits: gamevar MY_VAR 0 REG_FLAGS
+     * The initial value can be overridden at build time with --vars MY_VAR=1.
+     */
+    type gameVar = number & { _brand: 'gamevar' };
+
     /** Assert integer equality and print "label: exp=X got=Y [PASS/FAIL]" to the OSD. */
     function checkEq(label: string, expected: number, actual: number): void;
     /** Assert FP16 equality and print "label: exp=X.XXXX got=Y.YYYY [PASS/FAIL]" to the OSD. */
@@ -831,6 +839,10 @@ declare global {
          * String Base pointer register. Hold the base of the current string stack.
          */
         rbsp: CON_NATIVE_GAMEVAR<'rbsp', number>;
+        /** Data-segment register — points to the start of the heap (= stackSize + globalStaticSize). */
+        rds: CON_NATIVE_GAMEVAR<'rds', number>;
+        /** Total heap size in words (stackSize + heapNumPages * heapPageSize). */
+        heapsize: CON_NATIVE_GAMEVAR<'heapsize', number>;
         /**
          * Returns a reference from the register's value
          * @param register - The register to get the reference

@@ -1,4 +1,4 @@
-import { BinaryExpression, SyntaxKind } from "ts-morph";
+import { BinaryExpression, PropertyAccessExpression, PropertyAssignment, SyntaxKind } from "ts-morph";
 import { CompilerContext, ESymbolType, SymbolDefinition } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
 import { evaluateLiteralExpression } from "../helper/helpers";
@@ -26,21 +26,51 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
   const useRD = context.usingRD;
 
   if (opText.includes("=") && !['>=', '<=', '=='].includes(opText)) {
+    // ── Special case: actor inline-object prop assigned from an object literal ──
+    // e.g. this.state = { phase: 0, timer: 0 }
+    // Expands into individual field writes instead of heap-allocating an object.
+    if (opText === '=' &&
+        right.isKind(SyntaxKind.ObjectLiteralExpression) &&
+        left.isKind(SyntaxKind.PropertyAccessExpression)) {
+      const propName = (left as PropertyAccessExpression).getName();
+      const pSym = context.actorCustomChildren?.[propName] as SymbolDefinition | undefined;
+      if (pSym && (pSym.type & ESymbolType.object) && pSym.children) {
+        for (const prop of right.asKindOrThrow(SyntaxKind.ObjectLiteralExpression).getProperties()) {
+          if (!prop.isKind(SyntaxKind.PropertyAssignment)) continue;
+          const pa = prop as PropertyAssignment;
+          const fieldName = pa.getName();
+          const childSym = pSym.children[fieldName] as SymbolDefinition | undefined;
+          if (!childSym) continue;
+          const fieldVal = evaluateLiteralExpression(pa.getInitializer(), context);
+          const val = (typeof fieldVal !== 'undefined' && typeof fieldVal !== 'object') ? Number(fieldVal) : 'ra';
+          if (val === 'ra') code += visitExpression(pa.getInitializer(), context);
+          code += `set ri _pCptr\n`;
+          const absOff = pSym.offset + childSym.offset;
+          if (absOff !== 0) code += `add ri ${absOff}\n`;
+          code += `setarray flat[ri] ${val}\n`;
+        }
+        return code;
+      }
+    }
+
     // assignment
     const valD = evaluateLiteralExpression(right, context);
-    if (typeof valD === 'undefined')
+    // evaluateLiteralExpression returns a Record for object literals — treat as
+    // unresolvable so we don't call Number({...}) which produces NaN.
+    const isCompileTimeScalar = typeof valD !== 'undefined' && typeof valD !== 'object';
+    if (!isCompileTimeScalar)
       code += visitExpression(right, context,);
 
     // If right side was compile-time evaluated (curFpBits not updated), fall back to
     // the symbol's declared fp_bits so FP→int coercion still fires for const FP vars
     let rightFpBitsAssign = context.curFpBits;
-    if (rightFpBitsAssign === 0 && typeof valD !== 'undefined' && right.isKind(SyntaxKind.Identifier)) {
+    if (rightFpBitsAssign === 0 && isCompileTimeScalar && right.isKind(SyntaxKind.Identifier)) {
       const rhsSym = (context.symbolTable.get(right.getText()) ?? context.paramMap[right.getText()]) as SymbolDefinition | undefined;
       if (rhsSym?.fp_bits) rightFpBitsAssign = rhsSym.fp_bits;
     }
 
     // Track the value to use in storeLeftSideOfAssignment (may be overridden below)
-    let storeVal: string | number = typeof valD !== 'undefined' ? Number(valD) : 'ra';
+    let storeVal: string | number = isCompileTimeScalar ? Number(valD) : 'ra';
 
     // For plain `=`: if right side is FP but left side is a plain integer, convert
     if (opText === '=' && rightFpBitsAssign !== 0) {

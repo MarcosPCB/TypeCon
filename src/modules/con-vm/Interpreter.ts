@@ -35,11 +35,28 @@ function readOperand(op: Operand, state: VMState): number {
 }
 
 function writeOperand(op: Operand, value: number, state: VMState): void {
+  // Strict integer checks — catch compiler bugs before |0 silently masks them.
+  if (state.strictIntegers) {
+    const target = op.kind === 'var' ? op.name
+                 : op.kind === 'array' ? `${op.name}[...]`
+                 : 'immediate';
+    if (isNaN(value)) {
+      throw new Error(`[CONVM] NaN written to '${target}' — check for unevaluated expressions in compiled CON (in: ${state._vmLS ?? '?'})`);
+    }
+    if (!Number.isInteger(value)) {
+      throw new Error(`[CONVM] Decimal value ${value} written to '${target}' — CON uses 32-bit integer arithmetic only (in: ${state._vmLS ?? '?'})`);
+    }
+  }
   const v = value | 0;
   switch (op.kind) {
     case 'immediate': return;
     case 'var':
       state.vars.set(op.name, v);
+      // Keep actorFields in sync for _pCptr (written via 'set _pCptr rb' within actor context).
+      // The GC allsprites scan reads it via getactorvar, which uses actorFields.
+      if (op.name === '_pCptr') {
+        setStructField(state.actorFields, state.thisactor, '_pCptr', v);
+      }
       if (op.name === 'rsp') {
         if (v > state.peakRsp) state.peakRsp = v;
         if (v > state._phaseRsp) state._phaseRsp = v;
@@ -321,6 +338,37 @@ export function executeStatements(
         break;
       }
 
+      // ── Per-actor gamevars ────────────────────────────────────────────────
+      case 'getactorvar': {
+        const idx = readOperand(s.index, state) | 0;
+        writeOperand(s.dst, getStructField(state.actorFields, idx, s.field), state);
+        break;
+      }
+      case 'setactorvar': {
+        const idx = readOperand(s.index, state) | 0;
+        setStructField(state.actorFields, idx, s.field, readOperand(s.src, state));
+        break;
+      }
+
+      // ── for VAR allsprites { body } ───────────────────────────────────────
+      // Iterates over all sprite indices that have any actor fields set (simulates
+      // EDuke32's allsprites iterator which loops over live sprites in the map).
+      case 'for_allsprites': {
+        const spritesWithFields = new Set<number>(state.actorFields.keys());
+        // Always include THISACTOR so the current actor is visible to GC scans
+        spritesWithFields.add(state.thisactor);
+        for (const spriteIdx of spritesWithFields) {
+          state.vars.set(s.loopVar, spriteIdx);
+          try {
+            executeStatements(s.body, state, stateMap, depth + 1);
+          } catch (e) {
+            if (e instanceof BreakSignal) break;
+            throw e;
+          }
+        }
+        break;
+      }
+
       // ── State call ────────────────────────────────────────────────────────
       case 'state': {
         // Native override: CFile_GetBuffer — compiled code has a +1 off-by-one
@@ -430,19 +478,19 @@ export function executeStatements(
       // ── Quote operations ──────────────────────────────────────────────────
       case 'qputs': {
         const idx = readOperand(s.quote, state);
-        state.quotes.set(idx, s.text);
+        state.quotes.set(idx, s.text.slice(0, 128));
         break;
       }
       case 'qstrcpy': {
         const dst = readOperand(s.dst, state);
         const src = readOperand(s.src, state);
-        state.quotes.set(dst, state.quotes.get(src) ?? '');
+        state.quotes.set(dst, (state.quotes.get(src) ?? '').slice(0, 128));
         break;
       }
       case 'qstrcat': {
         const dst = readOperand(s.dst, state);
         const src = readOperand(s.src, state);
-        state.quotes.set(dst, (state.quotes.get(dst) ?? '') + (state.quotes.get(src) ?? ''));
+        state.quotes.set(dst, ((state.quotes.get(dst) ?? '') + (state.quotes.get(src) ?? '')).slice(0, 128));
         break;
       }
       case 'qstrncat': {
@@ -450,7 +498,7 @@ export function executeStatements(
         const src = readOperand(s.src, state);
         const len = readOperand(s.len, state);
         const append = (state.quotes.get(src) ?? '').substring(0, len);
-        state.quotes.set(dst, (state.quotes.get(dst) ?? '') + append);
+        state.quotes.set(dst, ((state.quotes.get(dst) ?? '') + append).slice(0, 128));
         break;
       }
       case 'qsprintf':
@@ -458,7 +506,7 @@ export function executeStatements(
         const dst = readOperand(s.dst, state);
         const fmtIdx = readOperand(s.fmt, state);
         const fmt = state.quotes.get(fmtIdx) ?? '';
-        state.quotes.set(dst, formatSprintf(fmt, s.args, state));
+        state.quotes.set(dst, formatSprintf(fmt, s.args, state).slice(0, 128));
         break;
       }
       case 'qsubstr': {
@@ -467,7 +515,7 @@ export function executeStatements(
         const start = readOperand(s.start, state);
         const len = readOperand(s.len, state);
         const text = state.quotes.get(src) ?? '';
-        state.quotes.set(dst, text.substring(start, start + len));
+        state.quotes.set(dst, text.substring(start, start + len).slice(0, 128));
         break;
       }
       case 'qgetsysstr': {

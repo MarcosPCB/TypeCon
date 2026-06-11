@@ -203,6 +203,12 @@ export const PALDATA_FIELDS = new Set<string>([
   'nofloorpal',
 ]);
 
+// Per-actor gamevar fields (getactorvar[i]._pCptr, setactorvar[i]._pCptr).
+// Validator lowercases field names before lookup, so register the lowercase form.
+export const ACTORVAR_FIELDS = new Set<string>([
+  '_pcptr',   // property class pointer — heap address of the actor's custom property block
+]);
+
 // Maps the CON op string (as it appears in geta[ri].xxx) → valid field codes
 export const STRUCT_FIELD_MAP: Record<string, Set<string>> = {
   a:          ACTOR_FIELDS,
@@ -215,4 +221,5 @@ export const STRUCT_FIELD_MAP: Record<string, Set<string>> = {
   input:      INPUT_FIELDS,
   tiledata:   TILEDATA_FIELDS,
   paldata:    PALDATA_FIELDS,
+  actorvar:   ACTORVAR_FIELDS,
 };

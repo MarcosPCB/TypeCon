@@ -101,7 +101,12 @@ export class Validator {
         const idxToken = tok.next();
         const idx = parseInt(idxToken.value);
         if (!isNaN(idx)) this.syms.defineQuote(idx, idxToken.line);
-        tok.skipLineRemainder();
+        const quoteContent = tok.skipLineRemainder().trim();
+        if (quoteContent.length > 128) {
+          this.diag.push({ severity: 'warning', line: idxToken.line, col: idxToken.col,
+            code: 'WARN_QUOTE_TOO_LONG',
+            message: `String/quote content is ${quoteContent.length} characters (EDuke32 limit is 128; excess will be truncated)` });
+        }
 
       } else if (lower === 'actor' || lower === 'useractor') {
         if (lower === 'useractor') tok.next(); // enemy-type param
@@ -160,6 +165,16 @@ export class Validator {
       this.diag.push({ severity: 'error', line: t.line, col: t.col,
         code: 'ERROR_FLOAT_LITERAL',
         message: `Float literal '${t.value}' is not valid in CON — the compiler should have converted this to a fixed-point integer. Check the source for untyped float literals passed to FP-aware functions.` });
+      return;
+    }
+
+    // NaN and Infinity are JavaScript sentinel values that should never appear in
+    // compiled CON. Their presence indicates a TypeCON compiler bug — most commonly
+    // Number(objectLiteral) evaluating to NaN during constant folding.
+    if (t.kind === 'identifier' && /^[+-]?(nan|infinity)$/i.test(t.value)) {
+      this.diag.push({ severity: 'error', line: t.line, col: t.col,
+        code: 'ERROR_NAN_OPERAND',
+        message: `'${t.value}' is not a valid CON operand. This is a TypeCON compiler bug — likely an object literal or unevaluable expression was used where a number was expected (e.g. 'this.obj = {...}' without field expansion).` });
       return;
     }
 

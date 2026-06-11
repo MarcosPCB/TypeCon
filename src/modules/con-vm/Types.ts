@@ -40,6 +40,9 @@ export type Statement =
   | { op: 'addlogvar'; val: Operand }
   | { op: 'getstruct'; struct: 'actor' | 'player' | 'sector' | 'wall'; index: Operand; field: string; dst: Operand }
   | { op: 'setstruct'; struct: 'actor' | 'player' | 'sector' | 'wall'; index: Operand; field: string; src: Operand }
+  | { op: 'getactorvar'; index: Operand; field: string; dst: Operand }
+  | { op: 'setactorvar'; index: Operand; field: string; src: Operand }
+  | { op: 'for_allsprites'; loopVar: string; body: Statement[] }
   | { op: 'ifhitweapon'; body: Statement[]; elseBody?: Statement[] }
   | { op: 'readarrayfromfile' | 'writearraytofile'; arr: string; quote: Operand }
   | { op: 'defstate'; name: string; body: Statement[] }

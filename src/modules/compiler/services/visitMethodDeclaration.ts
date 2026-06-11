@@ -67,14 +67,18 @@ export function visitMethodDeclaration(
 
     localCtx.curFunc = { name: mName, type: ESymbolType.function, offset: 0, parentClass: className };
 
-    let code = `${context.options.lineDetail ? formatLineDetail(md.getText()) : ''}\n${localCtx.currentActorHardcoded || type == 'CPlayer' ? 'actor' : `useractor ${enemy}`} ${pic} ${extra} ${firstAction} \n  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
+    const isDebugTest = md.getLeadingCommentRanges().some(c => /debug-test/i.test(c.getText()));
+    if (isDebugTest) localCtx.isDebugTest = true;
+
+    const header = `${localCtx.currentActorHardcoded || type == 'CPlayer' ? 'actor' : `useractor ${enemy}`} ${pic} ${extra} ${firstAction}`;
+    let code = `${context.options.lineDetail ? formatLineDetail(md.getText()) : ''}\n${header} \n${isDebugTest ? '//// DEBUG-TEST ////\n  state _testInit\n' : ''}  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
     const body = md.getBody() as any;
     if (body) {
       body.getStatements().forEach(st => {
         code += indent(visitStatement(st, localCtx), 1) + "\n";
       });
     }
-    code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nenda \n\n`;
+    code += `  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n${isDebugTest ? '  set rb _testCounter\n' : ''}  state _GC\nenda \n\n`;
     return code;
   } else if (type == 'CEvent' && (mName.toLowerCase() == 'append' || mName.toLowerCase() == 'prepend')) {
     const isDebugTest = md.getLeadingCommentRanges().some(c => /debug-test/i.test(c.getText()));
