@@ -21,12 +21,12 @@
 ## Native game vars
  - Implement remaining game vars
 
- ## New game vars for every Class
-  - Implement a way to register new variables for specific classes (e.g: per-actor var in CActor or per player in CPlayer)
-
 ## Examples for each extra module
  - Example for AnimUtils
  - Example for CFile
+
+## Projectile system
+ - Implement defineprojectile in CProjectile
 
 ## Finish New Weapon System
 
