@@ -191,6 +191,9 @@
                     <li><a href="#cjson-json">JSON Alias</a></li>
                 </ul>
             </li>
+            <li><a href="#custom-props">Per-Actor Custom Properties</a></li>
+            <li><a href="#gamevar-type">gameVar Type</a></li>
+            <li><a href="#tcui">TCUI / TCDebug</a></li>
             <li>
                 <a href="#con-vm">CON VM Simulator</a>
                 <ul>
@@ -4049,6 +4052,7 @@ let x: FP16 = 0.5;        // → 32768 raw (half screen)</div>
                 <tr><td><code>tcc make compile</code></td><td>Compile source files from <code>sources</code> globs (filtered by <code>modules[]</code>) into <code>.tco</code> objects in <code>objDir</code>.</td></tr>
                 <tr><td><code>tcc make link</code></td><td>Link all <code>.tco</code> files in <code>objDir</code> into a single <code>.con</code> file written to <code>outputDir/output</code>.</td></tr>
                 <tr><td><code>tcc make validate</code></td><td>Run the CON validator on the linked output and report diagnostics.</td></tr>
+                <tr><td><code>tcc make test</code></td><td>Run all test files listed in <code>typecon.json:tests[]</code>. Supports <code>.test.json</code> suites and single <code>.ts</code> files.</td></tr>
                 <tr><td><code>tcc make clear</code> / <code>tcc make clean</code></td><td>Empty <code>obj/</code>, <code>asm/</code>, and <code>compiled/</code> without building.</td></tr>
             </table>
 
@@ -4069,6 +4073,8 @@ let x: FP16 = 0.5;        // → 32768 raw (half screen)</div>
                 <tr><td><code>modules</code></td><td>MakeModuleEntry[]</td><td>—</td><td>Per-file enable/required overrides. See <a href="#make-modules">Module Config</a>.</td></tr>
                 <tr><td><code>validate</code></td><td>MakeValidateConfig</td><td>—</td><td>Validator settings. See table below.</td></tr>
                 <tr><td><code>locked</code></td><td>string[]</td><td>—</td><td>Keys listed here are displayed but not editable in <code>tcc make config</code>. See <a href="#make-locks">Lock System</a>.</td></tr>
+                <tr><td><code>vars</code></td><td>Record&lt;string, number&gt;</td><td>—</td><td>Override <code>gameVar</code> initial values at build time. Equivalent to CLI <code>--vars NAME=VALUE</code>. CLI wins when both are specified.</td></tr>
+                <tr><td><code>tests</code></td><td>string[]</td><td>—</td><td>Paths to <code>.test.json</code> or <code>.ts</code> test files run by <code>tcc make test</code>. Relative to the project root.</td></tr>
             </table>
 
             <h4>validate object</h4>
@@ -4226,6 +4232,132 @@ const scores: Record&lt;string, number&gt; = JSON.parse(data).ToRecord();
 const hp: number = scores["hp"];</pre></div>
         </div>
 
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div id="custom-props" class="section">
+            <h2>Per-Actor Custom Properties</h2>
+            <p><code>CActor</code> and <code>CPlayer</code> subclasses can declare non-native instance properties — scalars, inline objects, arrays, and strings. The compiler automatically:</p>
+            <ol>
+                <li>Allocates a per-actor heap block via <code>appendevent EVENT_SPAWN</code> using the built-in <code>_pCptr</code> (<code>GAMEVAR_PERACTOR</code>) pointer.</li>
+                <li>Compiles the constructor body (statements after <code>super()</code>) into the same <code>EVENT_SPAWN</code> block, after the allocation, so properties are ready immediately.</li>
+                <li>Translates every <code>this.prop</code> access inside actor methods to <code>set ri _pCptr; add ri OFFSET; flat[ri]</code>.</li>
+                <li>Keeps the block alive via the GC's <code>for allsprites { getactorvar[rc]._pCptr }</code> scan.</li>
+                <li>Frees the block in <code>appendevent EVENT_KILLIT</code> automatically when the actor is killed.</li>
+            </ol>
+
+            <h3>Supported property types</h3>
+            <table>
+                <tr><th>TypeScript type</th><th>Storage</th><th>Slots</th></tr>
+                <tr><td><code>number</code> / <code>boolean</code></td><td>Scalar inline</td><td>1</td></tr>
+                <tr><td>Known interface / type alias</td><td>All fields stored contiguously (inline object)</td><td>N fields</td></tr>
+                <tr><td><code>number[]</code> / <code>string[]</code></td><td>Heap pointer (array allocated separately)</td><td>1</td></tr>
+                <tr><td><code>string</code></td><td>Heap pointer</td><td>1</td></tr>
+            </table>
+
+            <h3>Example</h3>
+            <div class="code"><pre>interface EnemyState { phase: number; timer: number; }
+
+class Grunt extends CActor {
+    constructor() {
+        super(1234, true, 100);
+        // These statements run in EVENT_SPAWN after _pCptr is allocated:
+        this.hp          = 100;
+        this.state       = { phase: 0, timer: 0 };
+        this.waypoints   = [0, 0, 0];   // 3-element array
+        this.label       = 'Grunt';
+    }
+
+    // Object: 2 contiguous slots in the _pCptr block
+    public state:      EnemyState;
+    // Array pointer: 1 slot (array data lives elsewhere on heap)
+    public waypoints:  number[];
+    // String pointer: 1 slot
+    public label:      string;
+    // Scalars: 1 slot each
+    public hp:         number = 100;
+    public rage:       number = 0;
+
+    // debug-test
+    Main() {
+        this.rage = this.rage + 1;
+        this.state.phase = 1;
+        this.state.timer = this.state.timer + 1;
+
+        checkEq('hp',         100,  this.hp);
+        checkEq('state.phase', 1,   this.state.phase);
+        checkEq('label len',   5,   this.label.length);
+    }
+}</pre></div>
+
+            <h3>_pCptr block layout</h3>
+            <p>The block is a contiguous <code>flat[]</code> region. Offsets are assigned in property declaration order:</p>
+            <div class="code"><pre>flat[_pCptr + 0]  = state.phase     (EnemyState.phase, offset 0)
+flat[_pCptr + 1]  = state.timer     (EnemyState.timer, offset 1)
+flat[_pCptr + 2]  = waypoints ptr   (heap pointer to number[] array)
+flat[_pCptr + 3]  = label ptr       (heap pointer to string)
+flat[_pCptr + 4]  = hp              (scalar)
+flat[_pCptr + 5]  = rage            (scalar)</pre></div>
+
+            <h3>Notes</h3>
+            <ul>
+                <li>All access uses <code>set ri _pCptr</code> — the per-actor gamevar is automatically scoped to <code>THISACTOR</code> within actor events.</li>
+                <li>Object literals in the constructor (<code>this.state = { phase: 0, timer: 0 }</code>) expand directly to individual field writes — no heap allocation.</li>
+                <li>Array and string properties start as <code>0</code> (null pointer) until assigned.</li>
+                <li>The <code>// debug-test</code> marker works on <code>Main()</code> — run with <code>tcc -S --test --actor PICNUM</code> or <code>tcc test</code>.</li>
+            </ul>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div id="gamevar-type" class="section">
+            <h2>gameVar Type</h2>
+            <p>The <code>gameVar</code> type lets you declare a native EDuke32 gamevar directly from TypeScript. The declared variable is accessible from the in-game console (<code>setvar NAME VALUE</code>) and from CON code.</p>
+            <div class="code"><pre>const TCDEBUG_MODE: gameVar = 0;
+// Emits:  gamevar TCDEBUG_MODE 0 REG_FLAGS</pre></div>
+
+            <h3>Overriding at build time</h3>
+            <p>Use <code>--vars NAME=VALUE</code> to bake a different initial value into the compiled output without changing the source:</p>
+            <div class="code"><pre>tcc make --vars TCDEBUG_MODE=1
+tcc -L -di --vars TCDEBUG_MODE=1,OTHER_VAR=42</pre></div>
+            <p>You can also set overrides in <code>typecon.json</code>:</p>
+            <div class="code"><pre>{
+  "vars": { "TCDEBUG_MODE": 1 }
+}</pre></div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div id="tcui" class="section">
+            <h2>TCUI — Immediate-Mode UI</h2>
+            <p><code>TCUI</code> is an optional ImGUI/Nuklear-style layout class for building HUDs and overlays. Import it into your project:</p>
+            <div class="code"><pre>import './include/TCSet100/TCUI';</pre></div>
+            <p>Allocate one instance per panel and reuse it every display frame. All layout state lives in the class's own <code>flat[]</code> object fields — no per-frame heap allocation.</p>
+
+            <h3>API</h3>
+            <table>
+                <tr><th>Method</th><th>Description</th></tr>
+                <tr><td><code>beginContainer(x, y, w, h)</code></td><td>Start a container. Resets cursor; items are clipped to bounds.</td></tr>
+                <tr><td><code>endContainer()</code></td><td>End the container.</td></tr>
+                <tr><td><code>setLayout(mode, maxPerLine, itemW, itemH, grow)</code></td><td>Configure layout: <code>mode</code> 0=vertical / 1=horizontal; <code>grow</code> 1=wrap at <code>maxPerLine</code>.</td></tr>
+                <tr><td><code>setFont(tile, xSpace, yLine, xBetween, yBetween, flags)</code></td><td>Font settings (mirrors <code>IFont</code> fields).</td></tr>
+                <tr><td><code>setStyle(shade, pal, orientation)</code></td><td>Style settings (mirrors <code>TStyle</code> fields).</td></tr>
+                <tr><td><code>text(str)</code></td><td>Render a single-line string at the cursor, then advance.</td></tr>
+                <tr><td><code>multilineText(str)</code></td><td>Render multi-line text (split on <code>\n</code>), advance by total height.</td></tr>
+                <tr><td><code>sprite(picnum, scale)</code></td><td>Render a sprite at the cursor, then advance.</td></tr>
+                <tr><td><code>spacer(n)</code></td><td>Skip <em>n</em> item slots without rendering.</td></tr>
+            </table>
+
+            <h3>TCDebug overlay</h3>
+            <p><code>TCDebug</code> is a pre-wired debug overlay built on top of <code>TCUI</code>. Import it to add a live stack/heap display that hooks <code>EVENT_DISPLAYEND</code> automatically:</p>
+            <div class="code"><pre>import './include/TCSet100/TCDebug';
+
+// Toggle from the EDuke32 console:
+setvar TCDEBUG_MODE 1
+
+// Or bake at build time:
+tcc make --vars TCDEBUG_MODE=1</pre></div>
+            <p>The overlay shows two lines:</p>
+            <div class="code"><pre>Stack: &lt;rsp&gt; / &lt;rds&gt;
+Heap:  used=&lt;N&gt;  free=&lt;N&gt;  gc=&lt;N&gt;</pre></div>
+        </div>
+
         <div id="con-vm" class="section">
             <h2>CON VM Simulator</h2>
             <p>TypeCON includes a built-in CON bytecode interpreter (<code>tcc -S</code>) that runs compiled <code>.con</code> output without EDuke32. It is the backbone of the automated test system and supports ~50 CON opcodes including arithmetic, array ops, string ops, <code>while</code>/<code>switch</code>, <code>state</code> calls, <code>mulscale</code>/<code>divscale</code>, <code>sqrt</code>, <code>sin</code>/<code>cos</code>, and file I/O.</p>
@@ -4235,9 +4367,14 @@ const hp: number = scores["hp"];</pre></div>
                 <tr><th>Flag</th><th>Description</th></tr>
                 <tr><td><code>-S</code>, <code>--sim</code></td><td>Run the CON VM simulator on the compiled output</td></tr>
                 <tr><td><code>--state NAME</code></td><td>Run a specific <code>defstate</code> instead of the full init sequence</td></tr>
+                <tr><td><code>--actor PICNUM</code></td><td>Run a specific actor body by tile number (<code>EVENT_SPAWN</code> fires first)</td></tr>
+                <tr><td><code>--event NAME</code></td><td>Run a specific event handler</td></tr>
                 <tr><td><code>--no-init</code></td><td>Skip init events; useful for unit-testing individual states</td></tr>
                 <tr><td><code>--mem</code></td><td>Print per-phase stack HWM and page-based heap accounting (Allocated live / Marked to be freed / Free reclaimed)</td></tr>
-                <tr><td><code>--test</code></td><td>Aggregate <code>checkEq</code>/<code>checkFpEq</code> results; exit <code>0</code>/<code>1</code></td></tr>
+                <tr><td><code>--test</code></td><td>Aggregate <code>checkEq</code>/<code>checkFpEq</code> results; exit <code>0</code>/<code>1</code>. Works with <code>--actor</code> for actor debug-tests.</td></tr>
+                <tr><td><code>--2-pass-gc</code></td><td>Run GC twice after the entry point — completes the two-pass deferred deletion so the memory report shows "reclaimed" pages instead of "marked to free"</td></tr>
+                <tr><td><code>--strict-int</code></td><td>Throw a runtime error if a NaN or decimal value is written to any CON variable. Useful for catching compiler bugs early.</td></tr>
+                <tr><td><code>--report FILE</code></td><td>Write a JSON simulation report to FILE: memory stats, test results, final variable state, and a <code>flatMemory</code> snapshot (stack + typed heap pages)</td></tr>
                 <tr><td><code>--set-field-actor [I]f=v</code></td><td>Pre-seed an actor struct field before simulation</td></tr>
                 <tr><td><code>--set-field-player [I]f=v</code></td><td>Pre-seed a player struct field</td></tr>
                 <tr><td><code>--set-field-sector [I]f=v</code></td><td>Pre-seed a sector struct field</td></tr>
@@ -4257,16 +4394,16 @@ tcc -S compiled/EDUKE.CON --set-field-actor "[0]extra=42" --set-field-player "[0
 
         <div id="debug-test" class="section">
             <h2>Debug-Test Framework</h2>
-            <p>Add a <code>// debug-test</code> comment to any <code>CEvent</code> class or <code>Append()</code> method body to enable in-place pass/fail unit testing. No separate test file needed — tests live inline with game logic.</p>
+            <p>Add a <code>// debug-test</code> comment to any <code>CEvent</code> <code>Append()</code>, plain <code>defstate</code>, or <strong><code>CActor</code>/<code>CPlayer</code> <code>Main()</code></strong> to enable in-place pass/fail unit testing. No separate test file needed — tests live inline with game logic.</p>
 
             <h3>How it works</h3>
             <ol>
-                <li>The compiler detects the <code>// debug-test</code> comment and emits a <code>//// DEBUG-TEST ////</code> CON marker, <code>state _testInit</code>, and <code>set rb _testCounter</code> at the top of the block.</li>
+                <li>The compiler detects the <code>// debug-test</code> comment and emits a <code>//// DEBUG-TEST ////</code> CON marker, <code>state _testInit</code>, and <code>set rb _testCounter</code> at the top of the block. For actors this appears immediately after the <code>useractor</code> line.</li>
                 <li>Every <code>checkEq(a, b)</code> or <code>checkFpEq(a, b)</code> call site gets two injected instructions: <code>add _testCounter 4096</code> (increment total) and, if <code>a == b</code>, <code>add _testCounter 1</code> (increment pass).</li>
                 <li>After simulation <code>--test</code> decodes <code>_testCounter</code> as <code>total = counter &gt;&gt; 12</code>, <code>passed = counter &amp; 0xFFF</code> and prints per-function results.</li>
             </ol>
 
-            <h3>Usage</h3>
+            <h3>Usage — CEvent</h3>
             <div class="code"><pre>class TestMath extends CEvent {
     // debug-test
     Append() {
@@ -4276,6 +4413,23 @@ tcc -S compiled/EDUKE.CON --set-field-actor "[0]extra=42" --set-field-player "[0
         checkFpEq(Math.sin(0.25), 0.707);
     }
 }</pre></div>
+
+            <h3>Usage — CActor</h3>
+            <div class="code"><pre>class Grunt extends CActor {
+    constructor() { super(1234, true, 100); }
+    public hp: number = 100;
+
+    // debug-test
+    Main() {
+        this.hp -= 1;
+        checkEq('hp', 99, this.hp);
+    }
+}</pre></div>
+            <div class="code"><pre>tcc -c -il Grunt.ts &amp;&amp; tcc -L -di -o grunt.con
+tcc -S compiled/grunt.con --test --actor 1234
+
+[PASS] actor_1234   1/1</pre></div>
+            <p>The simulator fires <code>EVENT_SPAWN</code> before the actor body (so <code>_pCptr</code> and custom properties are initialised). Without <code>--actor</code>, <code>--test</code> auto-discovers all debug-test marked actors.</p>
 
             <h3>Output</h3>
             <div class="code"><pre>tcc -S compiled/EDUKE.CON --test

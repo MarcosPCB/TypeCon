@@ -18,9 +18,14 @@ Welcome to the TypeCON Compiler! This tool leverages the power of TypeScript to 
 - **Full-Precision Sprite & Text Rendering**: `RotateSpriteF` and `ScreenTextF` accept normalized screen coordinates (FP16) and sub-degree angles (FP11), automatically setting `ROTATESPRITE_FULL16`.
 - **Native `Record<string, T>` Hash Map**: Compiler-generated hash map backed by the CON heap; supports compile-time key hashing and chained access.
 - **`JSON` Namespace**: `JSON.parse(text)` and `JSON.stringify(obj)` mirror JavaScript's JSON global, backed by the `CJson` class.
+- **Per-Actor Custom Properties**: Declare non-native properties on `CActor`/`CPlayer` subclasses — the compiler transparently allocates a per-actor heap block (`_pCptr`) and generates `EVENT_SPAWN` / `EVENT_KILLIT` hooks. Supports scalars, inline objects, arrays, and strings.
+- **`gameVar` Type**: Declare native EDuke32 gamevars directly from TypeScript; `--vars NAME=VALUE` overrides initial values at build time.
+- **TCUI Library**: ImGUI/Nuklear-style immediate-mode UI class (`beginContainer` → `setLayout` → `text`/`sprite` → `endContainer`) — import from `include/TCSet100/TCUI`.
+- **TCDebug Library**: Runtime stack/heap overlay that self-hooks `EVENT_DISPLAYEND`; toggled via `setvar TCDEBUG_MODE 1` — import from `include/TCSet100/TCDebug`.
 - **CON VM Simulator**: Built-in bytecode interpreter (`tcc -S`) for running and unit-testing compiled CON output without EDuke32.
-- **Debug-Test Framework**: Mark any event or function with `// debug-test` to enable `checkEq`/`checkFpEq` pass/fail tracking; `--test` prints structured results.
-- **`tcc test` Runner**: JSON-driven multi-scenario test harness with setup/expect blocks and game-struct field assertions.
+- **Debug-Test Framework**: Mark any event, defstate, or **actor `Main()`** with `// debug-test` to enable `checkEq`/`checkFpEq` pass/fail tracking; `--test` prints structured results.
+- **`tcc test` / `tcc make test`**: JSON-driven multi-scenario test harness; `tcc make test` runs all tests listed in `typecon.json`.
+- **Simulator JSON Report**: `--report FILE` exports memory stats, test results, variables, and a `flatMemory` snapshot (stack + heap pages) to JSON for tooling integration.
 - **Hand-written CON Integration**: Use `CON()` and `CONUnsafe()` for direct engine instruction injection.
 - **VS Code Development Support**: Includes a TypeScript plugin for real-time validation and Duke 3D type safety.
 
@@ -138,6 +143,89 @@ Anim.pingPong(t, period: number): number
 Anim.oscillateFP(t, period: number): FP16
 Anim.approach(curr, target, step: number): number
 Anim.pulse(t, period, duty: number): number
+```
+
+---
+
+## 🎯 Per-Actor Custom Properties
+
+`CActor` and `CPlayer` subclasses can declare non-native instance properties. The compiler
+allocates a per-actor heap block via `EVENT_SPAWN` and accesses it through the built-in
+`_pCptr` (`GAMEVAR_PERACTOR`) pointer. The GC keeps the block alive as long as the actor
+sprite exists; `EVENT_KILLIT` frees it automatically.
+
+```typescript
+interface EnemyState { phase: number; timer: number; }
+
+class CustomEnemy extends CActor {
+    constructor() {
+        super(1234, true, 100);
+        // Constructor body compiles into EVENT_SPAWN (after allocation)
+        this.hp     = 100;
+        this.state  = { phase: 0, timer: 0 };
+        this.label  = 'Grunt';
+    }
+    public hp:      number = 100;       // scalar — 1 slot
+    public state:   EnemyState;         // inline object — 2 slots
+    public inventory: number[];         // heap pointer — 1 slot
+    public label:   string;             // heap pointer — 1 slot
+
+    Main() {
+        this.hp    -= 1;
+        this.state.phase = 1;
+        this.label = 'Damaged';
+    }
+}
+```
+
+### `gameVar` type
+
+Declare a native EDuke32 gamevar (accessible from the in-game console) from TypeScript:
+
+```typescript
+const TCDEBUG_MODE: gameVar = 0;   // emits: gamevar TCDEBUG_MODE 0 REG_FLAGS
+```
+
+Override the initial value at build time:
+```bash
+tcc make --vars TCDEBUG_MODE=1
+tcc -L -di --vars TCDEBUG_MODE=1
+```
+
+---
+
+## 🖥 TCUI — Immediate-Mode UI
+
+`TCUI` is an optional ImGUI/Nuklear-style UI layout class. Import it when you need
+in-game HUDs or overlays:
+
+```typescript
+import './include/TCSet100/TCUI';
+
+const ui = new TCUI();  // allocate once; reuse every frame
+
+class MyHUD extends CEvent {
+    constructor() { super('DisplayEnd'); }
+    Append() {
+        ui.beginContainer(0, 0, 200, 50);
+        ui.setLayout(0, 0, 200, 10, 0);  // vertical, 10 px rows
+        ui.setFont(2930, 0, 8, 0, 0, ETextFlags.INTERNALSPACE);
+        ui.setStyle(-128, 0, EOrientationFlags.NOCLIP | EOrientationFlags.AUTO);
+        ui.text("HP: " + player.health);
+        ui.text("Score: " + score);
+        ui.endContainer();
+    }
+}
+```
+
+### TCDebug overlay
+
+Import `TCDebug` to add a live stack/heap overlay that self-hooks `EVENT_DISPLAYEND`:
+
+```typescript
+import './include/TCSet100/TCDebug';
+// Toggle:  setvar TCDEBUG_MODE 1   (from EDuke32 console)
+// Or bake: tcc make --vars TCDEBUG_MODE=1
 ```
 
 ---
@@ -285,6 +373,7 @@ tcc make config
 | `tcc make compile` | Compile source files → `.tco` objects |
 | `tcc make link` | Link `.tco` objects → final `.con` |
 | `tcc make validate` | Validate the linked output with the CON validator |
+| `tcc make test` | Run all test files listed in `typecon.json:tests` |
 | `tcc make clear` | Empty `obj/`, `asm/`, and `compiled/` (no build) |
 
 ### `typecon.json` format
@@ -310,7 +399,12 @@ tcc make config
     "warnNearLimits": true,
     "baseDirs": ["baseCON"]
   },
-  "locked": ["stackSize", "heapPageSize"]
+  "locked": ["stackSize", "heapPageSize"],
+  "vars": { "TCDEBUG_MODE": 0 },
+  "tests": [
+    "tests/my_suite.test.json",
+    "tests/quick_check.ts"
+  ]
 }
 ```
 
@@ -351,9 +445,14 @@ tcc -S compiled/EDUKE.CON --set-field-actor "[0]extra=42" --set-field-player "[0
 |---|---|
 | `-S`, `--sim` | Run the CON VM simulator on the compiled output |
 | `--state NAME` | Run a specific `defstate` instead of the full init sequence |
+| `--actor PICNUM` | Run a specific actor body (`EVENT_SPAWN` fires first) |
+| `--event NAME` | Run a specific event handler |
 | `--no-init` | Skip init events; useful for unit-testing individual states |
 | `--mem` | Print per-phase stack HWM and page-based heap accounting |
 | `--test` | Aggregate `checkEq`/`checkFpEq` results; exit `0`/`1` |
+| `--2-pass-gc` | Run GC twice after entry point — converts "marked to free" into "reclaimed" |
+| `--strict-int` | Throw on NaN or decimal values written to CON variables (catches compiler bugs) |
+| `--report FILE` | Write JSON report: memory stats, test results, variables, `flatMemory` snapshot |
 | `--set-field-actor [I]f=v` | Pre-seed an actor field for simulation |
 | `--set-field-player [I]f=v` | Pre-seed a player field |
 | `--set-field-sector [I]f=v` | Pre-seed a sector field |
@@ -363,7 +462,7 @@ tcc -S compiled/EDUKE.CON --set-field-actor "[0]extra=42" --set-field-player "[0
 
 ## 🧬 Debug-Test Framework
 
-Add a `// debug-test` comment to any `CEvent` class or method `Append()` to enable in-place unit testing. The compiler automatically injects `checkEq` / `checkFpEq` counters.
+Add a `// debug-test` comment to any `CEvent` `Append()`, plain `defstate`, or **`CActor`/`CPlayer` `Main()`** to enable in-place unit testing. The compiler automatically injects `checkEq` / `checkFpEq` counters.
 
 ```typescript
 class TestMath extends CEvent {
@@ -518,7 +617,7 @@ For a deep dive into how TypeCON handles memory, strings, and garbage collection
 ## ⚠️ Limitations
 
 - **Optimization**: Generated code is currently unoptimized. Use large scripts with care.
-- **Constructor Rules**: No function calls (except `super()`) or control flow inside constructors.
+- **Constructor Rules**: `CActor`/`CPlayer` constructors may only contain `super()` and property initialization statements. Arbitrary control flow inside constructors is not supported.
 - **Scoped Locals**: Local variables are strictly block-scoped.
 
 ---

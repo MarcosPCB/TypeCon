@@ -56,6 +56,12 @@ TypeCON implements a virtual register machine on top of CON. All registers are d
 | :--- | :--- | :--- |
 | `_testCounter` | Test Counter | Initialized to `-1` (disabled). When `// debug-test` mode is active, `_testInit` sets it to `0`. Encoded as `(total_count << 12) \| pass_count`; decoded after simulation by `--test`. |
 
+### Per-actor property pointer
+
+| Register | Name | Purpose |
+| :--- | :--- | :--- |
+| `_pCptr` | Property Class Pointer | `GAMEVAR_PERACTOR` (flag `2`) — every sprite has its own slot. Holds the `flat[]` heap address of that actor's custom property block, or `0` if none. Accessed directly as `set ri _pCptr` inside actor code; scanned by the GC via `getactorvar[rc]._pCptr`. |
+
 ---
 
 ## 2. Flat Memory Model
@@ -102,15 +108,17 @@ The Build Engine displays text via global "quotes" (indices 0-1023). TypeCON man
 ---
 
 ## 4. Garbage Collection
-TypeCON implements a non-intrusive Mark-and-Sweep style Garbage Collector via the `_GC` state.
+TypeCON implements a non-intrusive two-pass Mark-and-Sweep Garbage Collector via the `_GC` state.
 
 1.  **Scan**: It iterates through all active heap pages in `allocTable`.
-2.  **Mark**: It scans the **entire stack** (from `rbp` up to `rsp`) looking for any value that matches the heap address.
-3.  **Sweep**:
-    - If a pointer is found on the stack, it's considered "alive". Any "toBeFreed" mark (bit `1024`) is cleared.
-    - If a pointer is NOT found on the stack:
+2.  **Mark (stack)**: It scans the **entire stack** (from `rbp` up to `rsp`) looking for any value that matches the heap address.
+3.  **Mark (per-actor)**: For allocations of type `EHeapType.peractor` (bit 16), it additionally scans all live sprites via `for rc allsprites { getactorvar[rc]._pCptr ra }` to keep per-actor property blocks alive even when not on the stack.
+4.  **Sweep**:
+    - If a pointer is found on the stack **or** in an actor's `_pCptr`, it is considered "alive". Any "toBeFreed" mark (bit `1024`) is cleared.
+    - If a pointer is NOT found:
         - If it was already marked with bit `1024`, it is physically freed (`allocTable = 0`).
         - Otherwise, it is marked with bit `1024` to be checked in the next cycle.
+5.  **Lifecycle hook**: `appendevent EVENT_KILLIT` in the framework frees the `_pCptr` block automatically when any actor dies.
 
 ---
 
@@ -503,7 +511,85 @@ JSON.stringify(node)    // → node.Stringify()
 
 ---
 
-## 16. CON VM Simulator
+## 16. `gameVar` Type
+
+The `gameVar` type lets TypeCON source code declare native EDuke32 `GAMEVAR_PERACTOR` or
+global gamevars that are accessible from the EDuke32 console and from CON code.
+
+```typescript
+const TCDEBUG_MODE: gameVar = 0;   // emits:  gamevar TCDEBUG_MODE 0 REG_FLAGS
+```
+
+**Compiler behaviour**
+
+- Detected via the alias name `'gameVar'` in `visitVariableDeclaration.ts`.
+- Emits `gamevar NAME VALUE REG_FLAGS` into `context.gameVarDeclarations[]`, which is
+  prepended to the output before any `defstate` or event blocks (required by EDuke32's
+  single-pass parser).
+- The symbol is registered as `ESymbolType.native` with `CON_code: varName`.  
+  Reads emit `set ra VARNAME`; writes emit `set VARNAME ra` — no `flat[]` indirection.
+- Initial value can be overridden at build time via `--vars NAME=VALUE` (applied at emit
+  time, so the substitution is baked into the `gamevar` declaration itself).
+
+---
+
+## 17. Per-Actor Custom Properties (`_pCptr`)
+
+CActor and CPlayer subclasses can declare non-native instance properties. The compiler
+allocates a per-actor heap block and points to it via the `_pCptr` `GAMEVAR_PERACTOR`.
+
+### Supported property types
+
+| TypeScript type | Storage | Block slots |
+|---|---|---|
+| `number` / `boolean` | Scalar value inline | 1 |
+| Known interface/type | Inline object (all fields contiguous) | N (one per field) |
+| `number[]` / `string[]` | Heap pointer (array allocated separately) | 1 |
+| `string` | Heap pointer | 1 |
+
+### Block layout
+
+```
+flat[_pCptr + 0]   = first property (or first field of first inline object)
+flat[_pCptr + 1]   = second property / next inline field
+...
+flat[_pCptr + N-1] = last property
+```
+
+### Lifecycle
+
+1. **Allocation** — `appendevent EVENT_SPAWN / ifactor PICNUM` runs `alloc(N, EHeapType.peractor)`
+   and stores the result: `set _pCptr rb`. Default values from property declarations are
+   then written, followed by any additional initialization from the constructor body.
+2. **Access** — Inside actor methods, `set ri _pCptr` loads the base address into `ri`.
+   Each property read/write then adds the property's compile-time offset: `add ri OFFSET;
+   set ra flat[ri]` or `setarray flat[ri] VALUE`.
+3. **GC** — The GC's allsprites scan (`for rc allsprites { getactorvar[rc]._pCptr ra }`)
+   keeps per-actor blocks live as long as the actor sprite exists.
+4. **Free** — `appendevent EVENT_KILLIT` in the framework checks `set ra _pCptr; ifn ra 0
+   { state free; set _pCptr 0 }`, releasing the block when the actor is killed.
+
+### Constructor body
+
+Statements in the CActor/CPlayer constructor after `super()` are compiled into the
+`EVENT_SPAWN` block, after the `_pCptr` allocation and default-value writes. This means
+constructor code sees all custom properties already initialized.
+
+```typescript
+class Enemy extends CActor {
+    constructor() {
+        super(1234, true, 100);
+        this.phase = 1;          // runs in EVENT_SPAWN after alloc
+        this.target = -1;
+    }
+    public phase:  number = 0;
+    public target: number = 0;
+}
+```
+
+---
+
+## 18. CON VM Simulator
 
 The CON VM simulator (`src/modules/con-vm/`) is a full CON bytecode interpreter that can
 run compiled `.con` output entirely within the TypeCON process — no EDuke32 binary needed.
@@ -518,35 +604,91 @@ run compiled `.con` output entirely within the TypeCON process — no EDuke32 bi
 | `Tables.ts` | Build Engine tables: sintable (for `sin`/`cos`), `getangle` lookup |
 | `Types.ts` | Shared types: `VMState`, `VMRunResult`, `StructField` maps |
 
-### Supported opcodes (~50)
+### Supported opcodes (~55)
 
 Arithmetic (`add`/`sub`/`mul`/`div`, `mulscale`/`divscale`), comparison (`ifvarand`,
 `ifvarl`, …), array ops (`setarray`/`getarraysize`/`resizearray`), string ops
 (`qputs`/`qstrcpy`/`qsprintf`/`qgetsysstr`), control flow (`while`, `switch…endswitch`,
-`state`), math (`sqrt`, `sin`/`cos`), and file I/O (`readarrayfromfile`/`writearraytofile`).
+`state`, `for VAR allsprites`), math (`sqrt`, `sin`/`cos`), file I/O
+(`readarrayfromfile`/`writearraytofile`), and per-actor gamevars
+(`getactorvar[I].FIELD DST`, `setactorvar[I].FIELD SRC`).
 
 ### Game struct support
 
 `VMState` carries four struct-field maps — `actorFields`, `playerFields`, `sectorFields`,
 `wallFields` — pre-seeded from the CLI and updated by `geta`/`seta`, `getp`/`setp`,
 `getsector`/`setsector`, `getwall`/`setwall` instructions during execution.
+`_pCptr` writes (`set _pCptr rb`) are automatically mirrored to `actorFields` so the GC
+allsprites scan can find per-actor allocations during VM simulation.
 
-### Memory report (`--mem`)
+### Actor test support
 
-After each simulation phase the simulator reports:
-- Per-phase stack high-water mark
-- Heap page accounting: **Allocated live** / **Marked to be freed** / **Free reclaimed**
+`// debug-test` now works on `CActor`/`CPlayer` `Main()` methods. The compiler emits
+`//// DEBUG-TEST ////` + `state _testInit` immediately after the `useractor` line.
+The VM fires `EVENT_SPAWN` before executing the actor body (so `_pCptr` is initialised),
+and `testMode` auto-discovers debug-test actors when no `--actor` is specified.
+
+### CLI flags
+
+| Flag | Description |
+|---|---|
+| `--mem` | Print per-phase stack HWM and page-based heap accounting |
+| `--test` | Aggregate `checkEq`/`checkFpEq` results; exit `0`/`1` |
+| `--2-pass-gc` | Run GC twice after entry point — completes deferred deletion so the memory report shows "reclaimed" instead of "marked to free" |
+| `--strict-int` | Throw on NaN or decimal values written to any CON variable/array |
+| `--report FILE` | Write a JSON simulation report (memory, tests, variables, `actorFields`, and `flatMemory` with stack snapshot + heap page data) |
+
+### JSON report structure (`--report`)
+
+The `flatMemory` key in the JSON report contains:
+- `stack` — `flat[0..peakRsp]`, the actually-used portion only
+- `heapPages` — one entry per allocated page with `address`, `typeLabel` (human-readable), `sizeWords`, and `data[]`
+
+This gives full memory visibility without requiring a profiling tool; any JSON viewer
+or simple script can display or diff simulation state.
 
 ---
 
-## 17. Debug-Test Framework
+## 20. TCUI and TCDebug Libraries
+
+Both are optional TypeScript libraries in `src/sets/TCSet100/`. Import when needed.
+
+### TCUI (`TCUI.ts`)
+`TCUI` is an ImGUI/Nuklear-style immediate-mode UI class. Call its methods every display
+frame. Internal layout state lives in the class's own `flat[]` object fields — zero heap
+allocation per frame.
+
+```typescript
+import './include/TCSet100/TCUI';
+const ui = new TCUI();
+ui.beginContainer(0, 0, 200, 100);
+ui.setLayout(0, 0, 200, 10, 0);   // vertical, 10 px rows
+ui.setFont(2930, 0, 8, 0, 0, ETextFlags.INTERNALSPACE);
+ui.setStyle(-128, 0, EOrientationFlags.NOCLIP | EOrientationFlags.AUTO);
+ui.text("Score: " + score);
+ui.endContainer();
+```
+
+### TCDebug (`TCDebug.ts`)
+`TCDebug` renders a two-line stack/heap overlay using TCUI. It self-hooks
+`EVENT_DISPLAYEND` — importing the file activates it.
+
+```typescript
+import './include/TCSet100/TCDebug';
+// setvar TCDEBUG_MODE 1   (from EDuke32 console)
+// tcc make --vars TCDEBUG_MODE=1   (baked at build time)
+```
+
+---
+
+## 21. Debug-Test Framework
 
 The debug-test framework enables in-process unit testing of compiled CON output.
 
 ### How it works
 
-1. A `// debug-test` comment on a `CEvent` class or `Append()` method body tells the
-   compiler to enter test mode for that block.
+1. A `// debug-test` comment on a `CEvent` `Append()` method, a plain `defstate`, or a
+   `CActor`/`CPlayer` `Main()` method tells the compiler to enter test mode for that block.
 2. The compiler emits a `//// DEBUG-TEST ////` CON marker, `state _testInit`, and
    `set rb _testCounter` at the start of the block.
 3. Every `checkEq(a, b)` or `checkFpEq(a, b)` call site gets two injected lines:
@@ -571,7 +713,7 @@ Exit code `0` means all tests passed; `1` means at least one failed.
 
 ---
 
-## 18. `tcc test` Runner
+## 22. `tcc test` Runner
 
 The test runner module (`src/modules/test-runner/`) orchestrates the full
 compile → link → simulate → assert pipeline from a single JSON script.
