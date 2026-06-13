@@ -89,6 +89,9 @@ interface TestScript {
   linePrint?: boolean;        // emit original TS lines as comments (-dl); default false
   memTest?: boolean;          // print memory report after each test run (--mem); default false
   validate?: boolean;         // run validator before simulation; default true
+  stackSize?:    number;      // flat[] stack region size in words; default 8192
+  heapPageSize?: number;      // words per heap page;               default 4
+  heapNumPages?: number;      // initial heap page-table capacity;  default 1024
   tests: TestCase[];
 }
 
@@ -99,6 +102,7 @@ interface TestCase {
   runState?: string;  // --state NAME
   noInit?: boolean;
   setup?: {
+    gameVars?:     Record<string, number>;                    // set CON gamevars before entry point
     actorFields?:  Record<string, Record<string, number>>;
     playerFields?: Record<string, Record<string, number>>;
     sectorFields?: Record<string, Record<string, number>>;
@@ -183,8 +187,12 @@ export async function runTestScript(jsonPath: string, pkgDir: string): Promise<v
   if (!fs.existsSync(objDir)) fs.mkdirSync(objDir, { recursive: true });
   if (!fs.existsSync(outFolder)) fs.mkdirSync(outFolder, { recursive: true });
 
+  const stackSize    = script.stackSize    ?? 8192;
+  const heapPageSize = script.heapPageSize ?? 4;
+  const heapNumPages = script.heapNumPages ?? 1024;
+
   console.log(C.cyan(`\nCompiling ${sources.length} source file(s)...`));
-  const compiler = new TsToConCompiler({ lineDetail: script.linePrint ?? false, mode: 'module', stackSize: 8192, heapNumPages: 14336 });
+  const compiler = new TsToConCompiler({ lineDetail: script.linePrint ?? false, mode: 'module', stackSize, heapNumPages });
   let sharedContext: any;
   const tcoFiles: string[] = [];
 
@@ -207,7 +215,7 @@ export async function runTestScript(jsonPath: string, pkgDir: string): Promise<v
 
   // ── Link ────────────────────────────────────────────────────────────────
   console.log(C.cyan(`\nLinking → ${path.relative(cwd, conPath)}`));
-  const initSys = new CONInit(8192, 4, 14336, true, 4 * 14336, 0, false);
+  const initSys = new CONInit(stackSize, heapPageSize, heapNumPages, true, heapPageSize * heapNumPages, 0, false);
   const linker  = new Linker(outFolder, initSys, false, false, false);
   for (const tco of tcoFiles) linker.loadModule(tco);
 
@@ -270,6 +278,9 @@ export async function runTestScript(jsonPath: string, pkgDir: string): Promise<v
       testMode:    true,
       showMemory:  script.memTest ?? false,
       searchDirs,
+      gamevarOverrides:     tc.setup?.gameVars
+                              ? new Map(Object.entries(tc.setup.gameVars).map(([k, v]) => [k, Number(v)]))
+                              : undefined,
       actorFieldOverrides:  parseSetup(tc.setup?.actorFields),
       playerFieldOverrides: parseSetup(tc.setup?.playerFields),
       sectorFieldOverrides: parseSetup(tc.setup?.sectorFields),
@@ -326,7 +337,7 @@ export async function runTestTs(tsPath: string, pkgDir: string): Promise<void> {
 
   // ── Compile ──────────────────────────────────────────────────────────────
   console.log(C.cyan(`Compiling ${path.relative(cwd, src)}...`));
-  const compiler = new TsToConCompiler({ lineDetail: false, mode: 'module', stackSize: 8192, heapNumPages: 14336 });
+  const compiler = new TsToConCompiler({ lineDetail: false, mode: 'module', stackSize: 8192, heapNumPages: 1024 });
   let sharedContext: any;
   const tcoFiles: string[] = [];
 
@@ -343,7 +354,7 @@ export async function runTestTs(tsPath: string, pkgDir: string): Promise<void> {
 
   // ── Link ─────────────────────────────────────────────────────────────────
   console.log(C.cyan(`\nLinking → compiled/${name}.con`));
-  const initSys  = new CONInit(8192, 4, 14336, true, 4 * 14336, 0, false);
+  const initSys  = new CONInit(8192, 4, 1024, true, 4 * 1024, 0, false);
   const linker   = new Linker(outDir, initSys, false, false, false);
   for (const tco of tcoFiles) linker.loadModule(tco);
   const { code: linkedCode } = linker.link();

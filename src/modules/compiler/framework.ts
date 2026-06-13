@@ -32,9 +32,9 @@ export class CONInit {
     public markerDefines: string[] = [];
     constructor(public readonly stackSize = 8192,
         public readonly heapPageSize = 4,
-        public readonly heapNumPages = 14336,
+        public readonly heapNumPages = 1024,
         public readonly precompiled = true,
-        public readonly heapSize = 4 * 14336,
+        public readonly heapSize = 4 * 1024,
         public readonly globalStaticSize = 0,
         public readonly acceptConModules = false,
     ) {
@@ -253,31 +253,33 @@ var playerDist 0 2
 //Internal minimum size of the heap pages
 define PAGE_SIZE ${heapPageSize}
 
-//This is where we store if a page is free or not and its type
+//Physical page table.
+//Each entry i corresponds to one PAGE_SIZE-slot chunk at address (stackSize + i*PAGE_SIZE).
+//allocTable[i]: 0 = free page; else = allocation type for the FIRST page of a block.
+//               Type | 1024 = marked-to-free by GC.
+//blockPages[i]: for the first page of a live block, number of pages it spans. 0 = free.
+//Continuation pages of a multi-page block always have allocTable=0 and blockPages=0;
+//they are skipped by the scan using blockPages[first_page].
 //0 -> free;
 //1 -> regular array;
 //2 -> string
 //4 -> object
-//1024 -> marked to be freed
+//16 -> peractor (per-actor custom property block)
+//1024 -> GC mark bit (ORed onto the type)
 array allocTable ${heapNumPages} 0
+array blockPages ${heapNumPages} 0
 
-//Holds the starting addresses of the a allocated pages.
-array lookupHeap ${heapNumPages} 0
+//Number of physical pages currently in the heap (grows as heap expands).
+var heaptables 0 REG_FLAGS
 
-//Holds the sizes of the allocated pages.
-array pageSizes ${heapNumPages} 0
-
-//The current number of pages available
-var heaptables ${heapNumPages} REG_FLAGS
-
-//The current heap memory size
-var heapsize ${this.heapSize} REG_FLAGS
+//Current heap byte size (not counting stack). Grows only when bump-allocating.
+var heapsize 0 REG_FLAGS
 
 //For pushing the r0-12 registers
 array rstack 24 0
 
-//TypeCON flat memory (stack + heap)
-array flat ${stackSize + this.heapSize}
+//TypeCON flat memory — stack only initially; heap grows dynamically via resizearray.
+array flat ${stackSize}
 `;
         this.initStates = `
 var _HEAPi 0 REG_FLAGS
@@ -530,86 +532,59 @@ defstate popsi
 ends
 
 defstate _GetFreePages
-    set _HEAPi 0 //Page index
-    set _HEAPj ${stackSize} //Current address
+    // Physical-page first-fit scan.
+    // Walk page entries left-to-right. Skip occupied blocks in one jump
+    // using blockPages[first_page]. Count consecutive free pages; allocate
+    // in the first run that is large enough. If nothing fits, bump-allocate
+    // at the end of the heap.
+    set _HEAPi 0
     set _HEAP_pointer -1
-    //Search for free pages
+    set _HEAPj 0   // consecutive free pages counted in current run
+    set _HEAPk 0   // start index of the current free run
+
     whilel _HEAPi heaptables {
-        //If one is found, check if there's enough space
         ife allocTable[_HEAPi] 0 {
-            set _HEAPk _HEAPi
-            add _HEAPk 1 //Next page
-            whilel _HEAPk heaptables {
-                ifn allocTable[_HEAPk] 0 {
-                    set _HEAPl lookupHeap[_HEAPk]
-                    sub _HEAPl _HEAPj
-
-                    //We found enough space
-                    ifge _HEAPl _HEAP_request
-                        set _HEAP_pointer _HEAPj
-                    else {
-                        set _HEAPj lookupHeap[_HEAPk]
-                        add _HEAPj pageSizes[_HEAPk]
-                        set _HEAPi _HEAPk
-                    }
-
-                    exit
-                }
-
-                set _HEAPl heaptables
-                sub _HEAPl _HEAPk
-
-                //No pages left — measure space from _HEAPj to the CURRENT heap end.
-                //Must use the 'heapsize' gamevar (not the compile-time ${heapSize}
-                //constant) so that space in grown regions is correctly detected.
-                ife _HEAPl 1 {
-                    set _HEAPl heapsize
-                    add _HEAPl ${stackSize}
-                    sub _HEAPl _HEAPj
-
-                    ifge _HEAPl _HEAP_request
-                        set _HEAP_pointer _HEAPj
-                }
-
-                add _HEAPk 1
-            }
-            
-            // After the inner loop: if no space was found yet, check whether
-            // there is space from _HEAPj to the current heap boundary.
-            // This covers the case where the freed page IS the last page
-            // (_HEAPk starts at heaptables so the inner whilel never runs).
-            ife _HEAP_pointer -1 {
-                set _HEAPl heapsize
-                add _HEAPl ${stackSize}
-                sub _HEAPl _HEAPj
-                ifge _HEAPl _HEAP_request
-                    set _HEAP_pointer _HEAPj
-            }
-
-            ifn _HEAP_pointer -1
+            // Free page — extend (or start) current free run
+            ife _HEAPj 0 { set _HEAPk _HEAPi }
+            add _HEAPj 1
+            set ra _HEAPj
+            mul ra PAGE_SIZE
+            ifge ra _HEAP_request {
+                // Run is big enough: compute address of run start
+                set _HEAP_pointer _HEAPk
+                mul _HEAP_pointer PAGE_SIZE
+                add _HEAP_pointer ${stackSize}
+                set _HEAPi _HEAPk
                 exit
+            }
         } else {
-            set _HEAPj lookupHeap[_HEAPi]
-            add _HEAPj pageSizes[_HEAPi]
+            // Occupied block — skip to next block in one jump
+            set _HEAPj 0
+            add _HEAPi blockPages[_HEAPi]
+            continue
         }
-
         add _HEAPi 1
     }
 
     ife _HEAP_pointer -1 {
-        //Get the exact size we need
+        // No gap found → bump-allocate at end of heap
         set _HEAP_pointer ${stackSize}
-        add _HEAP_pointer heapsize
+        set ra heaptables
+        mul ra PAGE_SIZE
+        add _HEAP_pointer ra
+
+        set _HEAPk _HEAP_request
+        div _HEAPk PAGE_SIZE            // pages needed
+        add heaptables _HEAPk
         add heapsize _HEAP_request
         add heapsize ${stackSize}
         resizearray flat heapsize
         sub heapsize ${stackSize}
-        add heaptables 1
-        resizearray lookupHeap heaptables
         resizearray allocTable heaptables
-        resizearray pageSizes heaptables
+        resizearray blockPages heaptables
+
         set _HEAPi heaptables
-        sub _HEAPi 1
+        sub _HEAPi _HEAPk               // index of first new page
     }
 
     set rb _HEAPi
@@ -630,81 +605,106 @@ defstate alloc
         sub _HEAPl _HEAPi
         add _HEAP_request _HEAPl
     }
-    
-    state _GetFreePages
-    set _HEAPi rb
 
-    setarray lookupHeap[_HEAPi] _HEAP_pointer
-    setarray allocTable[_HEAPi] r1
-    setarray pageSizes[_HEAPi] _HEAP_request
+    state _GetFreePages
+    // rb = first page index, _HEAP_pointer = heap byte address
+
+    setarray allocTable[rb] r1
+    set ra _HEAP_request
+    div ra PAGE_SIZE
+    setarray blockPages[rb] ra
 
     set rb _HEAP_pointer
 ends
 
 defstate free
-    set _HEAP_pointer r0
-    sub _HEAP_pointer ${stackSize}
-    ifl _HEAP_pointer 0 {
+    // O(1): compute page index directly from address.
+    set _HEAPi r0
+    sub _HEAPi ${stackSize}
+    ifl _HEAPi 0 {
         qputs 9999 ERROR: TRIED TO FREE MEMORY BELOW HEAP
-        //We gotta break or crash or we might have a memory leakage
         debug 9999
         return
     }
-    add _HEAP_pointer ${stackSize}
-    set _HEAPi 0
-
-    whilel _HEAPi heaptables {
-        ife lookupHeap[_HEAPi] _HEAP_pointer {
-            setarray lookupHeap[_HEAPi] 0
-            setarray allocTable[_HEAPi] 0
-            setarray pageSizes[_HEAPi] 0
-            exit
-        }
-
-        add _HEAPi 1
-    }
+    shiftr _HEAPi 2              // divide by PAGE_SIZE (= 4)
+    setarray allocTable[_HEAPi] 0
+    setarray blockPages[_HEAPi] 0
 ends
 
-//This needs some refactoring to be more efficient
 defstate realloc
-    //Get the current size of the allocation
-    set _HEAPi 0
-    whilel _HEAPi heaptables {
-        ife lookupHeap[_HEAPi] r1 {
-            set _HEAPj pageSizes[_HEAPi]
-            exit    
-        }
+    // O(1): compute page index directly from old address (r1).
+    set _HEAPi r1
+    sub _HEAPi ${stackSize}
+    shiftr _HEAPi 2              // divide by PAGE_SIZE
+    set _HEAPj blockPages[_HEAPi]
+    mul _HEAPj PAGE_SIZE         // _HEAPj = current byte size
 
-        add _HEAPi 1
+    //If old_ptr was already freed (blockPages=0), just do a fresh alloc.
+    ife _HEAPj 0 {
+        set r1 r2
+        state alloc
+        terminate
     }
 
-    //Since pages must be multiple of PAGE_SIZE
-    //we check if the requested size can fit in the current allocation
+    //Check if the new size fits in the existing block
     ifl r0 _HEAPj {
         set rb r1
         terminate
     }
 
-    state push
-    set ra _HEAPj
-    state push
+    // Fast path: if this block is at the END of the heap, extend heaptables
+    // in-place — no copy needed, O(1).  This keeps heaptables from exploding
+    // when a string is repeatedly grown by a few chars (e.g. JSON building).
+    set _HEAPl _HEAPi
+    add _HEAPl blockPages[_HEAPi]  // page just after current block
+    ife _HEAPl heaptables {
+        // Block is the last block — just grow heaptables.
+        set _HEAPl r0
+        add _HEAPl 3
+        shiftr _HEAPl 2             // _HEAPl = new pages needed
+        set _HEAPk _HEAPl
+        sub _HEAPk blockPages[_HEAPi]  // extra pages to add
+        setarray blockPages[_HEAPi] _HEAPl
+        add heaptables _HEAPk
+        mul _HEAPk PAGE_SIZE
+        add heapsize _HEAPk
+        add heapsize ${stackSize}
+        resizearray flat heapsize
+        sub heapsize ${stackSize}
+        resizearray allocTable heaptables
+        resizearray blockPages heaptables
+        set rb r1
+        terminate
+    }
 
+    // Push ra, old_ptr, old_size before alloc (which clobbers all HEAP temps)
+    state push                  // save ra
     set ra r1
+    state push                  // save old_ptr
+    set ra _HEAPj
+    state push                  // save old_size
+
+    // Alloc new block (r0=new_size already set, r1=type for new block)
     set r1 r2
     state alloc
-    set r1 ra
+    set r1 rb                   // r1 = new_ptr (save before pops restore ra)
 
-    state pop
+    state pop                   // ra = old_size
     set _HEAPj ra
-    state pop
+    state pop                   // ra = old_ptr
+    set _HEAPk ra               // _HEAPk = old_ptr (restored after alloc's clobbering)
+    state pop                   // ra = saved ra before push
 
-    copy flat[r1] flat[rb] _HEAPj
+    // copy old data → new block (CON copy: SRC first, DST second)
+    copy flat[_HEAPk] flat[r1] _HEAPj
 
-    //This deals with stack memory
-    ifge r1 ${stackSize} {
-        set r0 r1
+    //Free old block (heap memory only)
+    ifge _HEAPk ${stackSize} {
+        set r0 _HEAPk
         state free
     }
+
+    set rb r1
 ends
 
 defstate _GC
@@ -715,8 +715,10 @@ defstate _GC
             continue
         }
 
-        //Get the address of the allocation
-        set _HEAP_pointer lookupHeap[_HEAPi]
+        //Compute the heap address of this block from its page index
+        set _HEAP_pointer _HEAPi
+        mul _HEAP_pointer PAGE_SIZE
+        add _HEAP_pointer ${stackSize}
 
         //Check if it's being used by the stack
         set _HEAPj rbp
@@ -749,24 +751,25 @@ defstate _GC
 
         //If it's being used, check if it's marked to be freed
         ife _HEAPk 1 {
-            //Clean the mark
+            //Clean the mark bit while keeping type bits
             ifand allocTable[_HEAPi] 1024 {
                 set ra allocTable[_HEAPi]
-                and ra 1024
+                and ra -1025
                 setarray allocTable[_HEAPi] ra
             }
 
-            add _HEAPi 1
+            add _HEAPi blockPages[_HEAPi]
             continue
         }
+
+        //Save block size before potentially zeroing it
+        set _HEAPl blockPages[_HEAPi]
 
         //If it's not being used, check if it's marked to be freed
         ifand allocTable[_HEAPi] 1024 {
             //Free it
-            setarray lookupHeap[_HEAPi] 0
             setarray allocTable[_HEAPi] 0
-            setarray lookupHeap[_HEAPi] 0
-            setarray pageSizes[_HEAPi] 0
+            setarray blockPages[_HEAPi] 0
         } else {
             //Else, mark to be freed
             set ra allocTable[_HEAPi]
@@ -774,7 +777,7 @@ defstate _GC
             setarray allocTable[_HEAPi] ra
         }
 
-        add _HEAPi 1
+        add _HEAPi _HEAPl
     }
 ends
 
@@ -848,6 +851,7 @@ defstate _convertInt2String
     ife ra 0 {
         state pushr1
         set r0 2
+        set r1 2
         state alloc
         state popr1
         setarray flat[rb] 1
@@ -868,7 +872,7 @@ defstate _convertInt2String
         state pushd
         add rc 1
     }
-    
+
     whilen ra 0 {
         set rd ra
         mod rd 10
@@ -881,6 +885,7 @@ defstate _convertInt2String
     state pushr1
     set r0 rc
     add r0 1
+    set r1 2
     state alloc
     state popr1
 
@@ -907,6 +912,7 @@ defstate _convertFP2String
     ife ra 0 {
         state pushr1
         set r0 7
+        set r1 2
         state alloc
         state popr1
         setarray flat[rb] 6
@@ -952,7 +958,7 @@ defstate _convertFP2String
         mul ra 65536
         sub rfx0 ra
         div ra 65536
-    
+
         whilen ra 0 {
             set rd ra
             mod rd 10
@@ -960,6 +966,76 @@ defstate _convertFP2String
             state pushd
             add rc 1
             div ra 10
+        }
+
+        // Reverse integer digits on the stack so MSB is pushed first.
+        // The extract loop pushes digits LSB-first; with the sub-ri-1
+        // reconstruction below, the LAST-pushed digit goes to string[1] (first
+        // visible position). We need MSB there, so we reverse now.
+        // FP16 max integer = 65535 = 5 digits.
+        ife rc 2 {
+            state popd
+            set _HEAPj rd
+            state popd
+            set _HEAPk rd
+            set rd _HEAPj
+            state pushd
+            set rd _HEAPk
+            state pushd
+        }
+        ife rc 3 {
+            state popd
+            set _HEAPj rd
+            state popd
+            set _HEAPk rd
+            state popd
+            set _HEAPl rd
+            set rd _HEAPj
+            state pushd
+            set rd _HEAPk
+            state pushd
+            set rd _HEAPl
+            state pushd
+        }
+        ife rc 4 {
+            state popd
+            set _HEAPi rd
+            state popd
+            set _HEAPj rd
+            state popd
+            set _HEAPk rd
+            state popd
+            set _HEAPl rd
+            set rd _HEAPi
+            state pushd
+            set rd _HEAPj
+            state pushd
+            set rd _HEAPk
+            state pushd
+            set rd _HEAPl
+            state pushd
+        }
+        ife rc 5 {
+            state popd
+            set rfx1 rd
+            state popd
+            set _HEAPi rd
+            state popd
+            set _HEAPj rd
+            state popd
+            set _HEAPk rd
+            state popd
+            set _HEAPl rd
+            set rd rfx1
+            state pushd
+            set rd _HEAPi
+            state pushd
+            set rd _HEAPj
+            state pushd
+            set rd _HEAPk
+            state pushd
+            set rd _HEAPl
+            state pushd
         }
     }
 
@@ -1002,6 +1078,7 @@ defstate _convertFP2String
     state pushr1
     set r0 rc
     add r0 1
+    set r1 2
     state alloc
     state popr1
 
@@ -1056,6 +1133,13 @@ defstate _convertString2Quote
     
     //Set rssp quote to the first letter of the string
     add ri flat[ra]
+    ife ri 900 {   // char code 0 = null terminator = empty string
+        sub rssp 1
+        state popc
+        state popd
+        state pop
+        terminate
+    }
     sub ri 32
 
     state push
@@ -1066,9 +1150,6 @@ defstate _convertString2Quote
         set ra 1
 
     ife ra 1 {
-        qputs 1022 ERROR: %d is not a valid ASCII character
-        qsprintf 1023 1022 ri
-        echo 1023
         clamp ri 900 994
     }
 
@@ -1103,8 +1184,8 @@ defstate _convertString2Quote
         }
 
         add ri flat[ra]
-        ife ri 0
-            exit
+        ife ri 900
+            exit   // null terminator (char code 0)
 
         sub ri 32
 

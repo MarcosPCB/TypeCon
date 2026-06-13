@@ -334,9 +334,15 @@ set rb ra
         if (i === 0) {
           const argCode = visitExpression(args[i] as Expression, context, `r0`);
           code += argCode;
-          // If the last instruction wrote to ra (not r0), emit the missing move.
-          const lastLine = argCode.trimEnd().split('\n').at(-1)?.trim() ?? '';
-          if (lastLine.length > 0 && !lastLine.startsWith('set r0') && !lastLine.startsWith('add r0')) {
+          // If the last *effective* instruction wrote to ra (not r0), emit the
+          // missing move. Skip trailing cleanup lines (rfx restore, popd) which
+          // follow the actual result-placement instruction.
+          const lines = argCode.trimEnd().split('\n').map(l => l.trim()).filter(l => l.length > 0);
+          let checkIdx = lines.length - 1;
+          while (checkIdx >= 0 && (/^set rd rfx\d+$/.test(lines[checkIdx]) || lines[checkIdx] === 'state popd'))
+            checkIdx--;
+          const lastEffective = checkIdx >= 0 ? lines[checkIdx] : '';
+          if (lastEffective.length > 0 && !lastEffective.startsWith('set r0') && !lastEffective.startsWith('add r0')) {
             code += `set r0 ra\n`;
           }
         } else {

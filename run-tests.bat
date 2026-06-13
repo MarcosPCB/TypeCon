@@ -101,6 +101,7 @@ echo === Actors ===
 call :run_test examples\actors\AssaultTrooper.ts
 call :run_test examples\actors\BattleLord.ts
 call :run_test examples\tests\actors\test_actor_custom_props.ts
+call :run_test examples\tests\actors\test_tcdebug_print.ts
 
 echo.
 echo === General ===

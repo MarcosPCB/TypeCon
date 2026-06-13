@@ -285,6 +285,44 @@ set ra rb
         return sysFrame.rb as unknown as string;
     }
 
+    // ── object-stride item accessor (must be before Stringify for TypeCON forward-ref) ──
+
+    /**
+     * Returns a view CJson for the value at object index i (type + val).
+     * Uses stride 3 (object format). Do NOT call Free() on the returned node.
+     */
+    GetObjItem(index: number): CJson {
+        CONUnsafe(`
+// r0 = index
+set ri flat[rbp]
+add ri 3
+set ri flat[ri]       // ri = obj_ptr
+set r4 r0
+mul r4 3
+add r4 1
+add r4 ri             // r4 = &obj[1 + i*3] = key slot
+add r4 1              // skip key → r4 = &obj[1 + i*3 + 1] = type slot
+set r5 flat[r4]       // r5 = value type
+add r4 1
+set r6 flat[r4]       // r6 = value
+set r0 5
+set r1 4
+state alloc
+setarray flat[rb] 0
+set ri rb
+add ri 1
+setarray flat[ri] 0
+add ri 1
+setarray flat[ri] r5
+add ri 1
+setarray flat[ri] r6
+add ri 1
+setarray flat[ri] 0   // _owned = 0
+set ra rb
+`);
+        return sysFrame.rb as unknown as CJson;
+    }
+
     // ── export ────────────────────────────────────────────
 
     /**
@@ -325,7 +363,7 @@ set ra rb
                 if (i > 0) out = out + ',';
                 const k: string = this.GetKey(i);
                 out = out + '"' + k + '":';
-                const child: CJson = this.GetItem(i);
+                const child: CJson = this.GetObjItem(i);
                 out = out + child.Stringify();
                 i = i + 1;
             }
@@ -362,6 +400,75 @@ set ra rb
             }
         }
         return r;
+    }
+
+    // ── builder API ───────────────────────────────────────────────────────────
+
+    /**
+     * Create an integer-valued JSON node.
+     * Call on any CJson instance — `this` is unused; the method is a factory.
+     */
+    newInt(v: number): CJson {
+        const n = new CJson('');
+        n._type = CJsonType.Int;
+        n._val = v;
+        return n;
+    }
+
+    /**
+     * Create a string-valued JSON node.
+     * Stores the existing heap string pointer by reference.
+     */
+    newStr(s: string): CJson {
+        const n = new CJson('');
+        n._type = CJsonType.String;
+        n._val = s as unknown as number;
+        return n;
+    }
+
+    /**
+     * Create an empty Object node pre-sized for maxFields entries.
+     * Call addField() up to maxFields times before calling Stringify().
+     */
+    newObj(maxFields: number): CJson {
+        const n = new CJson('');
+        n._type = CJsonType.Object;
+        sysFrame.r0 = maxFields * 3 + 1;
+        sysFrame.r1 = 4; // EHeapType.object
+        CONUnsafe(`
+state alloc
+setarray flat[rb] 0
+set ra rb              // preserve rb through the TypeCON CONUnsafe epilogue (set rb ra)
+`);
+        n._val = sysFrame.rb as unknown as number;
+        return n;
+    }
+
+    /**
+     * Append a key–value field to this Object node.
+     * The object must have been created with sufficient capacity (newObj(maxFields)).
+     */
+    addField(key: string, child: CJson): void {
+        sysFrame.r4 = key as unknown as number;
+        sysFrame.r5 = child._type;
+        sysFrame.r6 = child._val;
+        sysFrame.rd = this._val as unknown as number;
+        CONUnsafe(`
+// rd=block_ptr  r4=key_ptr  r5=val_type  r6=val
+set ri rd
+set rc flat[ri]     // rc = current count N
+set ra rc
+mul ra 3
+add ra 1
+add ra ri           // ra = &block[1 + N*3]
+setarray flat[ra] r4   // store key
+add ra 1
+setarray flat[ra] r5   // store type
+add ra 1
+setarray flat[ra] r6   // store val
+add rc 1
+setarray flat[ri] rc   // count++
+`);
     }
 
     // ── lifetime ──────────────────────────────────────────

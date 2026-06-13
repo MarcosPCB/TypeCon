@@ -1,0 +1,30 @@
+{
+    "name": "TCDebug PrintReport",
+    "source": ["test_tcdebug_print.ts"],
+    "validate": true,
+    "memTest": true,
+    "stackSize": 8192,
+    "heapPageSize": 4,
+    "heapNumPages": 16384,
+    "tests": [
+        {
+            "name": "TCPRINT defaults to 0 (gamevar correctly initialised)",
+            "runEvent": "EVENT_DISPLAYEND",
+            "noInit": false,
+            "expect": {
+                "vars": { "TCPRINT": { "eq": 0 }, "TCDEBUG_MODE": { "eq": 0 } }
+            }
+        },
+        {
+            "name": "--set-gamevar override: TCPRINT reaches EVENT_DISPLAYEND as 1",
+            "runEvent": "EVENT_DISPLAYEND",
+            "noInit": false,
+            "setup": {
+                "gameVars": { "TCDEBUG_MODE": 0, "TCPRINT": 1 }
+            },
+            "expect": {
+                "vars": { "TCDEBUG_MODE": { "eq": 0 } }
+            }
+        }
+    ]
+}

@@ -104,6 +104,7 @@ printf "${BLD}${CYN}=== Actors ===${R}\n"
 run_test examples/actors/AssaultTrooper.ts
 run_test examples/actors/BattleLord.ts
 run_test examples/tests/actors/test_actor_custom_props.ts
+run_test examples/tests/actors/test_tcdebug_print.ts
 
 printf "\n${BLD}${CYN}=== General ===${R}\n"
 run_test examples/general/test.ts

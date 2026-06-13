@@ -142,7 +142,7 @@ export function executeStatements(
   }
 
   for (const s of stmts) {
-    if (++_vmSteps > 10_000_000) {
+    if (++_vmSteps > 100_000_000) {
       const v = (n: string) => state.vars.get(n) ?? 0;
       console.error(`[CONVM] LIMIT in: ${_vmLS} op:${s.op}`);
       console.error(`r4=${v('r4')} r5=${v('r5')} r8=${v('r8')} r9=${v('r9')} r10=${v('r10')} rc=${v('rc')} ri=${v('ri')} rbp=${v('rbp')} rsp=${v('rsp')}`);

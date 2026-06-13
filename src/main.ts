@@ -38,7 +38,7 @@ let init_file = 'init.con';
 let initFunc = false;
 let precompiled_modules = true;
 let heap_page_size = 4;
-let heap_page_number = 14336; // gives flat[] = 8192 + 57344 = 65536 (EDuke32 max array size)
+let heap_page_number = 1024; // initial page-table capacity; heap grows dynamically
 let eduke_init = false;
 let share_context = false;   // -sc: pass full context between files (opt-in symbol sharing)
 let sep_compile = false;     // -sep (compiler): reset import cache per file (fully independent)
@@ -62,6 +62,7 @@ let simTestMode = false;
 let simTwoPassGC = false;
 let simStrictInt = false;
 let simReportFile: string | undefined;
+let simGamevarOverrides: Map<string, number> = new Map();
 let simActorFields:  string | undefined;
 let simPlayerFields: string | undefined;
 let simSectorFields: string | undefined;
@@ -722,6 +723,12 @@ async function Main() {
             simReportFile = process.argv[i + 1];
         }
 
+        if (a == '--set-gamevar') {
+            const pair = process.argv[i + 1] ?? '';
+            const eq = pair.indexOf('=');
+            if (eq > 0) simGamevarOverrides.set(pair.slice(0, eq), Number(pair.slice(eq + 1)));
+        }
+
         if (a == '--set-field-actor')  simActorFields  = process.argv[i + 1];
         if (a == '--set-field-player') simPlayerFields = process.argv[i + 1];
         if (a == '--set-field-sector') simSectorFields = process.argv[i + 1];
@@ -896,6 +903,7 @@ async function Main() {
                 noInit: simNoInit, showMemory: simShowMemory, testMode: simTestMode,
                 twoPassGC: simTwoPassGC, strictIntegers: simStrictInt,
                 sourceFile: file, searchDirs,
+                gamevarOverrides: simGamevarOverrides.size > 0 ? simGamevarOverrides : undefined,
                 actorFieldOverrides:  simActorFields  ? parseFieldOverrides(simActorFields)  : undefined,
                 playerFieldOverrides: simPlayerFields ? parseFieldOverrides(simPlayerFields) : undefined,
                 sectorFieldOverrides: simSectorFields ? parseFieldOverrides(simSectorFields) : undefined,

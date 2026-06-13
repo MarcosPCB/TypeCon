@@ -20,6 +20,8 @@ export interface VMRunOptions {
   playerFieldOverrides?: Map<number, Map<string, number>>;
   sectorFieldOverrides?: Map<number, Map<string, number>>;
   wallFieldOverrides?:   Map<number, Map<string, number>>;
+  // Override gamevar initial values before simulation begins
+  gamevarOverrides?: Map<string, number>;
 }
 
 export interface HeapStats {
@@ -191,6 +193,13 @@ export function runVM(source: string, opts: VMRunOptions = {}): VMRunResult {
     // Snapshot 2: after init events, before entry point
     state.snapAfterEvents = takeSnapshot(state);
 
+    // Apply gamevar overrides between bootstrap and entry point
+    if (opts.gamevarOverrides) {
+      for (const [name, value] of opts.gamevarOverrides) {
+        state.vars.set(name, value);
+      }
+    }
+
     // Phase 3: run the requested entry point
     resetPhasePeaks(state);
     if (opts.entryState) {
@@ -291,19 +300,21 @@ function mergeStructFields(
 function computeHeapStats(state: VMState): SimReport['memory'] {
   const rds        = state.vars.get('rds') ?? 0;
   const allocTable = state.arrays.get('allocTable') ?? [];
-  const pageSizes  = state.arrays.get('pageSizes')  ?? [];
+  const blockPages = state.arrays.get('blockPages')  ?? [];
+  const PAGE_SIZE  = 4; // words per physical page
   const heaptables = state.vars.get('heaptables')   ?? allocTable.length;
   const MARK_BIT   = 1024;
 
   let liveCount = 0, liveWords = 0;
   let markCount = 0, markWords = 0;
-  let freeCount = 0, freeWords = 0;
+  const freeCount = 0, freeWords = 0;
   for (let i = 0; i < heaptables; i++) {
-    const type = allocTable[i] ?? 0;
-    const size = pageSizes[i]  ?? 0;
-    if (type & MARK_BIT)       { markCount++; markWords += size; }
-    else if (type !== 0)       { liveCount++; liveWords += size; }
-    else if (size !== 0)       { freeCount++; freeWords += size; }
+    const type  = allocTable[i] ?? 0;
+    if (type === 0) continue; // free or continuation page
+    const pages = blockPages[i] ?? 0;
+    const size  = pages * PAGE_SIZE;
+    if (type & MARK_BIT) { markCount++; markWords += size; }
+    else                 { liveCount++; liveWords += size; }
   }
   return {
     stackBase: rds,
@@ -351,18 +362,20 @@ function buildSimReport(
   const stackData  = Array.from(flat.slice(0, Math.max(0, peakRsp + 1))).map(v => v ?? 0);
 
   const allocTable = state.arrays.get('allocTable') ?? [];
-  const pageSizes  = state.arrays.get('pageSizes')  ?? [];
-  const lookupHeap = state.arrays.get('lookupHeap') ?? [];
+  const blockPages = state.arrays.get('blockPages')  ?? [];
   const heaptables = state.vars.get('heaptables')   ?? allocTable.length;
+  const stackBase  = state.vars.get('rds') ?? 0;
+  const PAGE_SIZE  = 4; // words per physical page
   const MARK_BIT   = 1024;
   const TYPE_LABELS: Record<number, string> = { 1: 'array', 2: 'string', 4: 'object', 8: 'string_array', 16: 'peractor' };
 
   const heapPages: SimReport['flatMemory']['heapPages'] = [];
   for (let i = 0; i < heaptables; i++) {
     const rawType = allocTable[i] ?? 0;
-    if (rawType === 0) continue; // skip free pages
-    const sizeWords = pageSizes[i] ?? 0;
-    const address   = lookupHeap[i] ?? 0;
+    if (rawType === 0) continue; // free or continuation page
+    const numPages  = blockPages[i] ?? 0;
+    const sizeWords = numPages * PAGE_SIZE;
+    const address   = stackBase + i * PAGE_SIZE; // physical-page address
     const baseType  = rawType & ~MARK_BIT;
     const marked    = (rawType & MARK_BIT) !== 0;
     const typeLabel = (marked ? 'marked:' : '') + (TYPE_LABELS[baseType] ?? `type${baseType}`);

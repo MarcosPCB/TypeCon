@@ -201,9 +201,8 @@ state popr1
      * @param encoding text enconding
      */
     Write(type: FileReadType, encoding: 8 | 16 | 32 = 8) {
-      if(!this.loaded)
-        return;
-
+      // No loaded guard — Write can be used to create new files.
+      // Call SetBuffer() / CopyMemToFile() / SetValue() to populate the buffer first.
       const pathQuote = Quote(this.path);
       if(type == FileReadType.binary) {
         sysFrame.BufferToSourceIndex(pathQuote as any, false);
@@ -222,6 +221,9 @@ resizearray rstack rd
         sysFrame.BufferToSourceIndex(pathQuote as any, false);
         sysFrame.rc = this.length;
         sysFrame.BufferToIndex(this.buffer, true);
+        // BufferToIndex(buf, true) clobbers r1 with 1 (the boolean arg).
+        // Restore it to the encoding parameter so the switch below matches correctly.
+        sysFrame.r1 = encoding;
         CONUnsafe(`
 getarraysize rstack rd
 set ra rc
@@ -306,9 +308,69 @@ else {
   state popr1
 }
 
+qstrcpy 1022 rsi
+writearraytofile rstack 1022
 resizearray rstack rd
 `)
       }
+    }
+
+    /**
+     * Write a TypeCON heap string directly to the file as text (UTF-8 ASCII).
+     * Reads the length from flat[content_ptr] itself — no separate strLen call needed.
+     * This is the safest way to write a string that may have been built over many
+     * concat operations (avoids GC timing issues with strLen).
+     * @param content  A TypeCON string (heap pointer) to write.
+     */
+    /**
+     * Write a TypeCON heap string as UTF-8 text to this.path.
+     * Packs 4 ASCII characters per 32-bit int and calls writearraytofile.
+     * Best called from simple stack frames; for complex functions with many
+     * while-loop locals, use a direct CONUnsafe block with qputs + writearraytofile.
+     * @param content  A TypeCON string (heap pointer).
+     */
+    WriteString(content: string) {
+        const pathQuote = Quote(this.path);
+        sysFrame.BufferToSourceIndex(pathQuote as any, false); // rsi = path quote
+        sysFrame.r0 = content as any as number;                // r0 = content ptr
+        CONUnsafe(`
+getarraysize rstack rd
+set r1 flat[r0]
+add r0 1
+set r2 r1
+add r2 3
+div r2 4
+resizearray rstack r2
+state pushr10
+set r3 0
+set r4 0
+set r5 0
+set r6 0
+whilel r3 r1 {
+    set r7 r0
+    add r7 r3
+    set r7 flat[r7]
+    ife r7 0
+        exit
+    shiftl r7 r6
+    or r5 r7
+    add r6 8
+    ife r6 32 {
+        setarray rstack[r4] r5
+        add r4 1
+        set r5 0
+        set r6 0
+    }
+    add r3 1
+}
+ifn r5 0 {
+    setarray rstack[r4] r5
+}
+state popr10
+qstrcpy 1022 rsi
+writearraytofile rstack 1022
+resizearray rstack rd
+`);
     }
 
     /**
@@ -444,7 +506,9 @@ set ra rb
      * @param buffer the buffer that's gonna replace
      */
     SetBuffer(buffer: []) {
-      sysFrame.BufferToSourceIndex(buffer as any, true);
+      // array=false: store the raw heap pointer (buffer_ptr) so that Write's
+      // BufferToIndex(this.buffer, true) correctly lands on buffer_ptr+1 (first element).
+      sysFrame.BufferToSourceIndex(buffer as any, false);
       this.buffer = sysFrame.GetReference(sysFrame.rsi) as [];
     }
 }
