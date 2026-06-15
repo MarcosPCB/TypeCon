@@ -68,6 +68,10 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
       const rhsSym = (context.symbolTable.get(right.getText()) ?? context.paramMap[right.getText()]) as SymbolDefinition | undefined;
       if (rhsSym?.fp_bits) rightFpBitsAssign = rhsSym.fp_bits;
     }
+    // Capture right-side string/quote type before the left side load (for compound +=)
+    // overwrites context.curExpr. Compile-time scalars are always numeric.
+    const rightIsString = !isCompileTimeScalar && Boolean(context.curExpr & ESymbolType.string);
+    const rightIsQuote  = !isCompileTimeScalar && Boolean(context.curExpr & ESymbolType.quote);
 
     // Track the value to use in storeLeftSideOfAssignment (may be overridden below)
     let storeVal: string | number = isCompileTimeScalar ? Number(valD) : 'ra';
@@ -96,9 +100,17 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
     const litIsFloatAssign = litTextAssign !== null && litTextAssign.includes('.');
 
     if (opText != '=') {
-      //code += `set rd ra\n`
+      // The right-side result is in ra. Loading the left side (for array/member
+      // access) may evaluate an index expression into ra, clobbering it.
+      // Preserve ra across the left-side load when it holds a runtime value.
+      if (!isCompileTimeScalar)
+        code += `state push\n`;
       code += visitExpression(left, context, 'rd');
       const leftFpBitsAssign = context.curFpBits;
+      const leftIsString = Boolean(context.curExpr & ESymbolType.string);
+      const leftIsQuote  = Boolean(context.curExpr & ESymbolType.quote);
+      if (!isCompileTimeScalar)
+        code += `state pop\n`;
 
       // Scale float literals to FP and compute effective right FP precision
       let effectiveRightFpBitsAssign = rightFpBitsAssign;
@@ -117,7 +129,20 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
 
       switch (opText) {
         case '+=':
-          code += `add rd ${rhs}\n`;
+          if (leftIsString) {
+            if (!rightIsString) {
+              // Right side is numeric — convert to string first (mirrors string + number in non-compound path)
+              const toStr = rightFpBitsAssign !== 0 ? `_convertFP2String` : `_convertInt2String`;
+              code += `state pushr1\nset r0 ${rhs}\nstate ${toStr}\nstate popr1\n`;
+              // rb now holds the converted string ptr; rd still holds the left string ptr
+              code += `state pushr2\nset r0 rd\nset r1 rb\nstate _stringConcat\nstate popr2\nset rd rb\n`;
+            } else {
+              code += `state pushr2\nset r0 rd\nset r1 ${rhs}\nstate _stringConcat\nstate popr2\nset rd rb\n`;
+            }
+          } else if (leftIsQuote)
+            code += `qstrcat rd ${rhs}\n`;
+          else
+            code += `add rd ${rhs}\n`;
           break;
         case "-=":
           code += `sub rd ${rhs}\n`;

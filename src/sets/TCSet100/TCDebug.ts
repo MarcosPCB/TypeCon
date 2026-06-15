@@ -243,11 +243,11 @@ set rsp r12
             sysFrame.r0 = pageIdx;
             sysFrame.r1 = sysFrame.r2 = sysFrame.r3 = sysFrame.r4 = 0;
             CONUnsafe(`
-ifvarl r0 heaptables {
+ifl r0 heaptables {
     set r1 allocTable[r0]
     set r2 r0
-    mul r2 4
-    add r2 8192
+    mul r2 PAGE_SIZE
+    add r2 rds
     set r3 blockPages[r0]
     set r4 1
 }
@@ -270,7 +270,9 @@ ifvarl r0 heaptables {
                 let mkBit:     number = 0;
 
                 if (rawType != 0) {
-                    sizeWords = numPages * 4;
+                    CONUnsafe(`mul r3 PAGE_SIZE`);
+                    sizeWords = numPages * sysFrame.r3;
+                    CONUnsafe('div r3 PAGE_SIZE');
 
                     sysFrame.r0 = rawType;
                     CONUnsafe(`and r0 1024`);
@@ -296,9 +298,23 @@ ifvarl r0 heaptables {
                     if (baseType == 16) { json = json + 'peractor'; }
                     // Data: empty array — outputting raw words via repeated string
                     // concat causes exponential copy-realloc blowup in the VM sim
-                    // (each word concat re-scans the full heap page table, O(N^2) total).
-                    // In real EDuke32 there are no step limits; data can be added there.
-                    json = json + '","sizeWords":' + sizeWords + ',"data":[]}';
+                    json = json + '","sizeWords":' + sizeWords + ',"data":[';
+
+                    let i = addr;
+                    const j = addr + sizeWords;
+
+                    while (i < j) {
+                        sysFrame.rsi = i;
+                        CONUnsafe('set rsi flat[rsi]');
+                        json += sysFrame.rsi;
+
+                        if(i < j - 1)
+                            json +=  ',';
+
+                        i++;
+                    }
+
+                    json += ']}'
 
                     // GC after each live page: the metadata output creates orphaned
                     // number strings that the loop would otherwise encounter as new

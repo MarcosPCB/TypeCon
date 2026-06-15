@@ -1,11 +1,11 @@
-import { ClassDeclaration, SyntaxKind, Statement, Block, ObjectLiteralExpression } from "ts-morph";
+import { ClassDeclaration, SyntaxKind, Statement, Block, ObjectLiteralExpression, ExpressionStatement, CallExpression, Expression } from "ts-morph";
 import { CompilerContext, SymbolDefinition, ESymbolType, EHeapType } from "../Compiler";
 import { evaluateLiteralExpression } from "../helper/helpers";
 import { indent } from "../helper/indent";
 import { addDiagnostic } from "./addDiagnostic";
 import { EventList, TEvents } from "../types";
 import { visitConstructorDeclaration } from "./visitConstructorDeclaration";
-import { parseVarForActionsMovesAi } from "./actorHelper";
+import { parseVarForActionsMovesAi, parseActorSuperCall } from "./actorHelper";
 import { visitStatement } from "./visitStatement";
 import { getObjectTypeLayout } from "./getObjectLayout";
 import { getObjectSize } from "./getObjectSize";
@@ -75,6 +75,38 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
   }
 
   const ctors = cd.getConstructors();
+
+  // Pre-extract currentActorPicnum (and related fields) from super() before the
+  // property loop, so the _enabler global allocation uses the correct picnum.
+  // visitConstructorDeclaration for CActor/CPlayer is deferred to after the
+  // property loop (so actorCustomChildren is ready), but that means the property
+  // loop would allocate lb{undefined}_enabler instead of lb{picnum}_enabler.
+  if ((type === 'CActor' || type === 'CPlayer') && ctors.length > 0) {
+    const body = ctors[0].getBody() as Block;
+    if (body) {
+      for (const st of body.getStatements()) {
+        if (!st.isKind(SyntaxKind.ExpressionStatement)) continue;
+        const expr = (st as ExpressionStatement).getExpression();
+        if (!expr.isKind(SyntaxKind.CallExpression)) continue;
+        if ((expr as CallExpression).getExpression().getText() !== 'super') continue;
+        if (type === 'CPlayer') {
+          const args = (expr as CallExpression).getArguments();
+          if (args.length >= 1) {
+            const val = evaluateLiteralExpression(args[0] as Expression, localCtx);
+            if (typeof val === 'number') localCtx.currentActorPicnum = val;
+          }
+          if (args.length >= 2) {
+            const val = evaluateLiteralExpression(args[1] as Expression, localCtx);
+            if (typeof val === 'number') localCtx.currentActorExtra = val;
+          }
+        } else {
+          parseActorSuperCall(expr as CallExpression, localCtx);
+        }
+        break;
+      }
+    }
+  }
+
   // For CEvent/CInput: run the constructor immediately — it sets currentEventName
   // which is needed for the appendevent code generated further below.
   // For CActor/CPlayer: deferred to AFTER property collection (see further below)

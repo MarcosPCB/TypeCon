@@ -6,6 +6,7 @@
     "stackSize": 8192,
     "heapPageSize": 4,
     "heapNumPages": 16384,
+    "linePrint": true,
     "tests": [
         {
             "name": "TCPRINT defaults to 0 (gamevar correctly initialised)",

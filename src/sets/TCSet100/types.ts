@@ -48,6 +48,8 @@ declare global {
     function strLen(s: string): number;
     /** Return the char code of character at index i in a heap-allocated TypeCON string (0-based). */
     function charCodeAt(s: string, i: number): number;
+    /** Return a heap-allocated TypeCON string containing a single character with the given code. */
+    function fromCharCode(i: number): string;
     /** Explicit FP precision cast to FP11 (Q20.11, 1.0 = 2048). Shifts integer→FP or FP→FP. */
     function FP11(x: number): FP11;
     /** Explicit FP precision cast to FP14 (Q17.14, 1.0 = 16384). Shifts integer→FP or FP→FP. */
