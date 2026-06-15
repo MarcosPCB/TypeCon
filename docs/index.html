@@ -129,6 +129,7 @@
             <li><a href="#introduction">Introduction</a></li>
             <li><a href="#getting-started">Getting Started</a></li>
             <li><a href="#language-concepts">Language Concepts</a></li>
+            <li><a href="#loops">Loops (for / for-of)</a></li>
             <li>
                 <a href="#class-reference">Class Reference</a>
                 <ul>
@@ -222,7 +223,7 @@
 
         <div id="introduction" class="section">
             <h2>Introduction</h2>
-            <p><strong>TypeCON Compiler BETA Version 0.8.3</strong></p>
+            <p><strong>TypeCON Compiler BETA Version 0.9.0</strong></p>
             <p>Welcome to the TypeScript to Build Engine CON Compiler! This tool leverages the power of TypeScript to
                 simplify the process of creating or modifying Duke Nukem 3D mods and developing games with the Build
                 Engine. By writing TypeScript code, you can produce CON files that adhere to the Build Engine's
@@ -354,6 +355,7 @@
 
             <h3>Modern Features</h3>
             <ul>
+                <li><strong>for / for-of Loops</strong>: Traditional C-style <code>for</code> loops and <code>for...of</code> array iteration with automatic hidden stack-slot management and per-iteration variable cleanup.</li>
                 <li><strong>Modern TypeScript Support</strong>: Use classes, interfaces, enums, and modern operators
                     like <strong>Spread (...)</strong> for objects and arrays.</li>
                 <li><strong>Virtual Machine</strong>: Implements a virtual register machine, stack, and heap with a
@@ -685,6 +687,46 @@ class displayRest extends CEvent {
                     </pre>
                 </div>
             </details>
+        </div>
+
+        <div id="loops" class="section">
+            <h2>Loops (for / for-of)</h2>
+            <p>TypeCON supports traditional C-style <code>for</code> loops and <code>for...of</code> array iteration.
+                The compiler manages hidden stack slots transparently — no manual CON bookkeeping needed.</p>
+
+            <h3>for loop</h3>
+            <p>All three clauses (init, condition, update) are optional.</p>
+            <div class="code"><pre>
+for (let i = 0; i &lt; 10; i++) {
+    PrintValue(i);
+}
+
+// Infinite loop with manual break
+for (;;) {
+    if (someCondition) break;
+}
+            </pre></div>
+            <p>The compiler emits a <code>whilen ra 1 { ... }</code> pattern. The loop variable lives in
+                <code>flat[]</code> (not in <code>rc</code>), so <code>break</code> cleanly emits <code>exit</code>
+                without leaving stale stack slots.</p>
+
+            <h3>for-of loop</h3>
+            <p>Iterates over heap arrays. The compiler allocates three hidden stack slots per loop:
+                the array pointer, a counter, and the current element.</p>
+            <div class="code"><pre>
+let arr: number[] = [10, 20, 30];
+for (const item of arr) {
+    PrintValue(item);
+}
+            </pre></div>
+            <p>Each iteration loads <code>flat[ptr + 1 + counter]</code> into the loop variable. The counter is
+                incremented in <code>flat[]</code> so <code>break</code> is safe with no extra stack cleanup. All three
+                hidden slots are released after the loop with a single <code>sub rsp 3</code>.</p>
+
+            <h3>Nested loops</h3>
+            <p>For loops can be freely nested. Each level manages its own hidden slots independently. If <code>rd</code>
+                is already occupied by an outer binary expression when a loop is encountered, the compiler wraps the
+                loop with <code>state pushd</code> / <code>state popd</code> automatically.</p>
         </div>
 
         <div id="class-reference" class="section">

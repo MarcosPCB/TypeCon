@@ -169,6 +169,33 @@ Anonymous functions are indexed in a global dispatcher.
 - `rsi` is loaded with the shared context or the function ID.
 - `state _subFunctions_<hash>` handles the jump table.
 
+### For Loops (`visitForStatement.ts`)
+Traditional `for (init; cond; update)` loops. All three clauses are optional.
+
+- **Init**: emits a local variable declaration via `visitVariableDeclaration` (increments `localVarCount`).
+- **Condition**: evaluated by `parseIfCondition`; result placed in `ra` (`0` = continue). Absent condition → infinite loop.
+- **Update**: emitted as a standalone expression after the body (e.g. `i++`, `i += 2`).
+- **Structure**: `<condCode> whilen ra 1 { <body> <bodyCleanup> <update> <condCode> }`.
+- **Body locals**: `sub rsp N` at the end of each iteration to release slots declared inside the body.
+- **Init locals**: `sub rsp N` after the loop closing `}` to release init-scope variables.
+- **`pushd` guard**: if `rd` is already occupied by an outer expression, the loop emits `state pushd` / `state popd` around itself; `localVarCount` is incremented to account for the extra stack slot.
+- **`break`** emits `exit` (same as `while`).
+
+### For-Of Loops (`visitForOfStatement.ts`)
+`for (const item of array)` — iterates over heap arrays.
+
+- Evaluates the iterable expression into `ra` (a heap array pointer).
+- Allocates **3 hidden stack slots** via `add rsp 1; setarray flat[rsp] <val>`:
+  1. `__ptr__` — the array base pointer.
+  2. `__ctr__` — iteration counter, initialised to `0`.
+  3. `item` — current element, registered in the symbol table so the loop body can read it.
+- **Condition**: `ifl counter flat[ptr]` (counter < array length); result in `ra`.
+- **Load step** (top of loop body): `ra = flat[ptr + 1 + ctr]` → stored into `item` slot.
+- **Counter increment** (end of loop body): `flat[rbp + ctrOffset] += 1`.
+- Counter lives in `flat[]`, not `rc`, so no `pushc`/`popc` is needed and `break` leaves no stale stack slot.
+- **Cleanup**: `sub rsp 3` after the loop closing `}`.
+- **`pushd` guard**: same as for loops — only if `rd` is already in use by an outer expression.
+
 ---
 
 ## 8. Objects, Arrays, and Actor Labels

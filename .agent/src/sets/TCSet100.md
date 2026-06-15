@@ -18,13 +18,30 @@ Contains the `nativeFunctions` array — the translation map that tells the comp
 Classic Duke3D enumerations: tile Names, Sounds, Music IDs.
 
 ### `precompile/src/` + `precompile/generated/`
-Reusable TypeScript modules that are compiled to `.con` files automatically during `yarn build` via `postBuild.js`. Shipped alongside the tool. Currently: `_mathFuncs`, `_stringFuncs`, `_spriteFuncs`, `_drawFuncs`.
+Reusable TypeScript modules that are compiled to `.con` files automatically during `yarn build` via `postBuild.js`. Shipped alongside the tool. Currently: `_mathFuncs`, `_stringFuncs`, `_spriteFuncs`, `_drawFuncs`, `_recFuncs`.
 
 ### `AnimUtils.ts`
 Animation dispatch library. Provides: `lerp`, `smoothstep`, all standard easing functions (`easeIn`, `easeOut`, `easeInOut`, etc.), `bezierQuad`, `pingPong`, `oscillateFP`, `approach`, `pulse`. Values operate in FP16 space.
 
 ### `CFile.ts`
 File I/O class using EDuke32's `readarrayfromfile` / `writearraytofile`. Uses `rstack` (the engine's array) as an intermediate buffer, then copies data into the `flat` heap. Uses `CONUnsafe()` extensively to inject raw high-performance CON instructions directly.
+
+### `CJson.ts`
+Recursive-descent JSON parser and builder that runs entirely in the CON VM. Parses a heap-allocated string into a tree of typed nodes (`Null`, `Bool`, `Int`, `FP16`, `String`, `Array`, `Object`). API: `Parse()`, `Find(key)`, `GetItem(i)`, `GetInt()`, `GetString()`, `Stringify()`, `ToRecord()`, `Free()`. Used via the `JSON` namespace alias (`JSON.parse` / `JSON.stringify`).
+
+### `JSON.ts`
+Thin namespace alias that mirrors JavaScript's `JSON` global:
+- `JSON.parse(text)` → `new CJson(text)`
+- `JSON.stringify(node)` → `node.Stringify()`
+
+### `TCDebug.ts`
+Runtime debug overlay that self-hooks `EVENT_DISPLAYEND` — importing the file activates it. Toggle with `setvar TCDEBUG_MODE 1` (from EDuke32 console) or bake with `--vars TCDEBUG_MODE=1`. Also exports a SimReport-compatible JSON report (memory, heap pages, all framework gamevars) via `--report`.
+
+### `TCUI.ts`
+ImGUI/Nuklear-style immediate-mode UI class. Internal layout state lives in `flat[]` object fields — zero heap allocation per frame. Usage: `beginContainer` → `setLayout` → `text`/`sprite` → `endContainer`.
+
+### `nws.ts`
+Network/socket operations module.
 
 ---
 
@@ -66,7 +83,7 @@ fp16FromString(s) // parse "1.5000" back to FP16
 ## Base Classes
 
 ### `CActor`
-Extend to create a Duke3D actor. Constructor takes `(picnum, isEnemy?, extra?)`. Implement `Append()` for the main actor loop. Emits a CON `actor`/`useractor` block.
+Extend to create a Duke3D actor. Constructor takes `(picnum, isEnemy?, extra?)`. Implement `Main()` for the main actor loop. Emits a CON `actor`/`useractor` block.
 
 ### `CEvent`
 Extend to hook a game event. Constructor takes an event name string (e.g. `super('NewGame')`). Implement `Append()` / `Prepend()` to emit `appendevent` / `onevent` blocks.
@@ -118,7 +135,44 @@ sprites[i].hitType.ceilingZ →  geta[ri].htceilingz ra
 
 ---
 
+## Native `Record<string, T>` Hash Map
+
+`Record<string, T>` is a compiler-native hash map backed by the `_recFuncs` precompiled module.
+
+**Heap layout:**
+```
+flat[ptr + 0]            = capacity  (power-of-2; default 16)
+flat[ptr + 1]            = count     (live entries)
+flat[ptr + 2 + i*2 + 0] = hash      (0 = empty, -1 = tombstone)
+flat[ptr + 2 + i*2 + 1] = value
+```
+
+**Compile-time behaviour:**
+- Empty literal `{}` emits `state _rec_alloc`.
+- String-literal keys: FNV-1a hash computed **at compile time** — zero runtime hashing cost.
+- Runtime keys (variables/expressions): emits `state _rec_hash` before the lookup/store.
+- Chained access (`r["a"]["b"]`) emits all `_rec_get` calls in order.
+- Table auto-doubles (`_rec_resize`) when `count > capacity * 3 / 4`.
+
+---
+
+## `gameVar` Type
+
+`gameVar` declares a native EDuke32 gamevar directly from TypeScript:
+
+```typescript
+const TCDEBUG_MODE: gameVar = 0;   // → gamevar TCDEBUG_MODE 0 REG_FLAGS
+```
+
+- Detected by `visitVariableDeclaration` via the alias name `'gameVar'`.
+- Emits `gamevar NAME VALUE REG_FLAGS` into `context.gameVarDeclarations[]`, prepended to output before any `defstate` (required by EDuke32's single-pass parser).
+- Reads emit `set ra VARNAME`; writes emit `set VARNAME ra` — no `flat[]` indirection.
+- Initial value can be overridden at build time: `--vars NAME=VALUE` (baked into the `gamevar` declaration).
+
+---
+
 ## Agent Guidelines
 - To expose a new EDuke32 field: declare it in `types.ts` (with `CON_NATIVE<T>`) and add an entry to the corresponding `nativeVars_*` array in `native.ts`.
 - To add a new native function/command: add an entry to `nativeFunctions` in `native.ts`.
-- After **any** change inside `src/sets/`, run `yarn build` so that `postBuild.js` copies the updated definitions into the `include/` directory shipped with the npm package.
+- After **any** change inside `src/sets/` — including `CJson.ts`, `TCDebug.ts`, `TCUI.ts`, `JSON.ts`, `AnimUtils.ts` — run `yarn build` so that `postBuild.js` copies the updated definitions into the `include/` directory shipped with the npm package.
+- `CActor` main loop method is `Main()`. `CEvent` handler methods are `Append()` / `Prepend()`. Do not confuse the two.

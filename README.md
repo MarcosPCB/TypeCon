@@ -10,6 +10,7 @@ Welcome to the TypeCON Compiler! This tool leverages the power of TypeScript to 
 
 ## 🚀 Features
 
+- **`for` / `for-of` Loops**: Full support for traditional C-style `for` loops and `for...of` array iteration; hidden stack slots and loop-variable cleanup are managed automatically.
 - **Modern TypeScript Support**: Use classes, interfaces, enums, and modern operators like **Spread (...)** for objects and arrays.
 - **Virtual Machine**: Implements a virtual register machine, stack, and heap with a Mark-and-Sweep Garbage Collector.
 - **Separate Compilation & Linking**: Compile individual files to `.tco` (Intermediate) format and link them later, or compile a whole project at once.
@@ -589,6 +590,7 @@ TypeCON ships with examples under `examples/`:
 | `examples/tests/json/test_file_json.ts` | `CFile.Read → CJson` pipeline test (8 assertions). |
 | `examples/tests/json/test_file_json_record.ts` | Nested `Record` access via `CJson.ToRecord()`. |
 | `examples/tests/structs/` | Struct accessor tests — sectors, walls, sprites, players. |
+| `examples/tests/general/test_for.ts` | `for` loop and `for-of` iteration tests (8 scenarios). |
 | `examples/tests/events/` | Event category compilation tests. |
 | `examples/tests/singletons/` | `userdef` and `player` singleton accessor tests. |
 

@@ -19,6 +19,7 @@ The `src/modules/make` module is the project-level build system for TypeCON. It 
 | `tcc make compile` | Compile `.ts` sources → `.tco` objects only |
 | `tcc make link` | Link `.tco` objects → final `.con` only |
 | `tcc make validate` | Validate the linked `.con` file only |
+| `tcc make test` | Run all test files listed in `typecon.json:tests` |
 | `tcc make clean` | Delete all `.tco`, `.con`, and `.icc` build artifacts |
 | `tcc make create` | Interactive wizard to create `typecon.json` |
 | `tcc make config` | Interactive wizard to edit `typecon.json` |
@@ -42,6 +43,8 @@ The `src/modules/make` module is the project-level build system for TypeCON. It 
 | `validate.warnNearLimits` | `false` | Warn when approaching EDuke32 resource limits |
 | `validate.baseDirs` | `[]` | Additional directories for include resolution |
 | `locked[]` | `[]` | Fields frozen in the config UI (read-only) |
+| `tests` | `[]` | Array of `.test.json` or `.ts` paths run by `tcc make test` |
+| `vars` | `{}` | Key-value map of `gameVar` initial value overrides applied at link time (equivalent to `--vars NAME=VALUE` per entry) |
 
 `modules[]` entries: `{ path: string, enabled: boolean, required?: boolean }` — `required: true` prevents disabling in the interactive config UI.
 

@@ -10,7 +10,7 @@ The `src/modules/compiler` directory contains the core transpiler logic for conv
 | `Intermediate.ts` | Defines `CompiledModule` — the `.tco` JSON format (code string, relocations, global allocations, symbol table snapshot) |
 | `framework.ts` | Generates the CON VM bootstrap string prepended to every output |
 | `types.ts` | Compiler-side type definitions (`SymbolDefinition`, `ESymbolType`, `IVar`, event type unions, etc.) |
-| `services/visitX.ts` | ~40 modular visitor functions, one per TypeScript AST node type |
+| `services/visitX.ts` | ~46 modular visitor functions, one per TypeScript AST node type |
 | `helper/` | Small utilities: `fnv1a32` (hash), `indent`, `formatLineDetail`, `helpers.ts` (literal eval + native lookup) |
 
 ## Core Components
@@ -58,6 +58,9 @@ Controls per-file compilation behaviour:
 - `visitCallExpression.ts` converts calls into `defstate` jumps or resolves native CON functions via `nativeFunctions` in `TCSet100/native.ts`.
 - `visitMemberExpression.ts` emits `flat[ri+offset]` for object/array access or `get/set<op>[ri].<field>` for native struct access.
 - `visitBinaryExpression.ts` emits `mulscale`/`divscale` automatically when both operands share the same `FP*` precision.
+- `visitForStatement.ts` — C-style `for (init; cond; update)` loops. All three clauses optional; body and init locals cleaned up with `sub rsp N`. Counter lives in `flat[]`, not `rc`, so `break` safely emits `exit`.
+- `visitForOfStatement.ts` — `for...of` iteration over heap arrays. Allocates 3 hidden stack slots (ptr, ctr, item); loads `flat[ptr + 1 + ctr]` each iteration; cleans up with `sub rsp 3` after the loop.
+- `context.isInLoop` — set to `true` inside any loop body; controls whether `break` emits `exit` (loop exit) or `state popb; jump rb` (switch exit).
 
 ### `helper/`
 - `fnv1a32.ts` — FNV-1a 32-bit hash, used to deduplicate identical sub-functions
