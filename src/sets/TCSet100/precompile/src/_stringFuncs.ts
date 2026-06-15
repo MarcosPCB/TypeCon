@@ -51,9 +51,9 @@ function _stringToFP16(s: string): FP16 {
 function _checkEq(label: string, expected: number, actual: number): void {
     let msg: string = label + ": exp=" + expected + " got=" + actual;
     if (actual == expected) {
-        msg = msg + " [PASS]";
+        msg += " [PASS]";
     } else {
-        msg = msg + " [FAIL]";
+        msg += " [FAIL]";
     }
     console.log(msg);
 }

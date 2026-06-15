@@ -849,11 +849,11 @@ defstate _convertInt2String
     set ra r0
 
     ife ra 0 {
-        state pushr1
+        state pushr2
         set r0 2
         set r1 2
         state alloc
-        state popr1
+        state popr2
         setarray flat[rb] 1
         add rb 1
         setarray flat[rb] 48
@@ -882,12 +882,12 @@ defstate _convertInt2String
         div ra 10
     }
 
-    state pushr1
+    state pushr2
     set r0 rc
     add r0 1
     set r1 2
     state alloc
-    state popr1
+    state popr2
 
     set ri rb
     setarray flat[ri] rc
@@ -910,11 +910,11 @@ defstate _convertFP2String
     set ra r0
 
     ife ra 0 {
-        state pushr1
+        state pushr2
         set r0 7
         set r1 2
         state alloc
-        state popr1
+        state popr2
         setarray flat[rb] 6
         add rb 1
         setarray flat[rb] 48
@@ -1075,12 +1075,12 @@ defstate _convertFP2String
         }
     }
 
-    state pushr1
+    state pushr2
     set r0 rc
     add r0 1
     set r1 2
     state alloc
-    state popr1
+    state popr2
 
     set ri rb
     setarray flat[ri] rc

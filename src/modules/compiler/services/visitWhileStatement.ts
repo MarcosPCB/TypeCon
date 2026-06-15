@@ -17,8 +17,15 @@ export function visitWhileStatement(ws: WhileStatement, context: CompilerContext
   const useRD = context.usingRD;
   context.usingRD = true;
 
-  if (useRD)
+  // Save localVarCount BEFORE pushd so we can fully restore it after popd.
+  // state pushd uses one flat[] stack slot — account for it so inner variables
+  // get the correct rbp-relative offsets.
+  const savedBeforePushd = context.localVarCount;
+
+  if (useRD) {
     code += `state pushd\n`;
+    context.localVarCount += 1;
+  }
 
   const pattern = parseIfCondition(ws.getExpression(), context);
   const right = typeof pattern.right === 'number' ? `set rd ${pattern.right}\n`
@@ -32,8 +39,8 @@ export function visitWhileStatement(ws: WhileStatement, context: CompilerContext
 
   // pushc occupies one stack slot inside the loop body. Bump localVarCount so
   // that any local variables declared inside the loop get correct rbp-relative
-  // offsets (i.e., offset = slot distance from rbp, accounting for the pushc slot).
-  const savedLocalVarCount = context.localVarCount;
+  // offsets (i.e., offset = slot distance from rbp, accounting for pushd + pushc).
+  const savedLoopCount = context.localVarCount;
   context.localVarCount += 1;
 
   const block = ws.getStatement();
@@ -46,17 +53,19 @@ export function visitWhileStatement(ws: WhileStatement, context: CompilerContext
 
   // Emit cleanup for any locals allocated inside the loop body so the stack is
   // stable across iterations (only the pushc slot remains before popc).
-  const loopBodySlots = context.localVarCount - savedLocalVarCount - 1;
+  const loopBodySlots = context.localVarCount - savedLoopCount - 1;
   if (loopBodySlots > 0)
     code += indent(`sub rsp ${loopBodySlots}\n`, 1);
 
-  context.localVarCount = savedLocalVarCount;
+  context.localVarCount = savedLoopCount;
 
   code += indent(ifCode + 'state popc\nadd rc 1\n', 1);
   code += '}\n';
 
-  context.isInLoop = false;
+  // Restore to pre-pushd count; state popd will physically remove the slot.
+  context.localVarCount = savedBeforePushd;
 
+  context.isInLoop = false;
   context.usingRD = useRD;
 
   if (useRD)

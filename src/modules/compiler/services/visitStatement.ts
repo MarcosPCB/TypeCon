@@ -10,8 +10,10 @@ import { storeInterface } from "./storeInterface";
 import { storeEnum } from "./storeEnum";
 import { visitFunctionDeclaration } from "./visitFunctionDeclaration";
 import { visitWhileStatement } from "./visitWhileStatement";
+import { visitForStatement } from "./visitForStatement";
+import { visitForOfStatement } from "./visitForOfStatement";
 import { addDiagnostic } from "./addDiagnostic";
-import { ExpressionStatement, ReturnStatement, Statement, SyntaxKind, VariableStatement, IfStatement, SwitchStatement, TypeAliasDeclaration, InterfaceDeclaration, EnumDeclaration, FunctionDeclaration, WhileStatement } from "ts-morph";
+import { ExpressionStatement, ReturnStatement, Statement, SyntaxKind, VariableStatement, IfStatement, SwitchStatement, TypeAliasDeclaration, InterfaceDeclaration, EnumDeclaration, FunctionDeclaration, WhileStatement, ForStatement, ForOfStatement, ForInStatement } from "ts-morph";
 import { ECompileOptions } from "../framework";
 
 // All dependencies are now imported directly
@@ -74,6 +76,17 @@ export function visitStatement(stmt: Statement, context: CompilerContext): strin
 
     case SyntaxKind.WhileStatement:
       return code + visitWhileStatement(stmt as WhileStatement, context);
+
+    case SyntaxKind.ForStatement:
+      return code + visitForStatement(stmt as ForStatement, context);
+
+    case SyntaxKind.ForOfStatement:
+      return code + visitForOfStatement(stmt as ForOfStatement, context);
+
+    case SyntaxKind.ForInStatement:
+      addDiagnostic(stmt as ForInStatement, context, 'error',
+        'for...in is not supported in TypeCON: objects have fixed compile-time layout with no runtime key enumeration.');
+      return code;
 
     case SyntaxKind.ExportAssignment:
       return '';
