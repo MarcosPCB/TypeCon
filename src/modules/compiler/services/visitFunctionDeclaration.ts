@@ -6,6 +6,7 @@ import { indent } from "../helper/indent";
 import { getObjectTypeLayout } from "./getObjectLayout";
 import { visitStatement } from "./visitStatement";
 import { formatLineDetail } from "../helper/formatLineDetail";
+import { getTypeBase } from "./getTypeBase";
 
 export function visitFunctionDeclaration(fd: FunctionDeclaration, context: CompilerContext) {
   const name = fd.getName() || "anonFn";
@@ -105,11 +106,15 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
         const alias = context.typeAliases.get(tText);
 
         if (!alias) {
-          addDiagnostic(fd, context, 'error', `Undeclared type alias ${tText}`);
-          return '';
+          const typeR = getTypeBase(p.getTypeNode(), context);
+          if (!typeR) {
+            addDiagnostic(fd, context, 'error', `Undeclared type alias ${tText}`);
+            return '';
+          }
+          t = ESymbolType[typeR];
+        } else {
+          children = getObjectTypeLayout(tText, context);
         }
-
-        children = getObjectTypeLayout(tText, context);
       }
     }
     const paramTypeText = p.getTypeNode()?.getText();

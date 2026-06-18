@@ -30,6 +30,12 @@ export function visitModuleDeclaration(md: ModuleDeclaration, context: CompilerC
         curModule: compilable ? context.symbolTable.get(moduleName) as SymbolDefinition : curModule
     };
 
+    // Snapshot the symbol table BEFORE visiting statements.  A module function that
+    // shares a name with a pre-existing symbol (e.g. JSON.fromRecord vs CJson.fromRecord)
+    // overwrites the key in localCtx.symbolTable.  We need to detect that overwrite so
+    // the new definition ends up in the module's children, not silently excluded.
+    const preVisitSnapshot = compilable ? new Map(localCtx.symbolTable) : null;
+
     let definitions = '';
     let initialization = '';
 
@@ -49,7 +55,14 @@ export function visitModuleDeclaration(md: ModuleDeclaration, context: CompilerC
     });
 
     if (compilable) {
-        const children: { [k: string]: SymbolDefinition | EnumDefinition } = Object.fromEntries([...localCtx.symbolTable].filter(e => !context.symbolTable.has(e[0])));
+        // Include a symbol in children if it is (a) brand-new, or (b) its value changed
+        // from the pre-visit snapshot (i.e. the module redefined a pre-existing name).
+        const children: { [k: string]: SymbolDefinition | EnumDefinition } = Object.fromEntries(
+            [...localCtx.symbolTable].filter(e =>
+                !preVisitSnapshot!.has(e[0]) ||           // new symbol
+                preVisitSnapshot!.get(e[0]) !== e[1]      // overwritten symbol
+            )
+        );
 
         context.symbolTable.set(moduleName, {
             name: moduleName,

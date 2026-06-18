@@ -1,0 +1,15 @@
+{
+    "name": "Record-to-JSON Test Suite",
+    "source": ["test_record_json.ts"],
+    "linePrint": true,
+    "cleanup": [
+        "test.json"
+    ],
+    "tests": [
+        {
+            "name": "Record<string, number> round-trips through JSON.fromRecord + JSON.parse",
+            "runEvent": "EVENT_INIT",
+            "noInit": true
+        }
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "name": "CFile Read/Write/FileExists/IsTextValid Test Suite",
+    "source": ["test_cfile.ts"],
+    "linePrint": true,
+    "cleanup": [
+        "test_cfile_exists.txt",
+        "test_cfile.bin",
+        "test_cfile.txt",
+        "test_cfile_w.txt",
+        "test_cfile_bad.bin"
+    ],
+    "tests": [
+        {
+            "name": "Binary+text read/write round-trips, FileExists, IsTextValid",
+            "runEvent": "EVENT_INIT",
+            "noInit": true
+        }
+    ]
+}

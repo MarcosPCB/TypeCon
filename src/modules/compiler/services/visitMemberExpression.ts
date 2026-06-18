@@ -1,5 +1,5 @@
 import { Expression, SyntaxKind, StringLiteral } from "ts-morph";
-import { CompilerContext, SegmentIdentifier, SegmentIndex, SegmentProperty, MemberSegment, SymbolDefinition, EnumDefinition, ESymbolType } from "../Compiler";
+import { CompilerContext, SegmentIdentifier, SegmentIndex, SegmentProperty, MemberSegment, SymbolDefinition, EnumDefinition, ESymbolType, EHeapType } from "../Compiler";
 import { fnv1a32 } from "../helper/fnv1a32";
 import { addDiagnostic } from "./addDiagnostic";
 import { CON_NATIVE_VAR, CON_NATIVE_FLAGS, CON_NATIVE_TYPE, nativeVars_Players } from "../../../sets/TCSet100/native";
@@ -9,6 +9,15 @@ import { unrollMemberExpression } from "./unrollMemberExpression";
 import { visitExpression } from "./visitExpression";
 import { FindLabel } from "./actorHelper";
 import { formatLineDetail } from "../helper/formatLineDetail";
+
+// Emit CON code to allocate a heap string for a literal key and store its pointer in r11.
+// Called from the _rec_set assignment path. r11 is the key_str_ptr convention for _rec_set_raw.
+function emitStringAlloc(s: string): string {
+  let code = `set r0 ${s.length + 1}\nset r1 ${EHeapType.string}\nstate alloc\nsetarray flat[rb] ${s.length}\nset ri rb\n`;
+  for (let i = 0; i < s.length; i++)
+    code += `add ri 1\nsetarray flat[ri] ${s.charCodeAt(i)}\n`;
+  return code + `set r11 rb\n`;
+}
 
 export function visitMemberExpression(expr: Expression, context: CompilerContext, assignment?: boolean, direct?: boolean, reg = 'ra'): string {
   let code = context.options.lineDetail ? formatLineDetail(expr.getText()) : '';
@@ -37,21 +46,27 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
     }
 
     let isParam = false;
-    sym = context.symbolTable.get(obj.name) as SymbolDefinition;
-    if (!sym) {
+    // Check paramMap FIRST so a method parameter shadows a same-named class field.
+    if (obj.name in context.paramMap) {
       sym = context.paramMap[obj.name];
-
+      isParam = true;
+    } else {
+      sym = context.symbolTable.get(obj.name) as SymbolDefinition;
       if (!sym) {
         addDiagnostic(expr, context, "error", `Undefined object: ${expr.getText()}`);
         return "set ${reg} 0\n";
       }
-
-      isParam = true;
     }
 
     if (sym.type & ESymbolType.string || sym.type & ESymbolType.array) {
-      if ((segments[1].kind == 'property' && segments[1].name == 'length'))
-        return code + `set ri rbp\nadd ri ${sym.offset}\nset ri flat[ri]\n${assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]`}\n`;
+      if ((segments[1].kind == 'property' && segments[1].name == 'length')) {
+        // For params, ri is loaded directly from the argument register (value = array ptr).
+        // For locals/fields, ri is a stack address that must be dereferenced first.
+        const loadRi = isParam
+          ? `set ri r${sym.offset}\n`
+          : `set ri rbp\nadd ri ${sym.offset}\nset ri flat[ri]\n`;
+        return code + loadRi + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
+      }
     }
 
     if (sym.type & ESymbolType.native) {
@@ -109,14 +124,20 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
         if (assignment) {
           // r["key"] = val  (ra holds the value to store)
-          // Save value to r2 BEFORE the key-hash computation — _rec_hash corrupts ra.
+          // Save value to r2 BEFORE alloc/hash — both can corrupt ra.
           code += `state pushr3\n`;
-          code += `set r2 ra\n`; // r2 = value (captured before _rec_hash can corrupt ra)
+          code += `set r2 ra\n`; // r2 = value (captured before anything clobbers ra)
           if (isLitKey) {
-            code += `set r0 ${fnv1a32((idxExpr as StringLiteral).getLiteralText())}\n`;
+            const keyText = (idxExpr as StringLiteral).getLiteralText();
+            // Allocate a heap string for the literal key; stores ptr in r11.
+            // emitStringAlloc clobbers r0/r1/ra — that's fine, we set them below.
+            code += emitStringAlloc(keyText);
+            code += `set r0 ${fnv1a32(keyText)}\n`;  // r0 = hash (set AFTER alloc)
           } else {
-            code += visitExpression(idxExpr, context, 'r0');
+            code += visitExpression(idxExpr, context, 'r0');  // r0 = key string ptr
+            code += `set r11 r0\n`;  // r11 = key_str_ptr (save before _rec_hash clobbers r0)
             code += `state pushr1\nstate _rec_hash\nstate popr1\nset r0 rb\n`;
+            // r11 = key_str_ptr still valid (_rec_hash uses ra/rc/r1/ri, not r11)
           }
           code += recLoad;       // r1 = rec_ptr
           code += `state _rec_set\n`;
@@ -174,7 +195,11 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
       for (let i = 1; i < segments.length; i++) {
         const seg = segments[i];
 
-        if (sym.type & ESymbolType.object || sym.type & ESymbolType.array)
+        // Dereference the slot pointer to reach the heap block.
+        // - object/array/class local (non-param): stack slot holds a heap ptr → need flat[ri]
+        // - object/array/class param: ri was set to r{offset} (already the heap ptr) → no extra dereference
+        if ((sym.type & ESymbolType.object || sym.type & ESymbolType.array ||
+            sym.type & ESymbolType.class) && !isParam)
           code += `set ri flat[ri]\n`;
 
         if (seg.kind == 'index') {
@@ -260,9 +285,6 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
       if (sym.type & ESymbolType.constant)
         code = `set ${reg} ${sym.literal}\n`;
-
-      if (sym.type & ESymbolType.object || (sym.type & ESymbolType.array && segments.at(-1).kind != 'index'))
-        return code + `set ${reg} ri\n`;
 
       return code;
     }
@@ -510,9 +532,6 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
             if (pSym.type & ESymbolType.constant)
               return `set ${reg} ${pSym.literal}\n`;
-
-            if (pSym.type & ESymbolType.object || (pSym.type & ESymbolType.array && segments.at(-1).kind != 'index'))
-              return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} ri\n`);
 
             return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
           }

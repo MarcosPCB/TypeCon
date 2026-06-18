@@ -152,6 +152,15 @@ export function visitMethodDeclaration(
           tText = tText.slice(0, tText.length - 2);
         } else t = ESymbolType.object;
 
+        const classSym = context.symbolTable.get(tText);
+        if (classSym && (classSym.type & ESymbolType.class)) {
+          t = ESymbolType.class;
+          children = classSym.children as Record<string, SymbolDefinition>;
+          paramFpBitsArr.push(0);
+          (localCtx.paramMap[p.getName()] as any) = { name: p.getName(), offset: i, type: t, children, class_name: tText };
+          return;
+        }
+
         let alias = context.typeAliases.get(tText);
 
         if (!alias) {

@@ -5,6 +5,7 @@ import { indent } from '../helper/indent';
 import { getObjectTypeLayout } from './getObjectLayout';
 import { visitStatement } from './visitStatement';
 import { formatLineDetail } from '../helper/formatLineDetail';
+import { getTypeBase } from './getTypeBase';
 
 /******************************************************************************
    * VISIT ARROW FUNCTION EXPRESSION
@@ -72,11 +73,15 @@ export function visitArrowFunctionExpression(af: ArrowFunction, context: Compile
         const alias = context.typeAliases.get(tText);
 
         if (!alias) {
-          addDiagnostic(af, context, 'error', `Undeclared type alias ${tText}`);
-          return '';
+          const typeR = getTypeBase(p.getTypeNode(), context);
+          if (!typeR) {
+            addDiagnostic(af, context, 'error', `Undeclared type alias ${tText}`);
+            return '';
+          }
+          t = ESymbolType[typeR];
+        } else {
+          children = getObjectTypeLayout(tText, context);
         }
-
-        children = getObjectTypeLayout(tText, context);
     }
     localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children };
   });

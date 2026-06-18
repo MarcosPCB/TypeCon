@@ -92,6 +92,7 @@ interface TestScript {
   stackSize?:    number;      // flat[] stack region size in words; default 8192
   heapPageSize?: number;      // words per heap page;               default 4
   heapNumPages?: number;      // initial heap page-table capacity;  default 1024
+  cleanup?: string[];         // files to verify exist then delete after all tests run
   tests: TestCase[];
 }
 
@@ -316,6 +317,20 @@ export async function runTestScript(jsonPath: string, pkgDir: string): Promise<v
   // ── Print suite summary ─────────────────────────────────────────────────
   printSuiteSummary(script.name ?? path.basename(jsonPath), results);
   process.exitCode = results.some(r => !r.passed) ? 1 : 0;
+
+  // ── Cleanup: verify existence then delete listed files ──────────────────
+  if (script.cleanup && script.cleanup.length > 0) {
+    console.log(C.cyan(`\nCleanup (${script.cleanup.length} file(s)):`));
+    for (const rel of script.cleanup) {
+      const absPath = path.resolve(cwd, rel);
+      if (fs.existsSync(absPath)) {
+        fs.unlinkSync(absPath);
+        console.log(`  ${C.green('[OK]')}     deleted  ${rel}`);
+      } else {
+        console.log(`  ${C.yellow('[WARN]')}   missing  ${rel}`);
+      }
+    }
+  }
 }
 
 // ── Single-file TypeScript test runner ───────────────────────────────────────

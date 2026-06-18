@@ -187,8 +187,9 @@ state popr1
 `)
         }
 
+        const numChars = sysFrame.rd as unknown as number;
         this.buffer = sysFrame.GetReference(sysFrame.rb) as [];
-        this.length = sysFrame.rd;
+        this.length = numChars;
         this.type = type;
 
         this.seek = 0;
@@ -221,9 +222,6 @@ resizearray rstack rd
         sysFrame.BufferToSourceIndex(pathQuote as any, false);
         sysFrame.rc = this.length;
         sysFrame.BufferToIndex(this.buffer, true);
-        // BufferToIndex(buf, true) clobbers r1 with 1 (the boolean arg).
-        // Restore it to the encoding parameter so the switch below matches correctly.
-        sysFrame.r1 = encoding;
         CONUnsafe(`
 getarraysize rstack rd
 set ra rc
@@ -254,23 +252,23 @@ else {
       switch rd
         case 3:
           shiftl rb 24
+          or rb rstack[rc]
           setarray rstack[rc] rb
           break
 
         case 2:
           shiftl rb 16
-          or rb flat[ri]
+          or rb rstack[rc]
           setarray rstack[rc] rb
           break
 
         case 1:
           shiftl rb 8
-          or rb flat[ri]
+          or rb rstack[rc]
           setarray rstack[rc] rb
           break
 
         case 0:
-          or rb flat[ri]
           setarray rstack[rc] rb
           break
       endswitch
@@ -284,12 +282,11 @@ else {
       switch rd
         case 1:
           shiftl rb 8
-          or rb flat[ri]
+          or rb rstack[rc]
           setarray rstack[rc] rb
           break
 
         case 0:
-          or rb flat[ri]
           setarray rstack[rc] rb
           break
       endswitch
@@ -302,6 +299,43 @@ else {
     }
 
     add ri 1
+  }
+
+  set r2 ra
+  mul r2 4
+  sub r0 r2
+  ifn r0 0 {
+    set r2 ra
+    add r2 1
+    resizearray rstack r2
+    set r3 0
+    whilel r3 r0 {
+      set rb flat[ri]
+      ife r3 0
+        setarray rstack[rc] rb
+      ifn r3 0 {
+        set r4 r3
+        mul r4 8
+        shiftl rb r4
+        set r4 rstack[rc]
+        or r4 rb
+        setarray rstack[rc] r4
+      }
+      add ri 1
+      add r3 1
+    }
+    set r5 r0
+    whilel r5 4 {
+      set r6 10
+      set r4 r5
+      mul r4 8
+      shiftl r6 r4
+      set r4 rstack[rc]
+      or r4 r6
+      setarray rstack[rc] r4
+      add r5 1
+    }
+    add ra 1
   }
 
   state popd
@@ -366,9 +400,20 @@ whilel r3 r1 {
 ifn r5 0 {
     setarray rstack[r4] r5
 }
-state popr10
+ifn r6 0 {
+    whilel r6 32 {
+        set r7 10
+        shiftl r7 r6
+        set r3 rstack[r4]
+        or r3 r7
+        setarray rstack[r4] r3
+        add r6 8
+    }
+}
+resizearray rstack r2
 qstrcpy 1022 rsi
 writearraytofile rstack 1022
+state popr10
 resizearray rstack rd
 `);
     }
@@ -395,13 +440,23 @@ resizearray rstack rd
      * @param num_dwords - The size in DWORD (32-bits) to be copied
      */
     CopyMemToFile(buffer: [], num_dwords: number): void {
-        if(buffer.length < num_dwords) {
+        if(num_dwords > buffer.length) {
             console.debug(`Number of bytes to be copied is greater than the buffer itself`);
             CONBreak(100);
             return;
         }
 
-        MemCopy(buffer, this.buffer as any, num_dwords);
+        const count: number = num_dwords;
+        const total: number = count + 1;
+        const src: [] = buffer;  // save buffer ptr before alloc clobbers r0
+        sysFrame.r0 = total;
+        CONUnsafe(`
+set r1 1
+state alloc
+`);
+        this.buffer = sysFrame.GetReference(sysFrame.rb) as [];
+        MemCopy(src, this.buffer as any, total);
+        this.length = count;
         this.seek += num_dwords;
     }
 
@@ -417,7 +472,10 @@ resizearray rstack rd
             return;
         }
 
-        MemCopy(this.buffer as any, buffer, num_dwords);
+        const src: [] = buffer;
+        const count: number = num_dwords;
+        const total: number = count + 1;
+        MemCopy(this.buffer as any, src, total);
         this.seek += num_dwords;
     }
 
@@ -497,7 +555,7 @@ set ra rb
      * @returns an array or string
      */
     GetBuffer(): [] | string {
-      sysFrame.BufferToSourceIndex(this.buffer, true);
+      sysFrame.BufferToSourceIndex(this.buffer, false);
       return sysFrame.GetReference(sysFrame.rsi);
     }
 
@@ -510,5 +568,72 @@ set ra rb
       // BufferToIndex(this.buffer, true) correctly lands on buffer_ptr+1 (first element).
       sysFrame.BufferToSourceIndex(buffer as any, false);
       this.buffer = sysFrame.GetReference(sysFrame.rsi) as [];
+      this.length = buffer.length;
+    }
+
+    /**
+     * Checks whether the file at this.path exists on disk.
+     * Saves the current rstack size, then resizes to 1 and zeroes it as a sentinel.
+     * If readarrayfromfile succeeds, the array size or content changes from the sentinel.
+     * Restores rstack size afterwards. Does not modify any CFile fields.
+     * @returns true (1) if the file exists and is readable, false (0) otherwise
+     */
+    FileExists(): boolean {
+        const pathQuote = Quote(this.path);
+        sysFrame.BufferToSourceIndex(pathQuote as any, false);
+        CONUnsafe(`
+getarraysize rstack rd
+resizearray rstack 1
+setarray rstack[0] 0
+qstrcpy 1022 rsi
+readarrayfromfile rstack 1022
+getarraysize rstack rb
+set r0 0
+ifg rb 0 {
+    set r0 1
+    ife rb 1 {
+        set r1 rstack[0]
+        ife r1 0 { set r0 0 }
+    }
+}
+resizearray rstack rd
+set ra r0
+`);
+        const existResult: number = sysFrame.ra;
+        return existResult as unknown as boolean;
+    }
+
+    /**
+     * Checks whether the loaded buffer contains only valid printable/whitespace ASCII.
+     * Valid chars: TAB (9), LF (10), CR (13), printable ASCII (32–126).
+     * Must be called after Read(FileReadType.text) — meaningless on binary data.
+     * Returns false (0) if the file has not been loaded.
+     * @returns true (1) if all chars are valid text ASCII, false (0) otherwise
+     */
+    IsTextValid(): boolean {
+        sysFrame.rc = this.length;
+        sysFrame.r0 = this.loaded as unknown as number;
+        sysFrame.rd = this.buffer as unknown as number; // raw heap ptr; CONUnsafe sets ri = rd+1
+        CONUnsafe(`
+set r1 r0
+set ri rd
+add ri 1
+set r2 0
+whilel r2 rc {
+    set rb flat[ri]
+    ifl rb 9  { set r1 0 }
+    ife rb 11 { set r1 0 }
+    ife rb 12 { set r1 0 }
+    ifg rb 13 {
+        ifl rb 32 { set r1 0 }
+    }
+    ifg rb 126 { set r1 0 }
+    add ri 1
+    add r2 1
+}
+set ra r1
+`);
+        const validResult: number = sysFrame.ra;
+        return validResult as unknown as boolean;
     }
 }

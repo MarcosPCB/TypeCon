@@ -64,6 +64,10 @@ export class CJson {
         return this._type;
     }
 
+    GetRawVal(): number {
+        return this._val;
+    }
+
     IsNull(): boolean {
         return (this._type == CJsonType.Null) as unknown as boolean;
     }
@@ -402,6 +406,84 @@ set ra rb
         return r;
     }
 
+    // ── Record → CJson conversion ────────────────────────────────────────────
+
+    /**
+     * Build a CJson Object node from a Record<string, number>.
+     * Iterates the stride-3 hash-map layout, emitting each live slot as
+     * a CJsonType.Int field.  Key strings must have been stored during
+     * _rec_set (the compiler emits them for every record write).
+     *
+     * Call on any CJson instance — `this` is unused; the method is a factory.
+     */
+    fromRecord(rec: Record<string, any>): CJson {
+        const node = new CJson('');
+        node._type = CJsonType.Object;
+
+        // Pass rec_ptr via r0; immediately stash to r14 so state alloc (r0-r3) can't clobber it.
+        sysFrame.r0 = rec as unknown as number;
+        CONUnsafe(`
+set r14 r0              // r14 = rec_ptr (save before alloc clobbers r0)
+set r15 flat[r14]       // r15 = capacity
+set ri r14
+add ri 1
+set r16 flat[ri]        // r16 = count (live entries)
+
+// Allocate CJson object block: count*3+1 words
+set r0 r16
+mul r0 3
+add r0 1
+set r1 4                // EHeapType.object
+state alloc             // rb = obj_block_ptr  (alloc uses r0-r3; r14-r16 survive)
+setarray flat[rb] 0     // count = 0
+set r17 rb              // r17 = obj_block_ptr
+
+// Iterate record slots: slot_base = rec_ptr + 2
+set r18 r14
+add r18 2               // r18 = slot_base
+set r19 0               // r19 = slot index
+
+whilel r19 r15 {
+    set ra r19
+    mul ra 3
+    set ri r18
+    add ri ra            // ri = &slot[r19].hash
+    set r20 flat[ri]     // r20 = hash
+
+    ifn r20 0 {
+        set r21 -1
+        ifn r20 r21 {    // skip tombstones (hash == -1)
+            add ri 1
+            set r21 flat[ri]   // r21 = key_str_ptr
+            add ri 1
+            set r22 flat[ri]   // r22 = val
+
+            // append (key_ptr, CJsonType.Int, val) to CJson obj block
+            set ri r17
+            set r23 flat[ri]   // r23 = current count N
+            set rd r23
+            mul rd 3
+            add rd 1
+            add rd ri          // rd = &block[1 + N*3]
+            setarray flat[rd] r21  // key_ptr
+            add rd 1
+            setarray flat[rd] 2    // CJsonType.Int = 2
+            add rd 1
+            setarray flat[rd] r22  // val
+            add r23 1
+            setarray flat[ri] r23  // count++
+        }
+    }
+
+    add r19 1
+}
+
+set ra r17   // preserve obj_block_ptr through epilogue (set rb ra)
+`);
+        node._val = sysFrame.rb as unknown as number;
+        return node;
+    }
+
     // ── builder API ───────────────────────────────────────────────────────────
 
     /**
@@ -450,8 +532,8 @@ set ra rb              // preserve rb through the TypeCON CONUnsafe epilogue (se
      */
     addField(key: string, child: CJson): void {
         sysFrame.r4 = key as unknown as number;
-        sysFrame.r5 = child._type;
-        sysFrame.r6 = child._val;
+        sysFrame.r5 = child.GetType();
+        sysFrame.r6 = child.GetRawVal();
         sysFrame.rd = this._val as unknown as number;
         CONUnsafe(`
 // rd=block_ptr  r4=key_ptr  r5=val_type  r6=val

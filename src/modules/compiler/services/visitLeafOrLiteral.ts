@@ -233,7 +233,7 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
   }
 
   if (expr.isKind(SyntaxKind.AsExpression)) {
-    code += visitExpression(expr.getExpression(), context);
+    code += visitExpression(expr.getExpression(), context, reg);
 
     const asKind = expr.compilerNode.type.kind;
 

@@ -228,7 +228,7 @@ export function executeStatements(
         const newSize = readOperand(s.size, state);
         let arr = state.arrays.get(s.arr) ?? [];
         while (arr.length < newSize) arr.push(0);
-        arr.length = Math.max(arr.length, newSize);
+        arr.length = newSize;
         state.arrays.set(s.arr, arr);
         if (s.arr === 'flat' && newSize > 0) {
           if (newSize - 1 > state.peakFlatIdx) state.peakFlatIdx = newSize - 1;

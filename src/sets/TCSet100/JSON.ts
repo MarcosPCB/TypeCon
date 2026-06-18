@@ -27,4 +27,17 @@ export namespace JSON {
     export function stringify(obj: CJson): string {
         return obj.Stringify();
     }
+
+    /**
+     * Serialize a Record<string, number> directly to a JSON string.
+     * Equivalent to: new CJson('').fromRecord(rec).Stringify()
+     *
+     * Requires that all keys were written with string literals or dynamic
+     * string expressions (the compiler stores key heap-strings on each write).
+     */
+    export function fromRecord(rec: Record<string, any>): string {
+        const node = new CJson('');
+        const json: CJson = node.fromRecord(rec);
+        return json.Stringify();
+    }
 }

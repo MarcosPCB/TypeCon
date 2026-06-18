@@ -69,6 +69,30 @@ run_test_sim() {
   fi
 }
 
+# ── runner: JSON test harness (compile + link + simulate + cleanup) ───────────
+run_test_json() {
+  local json="$1"
+  local name; name=$(basename "$json" .test.json)
+
+  printf "  %-42s " "${name}.test.json"
+  local out exit_code
+  out=$(node dist/main.js test "$json" 2>&1)
+  exit_code=$?
+
+  local summary
+  summary=$(echo "$out" | strip_ansi \
+    | grep -E "All [0-9]+ test|[0-9]+/[0-9]+ passed" \
+    | sed 's/^ *//' | head -1)
+
+  if [ "$exit_code" -ne 0 ]; then
+    printf "${RED}FAIL${R} (json)  ${summary}\n"
+    FAIL=$((FAIL + 1))
+  else
+    printf "${GRN}PASS${R} (json)  ${summary}\n"
+    PASS=$((PASS + 1))
+  fi
+}
+
 # ── runner: compile + link + validate ────────────────────────────────────────
 run_test() {
   local src="$1"
@@ -115,6 +139,9 @@ run_test examples/tests/events/test_events.ts
 printf "\n${BLD}${CYN}=== Input ===${R}\n"
 run_test examples/tests/input/test_cinput.ts
 run_test examples/tests/input/test_input.ts
+
+printf "\n${BLD}${CYN}=== CFile ===${R}\n"
+run_test_json examples/tests/cfile/test_cfile.test.json
 
 printf "\n${BLD}${CYN}=== JSON ===${R}\n"
 run_test_sim examples/tests/json/test_json.ts

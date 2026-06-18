@@ -908,6 +908,12 @@ ends
 defstate _convertFP2String
     state push
     set ra r0
+    // Save rfx0 and rfx1: callers (e.g. _checkFpEq string-concat chains) use these
+    // as spill slots. We clobber both below, so save them here and restore at every exit.
+    add rsp 1
+    setarray flat[rsp] rfx0
+    add rsp 1
+    setarray flat[rsp] rfx1
 
     ife ra 0 {
         state pushr2
@@ -929,6 +935,10 @@ defstate _convertFP2String
         add rb 1
         setarray flat[rb] 48
         sub rb 6
+        set rfx1 flat[rsp]
+        sub rsp 1
+        set rfx0 flat[rsp]
+        sub rsp 1
         state pop
         terminate
     }
@@ -1095,6 +1105,10 @@ defstate _convertFP2String
 
     state popd
     state popc
+    set rfx1 flat[rsp]
+    sub rsp 1
+    set rfx0 flat[rsp]
+    sub rsp 1
     state pop
 
 ends

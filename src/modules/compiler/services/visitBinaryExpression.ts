@@ -225,8 +225,33 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
   code += context.options.lineDetail ? `// right side\n` : '';
   const valD = evaluateLiteralExpression(right, context);
 
+  // rd holds the left string/quote result. A function call on the right side
+  // may clobber rd (CON defstate calls don't preserve registers). Save rd to a
+  // spill slot before evaluating the right side so the string/quote concat below
+  // uses the correct left ptr even after recursive calls like child.Stringify().
+  let strLhsSpillRfx: string | null = null;
+  let strLhsSpillStack = false;
+  if ((isString || isQuote) && typeof valD === 'undefined') {
+    if (context.rfxAllocated < 4) {
+      strLhsSpillRfx = `rfx${context.rfxAllocated}`;
+      context.rfxAllocated++;
+      code += `set ${strLhsSpillRfx} rd\n`;
+    } else {
+      strLhsSpillStack = true;
+      code += `state pushd\n`;
+    }
+  }
+
   if (typeof valD === 'undefined')
     code += visitExpression(right, context);
+
+  // Restore rd from the spill slot after right-side evaluation.
+  if (strLhsSpillRfx !== null) {
+    context.rfxAllocated--;
+    code += `set rd ${strLhsSpillRfx}\n`;
+  } else if (strLhsSpillStack) {
+    code += `state popd\n`;
+  }
 
   const rightFpBits = context.curFpBits;
 

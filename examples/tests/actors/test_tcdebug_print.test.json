@@ -7,6 +7,9 @@
     "heapPageSize": 4,
     "heapNumPages": 16384,
     "linePrint": true,
+    "cleanup": [
+        "tc_report.json"
+    ],
     "tests": [
         {
             "name": "TCPRINT defaults to 0 (gamevar correctly initialised)",

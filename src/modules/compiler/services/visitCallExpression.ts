@@ -112,12 +112,12 @@ export function visitCallExpression(call: CallExpression, context: CompilerConte
               code += `set r${totalArgs - 1} flat[rbp]\n`;
 
             code += `state ${o.name}\n`;
-            if (o.returns)
-              code += `${reg != 'rb' ? `set ${reg} rb\n` : ''}`;
             if (totalArgs > 0) {
               code += `state popr${args.length > 12 ? 'all' : totalArgs}\n`;
               context.localVarCount -= args.length;
             }
+            if (o.returns)
+              code += `${reg != 'rb' ? `set ${reg} rb\n` : ''}`;
 
             context.curExpr = o.returns;
 
@@ -196,12 +196,12 @@ export function visitCallExpression(call: CallExpression, context: CompilerConte
             code += `set ri rbp\nadd ri ${objSym.offset}\nset r${totalArgs - 1} flat[ri]\n`;
 
           code += `state ${o.name}\n`
-          if (o.returns)
-            code += `${reg != 'rb' ? `set ${reg} rb\n` : ''}`;
           if (totalArgs > 0) {
             code += `state popr${args.length > 12 ? 'all' : totalArgs}\n`;
             context.localVarCount -= args.length;
           }
+          if (o.returns)
+            code += `${reg != 'rb' ? `set ${reg} rb\n` : ''}`;
 
           context.curExpr = o.returns;
 
@@ -559,14 +559,16 @@ set rb ra
     }
     code += crecordHashCode;
 
+    const callReturns = func.type & ESymbolType.sub_function ? func.returns : targetSym.returns;
     if (func.type & ESymbolType.sub_function) {
       code += `state pushsi\nset rsi rbp\nadd rsi ${func.offset}\nset rsi flat[rsi]\n`;
-      code += `state _subFunctions_${context.subFunction.hash}\nstate popsi\n${(reg != 'rb' && func.returns) ? `set ${reg} rb\n` : ''}`;
-    } else code += `state ${(isClass || isModule) ? func.children[fnName].name : (func.CON_code ? func.CON_code : func.name)}\n${(reg != 'rb' && targetSym.returns) ? `set ${reg} rb\n` : ''}`;
+      code += `state _subFunctions_${context.subFunction.hash}\nstate popsi\n`;
+    } else code += `state ${(isClass || isModule) ? func.children[fnName].name : (func.CON_code ? func.CON_code : func.name)}\n`;
     if (totalArgs > 0) {
       code += `state popr${totalArgs > 12 ? 'all' : totalArgs}\n`;
       context.localVarCount -= totalArgs;
     }
+    if (reg != 'rb' && callReturns) code += `set ${reg} rb\n`;
 
     context.curExpr = (isClass || isModule) ? (func.children[fnName] as SymbolDefinition).returns : func.returns;
     context.curFpBits = targetSym.returns_fp_bits ?? 0;

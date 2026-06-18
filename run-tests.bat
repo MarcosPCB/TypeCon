@@ -66,6 +66,27 @@ goto :main
     )
     goto :eof
 
+:: ── runner: JSON test harness (compile + link + simulate + cleanup) ────────────
+:run_test_json
+    set "_json=%~1"
+    set "_name=%~n1"
+    set /a TOTAL+=1
+
+    node dist/main.js test "%_json%" > "%TEMP%\tcc_out.txt" 2>&1
+    set _json_exit=%errorlevel%
+
+    set "_summary="
+    for /f "tokens=*" %%L in ('findstr /C:"passed" "%TEMP%\tcc_out.txt" 2^>nul') do set "_summary=%%L"
+
+    if !_json_exit! neq 0 (
+        set /a FAIL+=1
+        echo   FAIL  %_name%  (json)  !_summary!
+    ) else (
+        set /a PASS+=1
+        echo   PASS  %_name%  (json)  !_summary!
+    )
+    goto :eof
+
 :: ── runner: compile + link + validate ─────────────────────────────────────────
 :run_test
     set "_src=%~1"
@@ -115,6 +136,10 @@ echo.
 echo === Input ===
 call :run_test examples\tests\input\test_cinput.ts
 call :run_test examples\tests\input\test_input.ts
+
+echo.
+echo === CFile ===
+call :run_test_json examples\tests\cfile\test_cfile.test.json
 
 echo.
 echo === JSON ===

@@ -326,8 +326,10 @@ export class CONParser {
     const idx = this.resolveLiteral(idxTok);
     // Use raw remainder to preserve whitespace (e.g. `string 900  ` = single space)
     const raw = this.sc.rawRestOfLine();
-    // Strip one leading space (separator between index and content), then strip surrounding quotes
-    const text = raw.replace(/^ /, '').replace(/^["']|["']$/g, '');
+    // Strip one leading space (separator between index and content), then strip matching surrounding
+    // quote pair (e.g. `string N "content"` → `content`) without clobbering single-char quotes
+    // like `string 902 "` which defines the double-quote character itself.
+    const text = raw.replace(/^ /, '').replace(/^(["'])(.*)\1$/, '$2');
     return { op: 'qputs', quote: { kind: 'immediate', value: idx }, text };
   }
 

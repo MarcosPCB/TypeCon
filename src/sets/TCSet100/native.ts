@@ -1285,7 +1285,7 @@ state pop
     {
         name: 'BufferToIndex',
         code: (args: boolean) => {
-            return `set ri r0\nife r1 1\n  add ri 1\n`;
+            return `add rsp 1\nsetarray flat[rsp] r1\nset ri r0\nife r1 1\n  add ri 1\nset r1 flat[rsp]\nsub rsp 1\n`;
         },
         returns: false,
         return_type: null,
@@ -1298,7 +1298,7 @@ state pop
     {
         name: 'BufferToSourceIndex',
         code: (args: boolean) => {
-            return `set rsi r0\nife r1 1\n  add rsi 1\n`;
+            return `add rsp 1\nsetarray flat[rsp] r1\nset rsi r0\nife r1 1\n  add rsi 1\nset r1 flat[rsp]\nsub rsp 1\n`;
         },
         returns: false,
         return_type: null,
