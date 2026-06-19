@@ -3,7 +3,7 @@ import { CompilerContext, ESymbolType, SymbolDefinition } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
 import { EventList } from "../types";
 import { indent } from "../helper/indent";
-import { parseActorSuperCall } from "./actorHelper";
+import { parseActorSuperCall, PROJECTILE_FIELD_MAP, parseProjectileSuperCall } from "./actorHelper";
 import { getObjectTypeLayout } from "./getObjectLayout";
 import { visitStatement } from "./visitStatement";
 import { evaluateLiteralExpression } from "../helper/helpers";
@@ -61,6 +61,50 @@ export function visitConstructorDeclaration(
           const expr = (st as ExpressionStatement).getExpression();
           if (!expr.isKind(SyntaxKind.CallExpression)) return true;
           return (expr as CallExpression).getExpression().getText() !== 'super';
+        });
+
+        if (initStatements.length > 0) {
+          const localCtx: CompilerContext = {
+            ...context,
+            localVarOffset: {},
+            localVarCount: 0,
+            paramMap: {},
+            curFunc: undefined,
+          };
+          let initCode = '';
+          for (const st of initStatements) {
+            initCode += indent(visitStatement(st, localCtx), 0);
+          }
+          context.actorCustomInitCode = (context.actorCustomInitCode ?? '') + initCode;
+        }
+      } else if (type === 'CProjectile') {
+        const statements = body.getStatements();
+        // Parse super(picnum, extra?) — sets currentActorPicnum / currentActorExtra
+        for (const st of statements) {
+          if (!st.isKind(SyntaxKind.ExpressionStatement)) continue;
+          const expr = (st as ExpressionStatement).getExpression();
+          if (!expr.isKind(SyntaxKind.CallExpression)) continue;
+          const call = expr as CallExpression;
+          if (call.getExpression().getText() !== 'super') continue;
+          parseProjectileSuperCall(call, context);
+          break;
+        }
+
+        // Compile non-super, non-IProjectile statements into actorCustomInitCode.
+        // IProjectile field assignments (this.vel = ...) are emitted as defineprojectile
+        // in visitClassDeclaration and must be skipped here to avoid double-emission.
+        const initStatements = statements.filter(st => {
+          if (!st.isKind(SyntaxKind.ExpressionStatement)) return true;
+          const expr = (st as ExpressionStatement).getExpression();
+          if (expr.isKind(SyntaxKind.CallExpression) &&
+              (expr as CallExpression).getExpression().getText() === 'super') return false;
+          if (expr.isKind(SyntaxKind.BinaryExpression)) {
+            const left = expr.getLeft();
+            if (left.isKind(SyntaxKind.PropertyAccessExpression) &&
+                left.getExpression().isKind(SyntaxKind.ThisKeyword) &&
+                PROJECTILE_FIELD_MAP[left.getName()]) return false;
+          }
+          return true;
         });
 
         if (initStatements.length > 0) {

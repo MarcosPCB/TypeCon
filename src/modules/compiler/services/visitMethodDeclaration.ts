@@ -31,7 +31,7 @@ export function visitMethodDeclaration(
     hasLocalVars: false
   };
 
-  if ((type == 'CActor' || type == 'CPlayer') && mName.toLowerCase() === "main") {
+  if ((type == 'CActor' || type == 'CPlayer' || type == 'CProjectile') && mName.toLowerCase() === "main") {
     const pic = localCtx.currentActorPicnum || 0;
     const extra = localCtx.currentActorExtra || 0;
     let firstAction = '0';
@@ -70,7 +70,7 @@ export function visitMethodDeclaration(
     const isDebugTest = md.getLeadingCommentRanges().some(c => /debug-test/i.test(c.getText()));
     if (isDebugTest) localCtx.isDebugTest = true;
 
-    const header = `${localCtx.currentActorHardcoded || type == 'CPlayer' ? 'actor' : `useractor ${enemy}`} ${pic} ${extra} ${firstAction}`;
+    const header = `${localCtx.currentActorHardcoded || type == 'CPlayer' || type == 'CProjectile' ? 'actor' : `useractor ${enemy}`} ${pic} ${extra} ${firstAction}`;
     let code = `${context.options.lineDetail ? formatLineDetail(md.getText()) : ''}\n${header} \n${isDebugTest ? '//// DEBUG-TEST ////\n  state _testInit\n' : ''}  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
     const body = md.getBody() as any;
     if (body) {
