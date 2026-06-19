@@ -393,6 +393,8 @@ TypeCON implements a virtual register machine on top of CON. All registers are d
 |---|---|---|
 | `r0`–`r23` | 0 | Function parameters. Inner loops and pre-compiled defstates also use `r4`–`r10` as scratch. |
 | `ra` | 0 | **Accumulator** — result of the last expression. Every `CONUnsafe` epilogue does `set rb ra`. |
+
+> **`rstack`** is a 24-slot CON array (one slot per `r0`–`r23`) declared in CONInit alongside the register `gamevar`s. It is used for bulk register save/restore: the helper defstates `pushr1`–`pushr12` / `popr1`–`popr12` copy registers in and out of `rstack` slots. `CFile.Read` also borrows `rstack` as an intermediate file-read buffer before transposing the data into `flat[]`.
 | `rb` | 0 | **Base/Return** — function return values; heap `alloc` result; `state pop` restores into `ra` then the caller copies to `rb`. |
 | `rc` | 0 | **Counter** — loop iteration counter; internal uses (GC allsprites scan uses `rc`). |
 | `rd` | 0 | **Data** — left-operand scratch for binary ops; pointer offset accumulator. |
@@ -903,7 +905,7 @@ The `pushd` guard works the same as for-loops: if `context.usingRD` is true on e
 
 ### Section 14 — Switch Statement (Two-Pass)
 
-CON has no native `switch`; TypeCON implements one using `getcurraddress` and a two-pass execution trick.
+CON has a native `switch` statement, but its cases only accept integer constants or `define` labels — not strings, runtime variables, or arbitrary expressions. TypeCON's `switch` supports any expression type (numbers, strings, or computed values) by implementing a two-pass execution trick using `getcurraddress`.
 
 #### Emitted CON structure (3-case example)
 
@@ -1078,10 +1080,11 @@ The encoded index is stored in `SymbolDefinition.literal` when the anonymous fun
 
 ```con
 set r0 <size_in_words>
+set r1 <EHeapType>   ; 1=array, 2=string, 4=object, 8=string_array, 16=peractor
 state alloc          ; returns: rb = flat[] address of allocated block
 ```
 
-`state alloc` searches `allocTable` for `<size>` contiguous free pages, marks them in `allocTable` with the heap type, sets `blockPages[first]` = number of pages, and returns the base address in `rb`.
+`r1` is the allocation type discriminator — `state alloc` reads it to tag the pages in `allocTable` with the correct `EHeapType`. `r0` holds the requested size in words. `state alloc` searches `allocTable` for `<size>` contiguous free pages, marks them with the type from `r1`, sets `blockPages[first]` = number of pages, and returns the base address in `rb`.
 
 `rf` bit 0 (`= 1`) can be set before a call to signal that the return value should be treated as a heap address (used by some native wrappers).
 
@@ -1853,7 +1856,7 @@ All FP16 arithmetic internally emits `mulscale`/`divscale 16` via the standard F
 `CFile` provides file I/O via the Build Engine's `readarrayfromfile` and `writearraytofile` CON instructions.
 
 **Read flow:**
-1. `CFile.Read(type, encoding)` uses `readarrayfromfile rstack <path>` to load the file into the `rstack` intermediate buffer (24-slot CON array).
+1. `CFile.Read(type, encoding)` uses `readarrayfromfile rstack <path>` to load the file into `rstack` — the 24-slot bulk register backup array (see Section 6) — repurposed here as an intermediate read buffer.
 2. The buffer is then transposed into the `flat[]` heap via `CONUnsafe()` for high-performance raw CON injection.
 3. Returns the heap string pointer (text mode) or raw integer array (binary mode).
 

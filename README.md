@@ -2,15 +2,15 @@
 
 **[BETA v0.9.0]** &nbsp;|&nbsp; [Documentation](https://marcospcb.github.io/TypeCon) &nbsp;|&nbsp; [Technical Architecture](Architecture.md)
 
-Write modern TypeScript, get valid EDuke32 CON scripts — no manual memory management, no raw offset arithmetic, no flag guessing.
+Write modern TypeScript, get valid EDuke32 CON scripts — focus on your project, not on fighting the language.
 
 ---
 
 ## What is TypeCON?
 
-EDuke32's CON scripting language was designed in 1996. It has no loops, no typed variables, no functions in the modern sense, and no way to catch mistakes before loading the game. Writing a complex enemy means juggling raw `gamevar` slots, manually unrolling logic with `ifcount` and `ifaction`/`ifmove` chains, and tracking which action or move state you are currently in — one wrong `ifmove` and your enemy silently breaks. Even simple arithmetic requires multiple lines: there is no `x = y * 8 / 3 * y`; you write `set x y`, `mul x 8`, `set rd y`, `mul rd 3`, `div x rd` — and hope you didn't clobber a TEMP/tmp gamevar another part of the code was using.
+EDuke32's CON scripting language was designed in 1996. It has no local variables — every value lives in a named global `gamevar` that any part of the script can clobber. There are no objects, no structured data types, and string manipulation means copying characters into numbered engine quote slots one at a time. CON's instruction set is a large flat list of keyword commands: hundreds of `if*` checks, `set`/`add`/`mul` arithmetic instructions, actor directives — all at the same level, with no scoping, no types, and no way to catch mistakes before the game loads. Even simple arithmetic like `x = y * 8 / 3 * y` becomes `set x y`, `mul x 8`, `set tmp y`, `mul tmp 3`, `div x tmp` — and you still have to hope nothing else clobbered `tmp` in the meantime. The result is that you spend most of your time fighting the language instead of building your project.
 
-TypeCON lets you write standard TypeScript — classes, loops, typed fields, objects, fixed-point math — and compiles it down to valid EDuke32 CON. The output is a `.con` file you drop into your mod folder. EDuke32 never knows it came from TypeScript.
+TypeCON lets you write standard TypeScript — classes, local variables, typed fields, objects, arrays, internal functions, fixed-point math — and compiles it down to valid EDuke32 CON. The output is a `.con` file you drop into your mod folder. EDuke32 never knows it came from TypeScript.
 
 TypeCON is aimed at Duke3D modders building new enemies, weapons, events, or HUDs. It is currently in **BETA** (v0.9.0): the language is usable and the examples in this repo compile and run, but generated code is unoptimized and the constructor syntax has some restrictions (see [Limitations](#limitations)).
 
@@ -20,7 +20,9 @@ TypeCON is aimed at Duke3D modders building new enemies, weapons, events, or HUD
 
 - Write enemies as TypeScript classes — actions, moves, AI configs, and the main loop all in one place, instead of scattered `ifaction`/`ifmove`/`ifcount` checks across dozens of lines.
 - Write arithmetic naturally: `x = y * 8 / 3 * y` instead of manually sequencing `set`, `mul`, `div` instructions and carefully protecting every gamevar.
-- Use `for` and `for-of` loops — no more unrolling logic with `ifcount` chains or manually tracking iteration state in a `gamevar`.
+- Use real local variables — no more allocating a global `gamevar` slot every time you need a temporary counter or flag.
+- Write `for` loops with real scoped counters and automatic cleanup — and use `for-of` to iterate over arrays, which CON does not support at all.
+- Define internal functions that take parameters and return values — called with a proper stack-based convention, not hand-rolled `defstate` jumps.
 - Typed fields on actors and players catch mistakes at edit time, not at EDuke32 launch time.
 - Fixed-point math (`FP16`, `FP11`) with automatic `mulscale`/`divscale` — write `angle * 0.5` and get the right instruction.
 - Arrays, objects, and strings allocated on a managed heap — no manual `flat[]` slot arithmetic.
@@ -112,22 +114,31 @@ class MyHUD extends CEvent {
 }
 ```
 
-### for and for-of loops
+### Loops, Local Variables, and Functions
+
+CON has a basic `for` construct, but it operates on gamevars — global state you have to manage manually. TypeCON gives you scoped `for` loops with real local counters, and adds `for-of` iteration over heap arrays (which CON does not support). Local variables live on the stack frame and are automatically cleaned up when the block exits. Internal functions take typed parameters and return values through a proper calling convention.
 
 ```typescript
-// C-style for loop
+// Scoped for loop — i is a local variable, not a gamevar
 for (let i = 0; i < 10; i++) {
     score += i;
 }
 
-// Iterate a heap array
+// for-of — not available in raw CON
 const items: number[] = [10, 20, 30];
 for (const v of items) {
     total += v;
 }
+
+// Internal function with parameters and return value
+function clamp(val: number, lo: number, hi: number): number {
+    if (val < lo) return lo;
+    if (val > hi) return hi;
+    return val;
+}
 ```
 
-The compiler manages all hidden stack slots and loop-variable cleanup automatically.
+The compiler allocates hidden stack slots, patches loop-variable lifetimes, and emits the correct frame-pointer prologue/epilogue for every function call.
 
 ### Fixed-Point Math (FP16)
 
@@ -334,7 +345,7 @@ tcc make test      # run all test files listed in typecon.json
 
 ### Simulator
 
-TypeCON includes a built-in CON interpreter that runs compiled `.con` output without launching EDuke32. It is the backbone of the automated test system.
+TypeCON includes a built-in CON interpreter that runs compiled `.con` output without launching EDuke32. It is the backbone of the automated test system and a foundation for building full test pipelines for your project — compile, simulate, assert, and report all from a single command or CI script.
 
 ```bash
 tcc -c -il examples/tests/math/test_math.ts && tcc -L -di
@@ -342,7 +353,7 @@ tcc -S compiled/EDUKE.CON --test
 # [PASS] TestMath::Append   4/4
 ```
 
-Mark any `CEvent.Append()`, defstate, or `CActor.Main()` with `// debug-test` to enable `checkEq`/`checkFpEq` pass/fail tracking inside the simulator.
+Mark any `CEvent.Append()`, defstate, or `CActor.Main()` with `// debug-test` to enable `checkEq`/`checkFpEq` pass/fail tracking. Use `--report FILE` to write a JSON simulation report (memory stats, test results, final variable state) that external tools or scripts can consume. The `tcc test` command chains compile → link → validate → simulate in one step for quick single-file testing; the `.test.json` format lets you define multi-scenario suites with pre-seeded game state.
 
 ### Validator
 
@@ -367,6 +378,92 @@ Compile and run any example to verify your setup:
 tcc -c -il examples/actors/AssaultTrooper.ts && tcc -L -di
 tcc -S compiled/EDUKE.CON --test
 ```
+
+---
+
+## CLI Reference
+
+All flags are available via `tcc` (or `node dist/main.js`). Exactly one mode flag is required per invocation.
+
+### Common flags
+
+These apply across compile, link, validate, and simulate modes.
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--input FILE` | `-i` | Single input file |
+| `--input-list FILE...` | `-il` | Multiple input files (list ends at the next `-` flag) |
+| `--output FILE` | `-o` | Output filename |
+| `--output-folder PATH` | `-of` | Output folder path |
+| `--accept-con-modules` | `-aCm` | Project accepts relocatable CON modules |
+
+### Compile mode (`-c`)
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--compile` | `-c` | Compile TypeScript sources to `.tco` intermediate files |
+| `--input-folder PATH` | `-if` | Compile all `.ts` files in a folder (alternative to `-i`/`-il`) |
+| `--module` | `-m` | Enable module mode for a single-file compile |
+| `--share-context` | `-sc` | Share symbol context between files (file2 sees file1's symbols) |
+| `--intermediate-code` | `-ic` | Also write annotated CON to `asm/` folder |
+| `--line-print` / `--detail-lines` | `-lp`, `-dl` | Embed original TS lines as CON comments |
+| `--separate` | `-sep` | Compile each file fully independently (resets import cache between files) |
+
+### Linker mode (`-L`, `-l`)
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--linker` | `-L`, `-l` | Link `.tco` files into a final `.con` |
+| `--default-inclusion` | `-di` | Emit a `GAME.CON`-style default inclusion block |
+| `--eduke-init` | `-ei` | Name the init file `EDUKE.CON` |
+| `--headerless` | `-hl` | Omit the VM bootstrap header from output |
+| `--header` | `-h` | Write only the framework header file |
+| `--create-init` | `-ci` | Create header + init files from the CON files listed via `-il` |
+| `--separate` | `-sep` | Output each module as a separate `.con` file instead of one merged file |
+| `--con-module` | `-Cm` | Output as a relocatable CON module |
+| `--no-precompiled` | `-np` | Disable automatic linking of pre-compiled system modules |
+| `--stack-size N` | `-ss` | Virtual stack size (slots) |
+| `--page-size N` | `-ps` | Heap page minimum size |
+| `--page-number N` | `-pn` | Default number of heap pages |
+| `--symbol-print` | `-sp` | Print the symbol table after linking |
+
+### Validator mode (`-V`)
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--validate` | `-V` | Static-analyse a compiled `.con` file (use `-i` or `-il` for input) |
+
+### Simulator mode (`-S`)
+
+| Flag | Alias | Description |
+|---|---|---|
+| `--sim` | `-S` | Run compiled `.con` in the built-in CON VM (use `-i` or `-il` for input) |
+| `--state NAME` | | Run a specific defstate |
+| `--event NAME` | | Run a specific event (e.g. `EVENT_SPAWN`) |
+| `--actor PICNUM` | | Run a specific actor by tile number |
+| `--no-init` | | Skip the game-lifecycle bootstrap (`EVENT_INIT` → `EVENT_NEWGAME`) |
+| `--no-validate` | `-nv` | Skip pre-simulation validation |
+| `--test` | | Test mode — print pass/fail summary for `@DebugTest` functions |
+| `--mem` | `-mem` | Print memory usage report after simulation |
+| `--2-pass-gc` | | Run GC twice to complete deferred page reclamation |
+| `--strict-int` | | Throw on NaN or non-integer writes |
+| `--report FILE` | | Write a JSON simulation report (memory, tests, final var state) to FILE |
+| `--set-gamevar NAME=N` | | Override a gamevar value before simulation |
+| `--set-field-actor SPEC` | | Pre-set actor/sprite fields: `[idx]field=value;...` |
+| `--set-field-player SPEC` | | Pre-set player fields |
+| `--set-field-sector SPEC` | | Pre-set sector fields |
+| `--set-field-wall SPEC` | | Pre-set wall fields |
+
+### Other
+
+| Command / Flag | Description |
+|---|---|
+| `setup` | Interactive project setup wizard |
+| `--clean` / `-C` | Delete `.tco`, `.con`, and `.icc` build artifacts and exit |
+| `-C precompiled` | Also delete pre-compiled generated CON files |
+| `--vars NAME=VAL,...` | Override gamevar initial values at build time |
+| `--version` | Print current version |
+| `--help` / `-?` | Print help text |
 
 ---
 
