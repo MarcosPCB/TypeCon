@@ -5,7 +5,7 @@ import { indent } from "../helper/indent";
 import { addDiagnostic } from "./addDiagnostic";
 import { EventList, TEvents } from "../types";
 import { visitConstructorDeclaration } from "./visitConstructorDeclaration";
-import { parseVarForActionsMovesAi, parseActorSuperCall } from "./actorHelper";
+import { parseVarForActionsMovesAi, parseActorSuperCall, PROJECTILE_FIELD_MAP, parseProjectileSuperCall } from "./actorHelper";
 import { visitStatement } from "./visitStatement";
 import { getObjectTypeLayout } from "./getObjectLayout";
 import { getObjectSize } from "./getObjectSize";
@@ -81,7 +81,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
   // visitConstructorDeclaration for CActor/CPlayer is deferred to after the
   // property loop (so actorCustomChildren is ready), but that means the property
   // loop would allocate lb{undefined}_enabler instead of lb{picnum}_enabler.
-  if ((type === 'CActor' || type === 'CPlayer') && ctors.length > 0) {
+  if ((type === 'CActor' || type === 'CPlayer' || type === 'CProjectile') && ctors.length > 0) {
     const body = ctors[0].getBody() as Block;
     if (body) {
       for (const st of body.getStatements()) {
@@ -99,6 +99,8 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
             const val = evaluateLiteralExpression(args[1] as Expression, localCtx);
             if (typeof val === 'number') localCtx.currentActorExtra = val;
           }
+        } else if (type === 'CProjectile') {
+          parseProjectileSuperCall(expr as CallExpression, localCtx);
         } else {
           parseActorSuperCall(expr as CallExpression, localCtx);
         }
@@ -140,6 +142,15 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
       offset: 0,
       type: ESymbolType.constant,
       literal: localCtx.currentActorExtra
+    });
+  }
+
+  if (type == 'CProjectile') {
+    localCtx.symbolTable.set('defaultPicnum', {
+      name: 'defaultPicnum',
+      offset: 0,
+      type: ESymbolType.constant,
+      literal: localCtx.currentActorPicnum
     });
   }
 
@@ -264,7 +275,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
           }
       }
       cls.num_elements++;
-    } else if ((type == 'CActor' || type == 'CPlayer') && p.getTypeNode()) {
+    } else if ((type == 'CActor' || type == 'CPlayer' || type == 'CProjectile') && p.getTypeNode()) {
       // Custom (non-native, non-special) CActor/CPlayer property → heap-allocated via _pCptr.
       // Skip properties whose type alias starts with 'CON_' (they are native struct fields).
       const aliasName = p.getType().getAliasSymbol()?.getName() ?? '';
@@ -334,17 +345,44 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
     }
   }
 
-  // Now that actorCustomChildren is populated, compile the CActor/CPlayer constructor body.
+  // Now that actorCustomChildren is populated, compile the CActor/CPlayer/CProjectile constructor body.
   // Non-super statements are compiled into localCtx.actorCustomInitCode and emitted
   // inside EVENT_SPAWN after the _pCptr allocation.
-  if (ctors.length > 0 && (type === 'CActor' || type === 'CPlayer')) {
+  if (ctors.length > 0 && (type === 'CActor' || type === 'CPlayer' || type === 'CProjectile')) {
     visitConstructorDeclaration(ctors[0], localCtx, type);
+  }
+
+  // Emit top-level defineprojectile calls from CProjectile constructor body.
+  // Each `this.xxx = constant` where xxx is an IProjectile field becomes:
+  //   defineprojectile {picnum} {field} {value}
+  let projectileDefineCode = '';
+  if (type === 'CProjectile' && ctors.length > 0) {
+    const projBody = ctors[0].getBody() as Block;
+    if (projBody) {
+      for (const st of projBody.getStatements()) {
+        if (!st.isKind(SyntaxKind.ExpressionStatement)) continue;
+        const expr = (st as ExpressionStatement).getExpression();
+        if (!expr.isKind(SyntaxKind.BinaryExpression)) continue;
+        const left = expr.getLeft();
+        if (!left.isKind(SyntaxKind.PropertyAccessExpression)) continue;
+        if (!left.getExpression().isKind(SyntaxKind.ThisKeyword)) continue;
+        const propName = left.getName();
+        const conField = PROJECTILE_FIELD_MAP[propName];
+        if (!conField) continue;
+        const val = evaluateLiteralExpression(expr.getRight() as Expression, localCtx);
+        if (val === null || val === undefined) {
+          addDiagnostic(st, localCtx, 'error', `CProjectile property '${propName}' must be a constant value`);
+          continue;
+        }
+        projectileDefineCode += `defineprojectile ${localCtx.currentActorPicnum} ${conField} ${val}\n`;
+      }
+    }
   }
 
   let labels = '';
 
-  // if CActor => append the actions/moves/ais lines
-  if (type == 'CActor') {
+  // if CActor/CProjectile => append the actions/moves/ais lines
+  if (type == 'CActor' || type == 'CProjectile') {
     for (const a of localCtx.currentActorActions) {
       labels += a + "\n";
     }
@@ -460,7 +498,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
               }
             });
 
-            codeV += `${context.options.lineDetail ? formatLineDetail(e.getText(), '\n') : ''}\n${localCtx.currentActorHardcoded ? 'actor' : `useractor ${localCtx.currentActorIsEnemy ? 1 : 0}`} ${picnum} ${extra} ${action}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+            codeV += `${context.options.lineDetail ? formatLineDetail(e.getText(), '\n') : ''}\n${localCtx.currentActorHardcoded || type === 'CProjectile' ? 'actor' : `useractor ${localCtx.currentActorIsEnemy ? 1 : 0}`} ${picnum} ${extra} ${action}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
 
             stmts.forEach(s => {
               if (!s.isKind(SyntaxKind.ReturnStatement))
@@ -478,7 +516,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
 
   context.curClass = null;
 
-  let prefix = labels + '\n';
+  let prefix = projectileDefineCode + labels + '\n';
 
   if (localCtx.initCode != '') {
     const enablerSym = localCtx.symbolTable.get(`lb${localCtx.currentActorPicnum}_enabler`) as SymbolDefinition;

@@ -449,6 +449,34 @@ export function parseIAiLiteral(
 }
 
 
+export const PROJECTILE_FIELD_MAP: Record<string, string> = {
+  vel: 'vel', velMult: 'velmult', bounces: 'bounces', drop: 'drop',
+  range: 'range', offset: 'offset', clipDist: 'clipdist',
+  iSound: 'isound', bSound: 'bsound', sound: 'sound',
+  trail: 'trail', tnum: 'tnum', tOffset: 'toffset',
+  txRepeat: 'txrepeat', tyRepeat: 'tyrepeat',
+  sxRepeat: 'sxrepeat', syRepeat: 'syrepeat',
+  shade: 'shade', pal: 'pal', cstat: 'cstat',
+  xRepeat: 'xrepeat', yRepeat: 'yrepeat',
+  hitRadius: 'hitradius', extra: 'extra', extraRand: 'extra_rand',
+  decal: 'decal', flashColor: 'flashcolor', spawns: 'spawns',
+  worksLike: 'workslike', userdata: 'userdata',
+};
+
+export function parseProjectileSuperCall(call: CallExpression, context: CompilerContext) {
+  const args = call.getArguments();
+  if (args.length >= 1) {
+    const a0 = evaluateLiteralExpression(args[0] as Expression, context);
+    if (a0 !== null && a0 !== undefined)
+      context.currentActorPicnum = a0 as number;
+  }
+  if (args.length >= 2) {
+    const a1 = evaluateLiteralExpression(args[1] as Expression, context);
+    if (a1 !== null && a1 !== undefined)
+      context.currentActorExtra = a1 as number;
+  }
+}
+
 export function parseActorSuperCall(call: CallExpression, context: CompilerContext) {
   // super(picnum, isEnemy, extra, actions, firstAction, moves, ais)
   const args = call.getArguments();

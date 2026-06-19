@@ -1795,7 +1795,7 @@ declare global {
         ) => void | number;
     }>;
 
-    export type OnVariation<C extends CActor> = Record<string, {
+    export type OnVariation<C> = Record<string, {
         (this: C): {
             picnum: constant,
             extra: constant,
@@ -3208,6 +3208,188 @@ declare global {
         appearance: CON_NATIVE<{ shade: number; pal: number; cstat: number; xRepeat: number; yRepeat: number; }>;
         /** Impact effects grouped: hitRadius, decal, flashColor, extra, extraRand, spawns */
         effect: CON_NATIVE<{ hitRadius: number; decal: number; flashColor: number; extra: number; extraRand: number; spawns: number; }>;
+    }
+
+    /**
+     * Base class for declaring sprite-based projectiles (non-hitscan).
+     * Extend this class to define a new projectile type via `defineprojectile`.
+     *
+     * In the constructor body, assign IProjectile fields (`this.vel`, `this.extra`, …)
+     * to emit `defineprojectile` directives. Define `Main()` for per-frame actor behaviour.
+     * If `Main()` is omitted the class emits only `defineprojectile` calls (hitscan-safe).
+     *
+     * Supports actions, moves, AIs, custom properties, OnEvent, and OnVariation —
+     * identical to {@link CActor}, except the actor block always uses `actor` (non-enemy).
+     */
+    export class CProjectile {
+        // ── defineprojectile fields (assign in constructor body) ─────────────
+        /** Base travel speed */
+        public vel: CON_NATIVE<number>;
+        /** Per-frame speed multiplier */
+        public velMult: CON_NATIVE<number>;
+        /** Number of bounces before the projectile disappears */
+        public bounces: CON_NATIVE<number>;
+        /** Gravity drop per frame */
+        public drop: CON_NATIVE<number>;
+        /** Maximum travel distance */
+        public range: CON_NATIVE<number>;
+        /** Launch offset from owner sprite */
+        public offset: CON_NATIVE<number>;
+        /** Collision clip distance */
+        public clipDist: CON_NATIVE<number>;
+        /** Sound on fire */
+        public iSound: CON_NATIVE<number>;
+        /** Sound on bounce */
+        public bSound: CON_NATIVE<number>;
+        /** Sound on impact */
+        public sound: CON_NATIVE<number>;
+        /** Trail sprite tile (0 = none) */
+        public trail: CON_NATIVE<number>;
+        /** Trail sprite type */
+        public tnum: CON_NATIVE<number>;
+        /** Offset between trail sprites */
+        public tOffset: CON_NATIVE<number>;
+        /** Trail sprite X repeat */
+        public txRepeat: CON_NATIVE<number>;
+        /** Trail sprite Y repeat */
+        public tyRepeat: CON_NATIVE<number>;
+        /** Projectile sprite X repeat */
+        public sxRepeat: CON_NATIVE<number>;
+        /** Projectile sprite Y repeat */
+        public syRepeat: CON_NATIVE<number>;
+        /** Shade */
+        public shade: CON_NATIVE<number>;
+        /** Palette index */
+        public pal: CON_NATIVE<number>;
+        /** Sprite status flags */
+        public cstat: CON_NATIVE<number>;
+        /** X repeat scale */
+        public xRepeat: CON_NATIVE<number>;
+        /** Y repeat scale */
+        public yRepeat: CON_NATIVE<number>;
+        /** Explosion hit radius */
+        public hitRadius: CON_NATIVE<number>;
+        /** Damage (projectile extra, not actor health) */
+        public extra: CON_NATIVE<number>;
+        /** Random damage range added to extra */
+        public extraRand: CON_NATIVE<number>;
+        /** Decal tile on wall impact */
+        public decal: CON_NATIVE<number>;
+        /** RGB flash color on impact */
+        public flashColor: CON_NATIVE<number>;
+        /** Tile spawned on impact */
+        public spawns: CON_NATIVE<number>;
+        /** Tile this projectile behaves like */
+        public worksLike: CON_NATIVE<number>;
+        /** User-defined data */
+        public userdata: CON_NATIVE<number>;
+
+        // ── sprite/actor properties (available inside Main()) ─────────────────
+        /** Tile number of the sprite */
+        public picnum: CON_NATIVE<number>;
+        /** Sprite position */
+        public pos: CON_NATIVE<vec3>;
+        /** Sprite angle */
+        public ang: CON_NATIVE<number>;
+        /** Owner sprite index */
+        public owner: CON_NATIVE<number>;
+        /** Sprite velocity */
+        public vel2: CON_NATIVE<vec3>;
+        /** Palette */
+        public pal2: CON_NATIVE<number>;
+        /** Shade/brightness */
+        public shade2: CON_NATIVE<number>;
+        /** Condition status flags */
+        public cstat2: CON_NATIVE<number>;
+        /** Sprite status list */
+        public statnum: CON_NATIVE<number>;
+        /** Repeat scaling */
+        public repeat: CON_NATIVE<vec2>;
+        /** Texture offset */
+        public texOffset: CON_NATIVE<vec2>;
+        /** Current sector */
+        public curSector: CON_NATIVE<CSector>;
+        /** Current sector ID */
+        public curSectorID: CON_NATIVE<number>;
+        /** Distance to nearest player */
+        public playerDist: CON_NATIVE<number>;
+        /** Current action pointer */
+        public curAction: CON_NATIVE<number>;
+        /** Current move pointer */
+        public curMove: CON_NATIVE<number>;
+        /** Current AI pointer */
+        public curAI: CON_NATIVE<number>;
+        /** Sprite flags */
+        public flags: CON_NATIVE<number>;
+        /** Lotag/Hitag */
+        public tags: CON_NATIVE<tag>;
+        /** Alpha transparency */
+        public alpha: CON_NATIVE<number>;
+        /** Blend mode */
+        public blend: CON_NATIVE<number>;
+        /** Pitch rotation */
+        public pitch: CON_NATIVE<number>;
+        /** Roll rotation */
+        public roll: CON_NATIVE<number>;
+
+        // ── actions / moves / AIs ─────────────────────────────────────────────
+        protected actions: TAction<string>;
+        protected moves: TMove<string>;
+        protected ais: TAi<string>;
+
+        /**
+         * Declare a new projectile type.
+         * @param picnum - tile number of the projectile sprite
+         * @param extra - (optional) initial sprite health for the actor block (rarely needed; projectile damage is set via `this.extra` in the body)
+         */
+        constructor(picnum: constant, extra?: constant)
+
+        // ── helper methods (same as CActor) ───────────────────────────────────
+        public PlayAction(action: IAction | null): CON_NATIVE<void>
+        public Move(move: IMove | null, flags: number): CON_NATIVE<void>
+        public StartAI(ai: IAi | null): CON_NATIVE<void>
+        public CStat(stats?: number): CON_NATIVE<number>
+        public CStatOR(stats: number): CON_NATIVE<void>
+        public SizeAt(w: number, h: number): CON_NATIVE<void>
+        public SizeTo(w: number, h: number, inc_x?: number, inc_y?: number): CON_NATIVE<void>
+        public Count(value?: number): CON_NATIVE<number>
+        public ActionCount(value?: number): CON_NATIVE<number>
+        public Fall(): CON_NATIVE<void>
+        public KillIt(): CON_NATIVE<void>
+        public Stop(): CON_NATIVE<void>
+        public ResetAction(): CON_NATIVE<void>
+        public Spawn(picnum: number | CActor, initFn?: ((id: number) => void), queued?: boolean): CON_NATIVE<number>
+        public Shoot(picnum: number | CActor, initFn?: ((id: number) => void), use_zvel?: boolean, zvel?: number, additive_zvel?: boolean): CON_NATIVE<number>
+        public HitRadius(radius: number, furthestDmg: number, farDmg: number, closeDmg: number, closestDmg: number): CON_NATIVE<void>
+        public Flash(): CON_NATIVE<void>
+        public Sound(sound_id: number, global?: boolean, once?: boolean): CON_NATIVE<void>
+        public StopSound(sound_id: number): CON_NATIVE<void>
+        public IsAwayFromWall(): CON_NATIVE<boolean>
+        public IsInWater(): CON_NATIVE<boolean>
+        public IsOnWater(): CON_NATIVE<boolean>
+        public IsOutside(): CON_NATIVE<boolean>
+        public IsRandom(value: number): CON_NATIVE<boolean>
+        public IsDead(): CON_NATIVE<boolean>
+        public Squished(): CON_NATIVE<boolean>
+        public BulletNear(): CON_NATIVE<boolean>
+        /**
+         * Must be called frequently in `Main()` for the projectile to receive weapon damage.
+         */
+        public HitByWeapon(): CON_NATIVE<boolean>
+        public WhichWeaponHit(): CON_NATIVE<number>
+        public Pal(color: number): CON_NATIVE<void>
+        public Debris(tile: constant, amount: constant): CON_NATIVE<void>
+        public Guts(tile: constant, amount: constant): CON_NATIVE<void>
+
+        /**
+         * Define per-frame behaviour. Omit for hitscan projectiles (no actor block emitted).
+         */
+        protected Main(first_action?: IAction): void;
+
+        /** Per-projectile-sprite events. See {@link OnEvent} */
+        protected Events: OnEvent;
+
+        protected Variations: OnVariation<CProjectile>;
     }
 
     /**
