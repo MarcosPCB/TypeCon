@@ -1,4 +1,4 @@
-import { VariableDeclaration, SyntaxKind, ObjectLiteralExpression, Expression, ArrowFunction, FunctionExpression } from "ts-morph";
+import { VariableDeclaration, SyntaxKind, ObjectLiteralExpression, PropertyAssignment, Expression, ArrowFunction, FunctionExpression } from "ts-morph";
 import { CompilerContext, ESymbolType, SymbolDefinition } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
 import { ECompileOptions } from "../framework";
@@ -54,6 +54,101 @@ export function visitVariableDeclaration(decl: VariableDeclaration, context: Com
       offset: 0,
       size: 1,
       literal: type.getAliasTypeArguments()[0].getLiteralValue() as number,
+      global: isGlobal,
+      parentFunc: isGlobal ? undefined : context.curFunc?.name
+    });
+    return code;
+  }
+
+  if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'GameLabel') {
+    const initNode = decl.getInitializer();
+    const val = initNode ? evaluateLiteralExpression(initNode as Expression, context) as number : 0;
+    context.headerDefines.push(`define ${varName} ${val}\n`);
+    context.symbolTable.set(varName, {
+      name: varName,
+      type: ESymbolType.number | ESymbolType.constant,
+      offset: 0,
+      size: 1,
+      literal: val,
+      isLabel: true,
+      global: isGlobal,
+      parentFunc: isGlobal ? undefined : context.curFunc?.name
+    });
+    return code;
+  }
+
+  if (type && type.getAliasSymbol() && type.getAliasSymbol().getName() == 'Sound') {
+    const initNode = decl.getInitializer();
+    if (!initNode || !initNode.isKind(SyntaxKind.ObjectLiteralExpression)) {
+      addDiagnostic(decl, context, 'error', 'Sound must be initialized with an object literal { file, ... }');
+      return code;
+    }
+    const obj = initNode as ObjectLiteralExpression;
+
+    let soundId: string | null = null;
+    let soundFile = '';
+    let pitchMin = 0, pitchMax = 0, flags = 0, dist = 0, vol = 0;
+
+    for (const prop of obj.getProperties()) {
+      if (!prop.isKind(SyntaxKind.PropertyAssignment)) continue;
+      const pa = prop as PropertyAssignment;
+      const propName = pa.getName();
+      const propInit = pa.getInitializer();
+      if (!propInit) continue;
+
+      switch (propName) {
+        case 'id': {
+          if (propInit.isKind(SyntaxKind.Identifier)) {
+            const sym = context.symbolTable.get(propInit.getText()) as SymbolDefinition;
+            soundId = (sym?.isLabel) ? sym.name : String(evaluateLiteralExpression(propInit as Expression, context) ?? 0);
+          } else {
+            soundId = String(evaluateLiteralExpression(propInit as Expression, context) ?? 0);
+          }
+          break;
+        }
+        case 'file':
+          soundFile = propInit.isKind(SyntaxKind.StringLiteral)
+            ? (propInit as any).getLiteralText()
+            : propInit.getText().replace(/^[`'"]|[`'"]$/g, '');
+          break;
+        case 'pitchMin':
+          pitchMin = Number(evaluateLiteralExpression(propInit as Expression, context) ?? 0);
+          break;
+        case 'pitchMax':
+          pitchMax = Number(evaluateLiteralExpression(propInit as Expression, context) ?? 0);
+          break;
+        case 'flags':
+          flags = Number(evaluateLiteralExpression(propInit as Expression, context) ?? 0);
+          break;
+        case 'dist':
+          dist = Number(evaluateLiteralExpression(propInit as Expression, context) ?? 0);
+          break;
+        case 'vol':
+          vol = Number(evaluateLiteralExpression(propInit as Expression, context) ?? 0);
+          break;
+      }
+    }
+
+    if (!soundFile) {
+      addDiagnostic(decl, context, 'error', `Sound '${varName}' is missing required field 'file'`);
+      return code;
+    }
+
+    if (soundId === null) {
+      // Auto-assign next available slot
+      context.headerDefines.push(`define ${varName} ${context.soundSlotCounter}\n`);
+      soundId = varName;
+      context.soundSlotCounter++;
+    }
+
+    context.headerDefines.push(`definesound ${soundId} "${soundFile}" ${pitchMin} ${pitchMax} ${flags} ${dist} ${vol}\n`);
+    context.symbolTable.set(varName, {
+      name: varName,
+      type: ESymbolType.number | ESymbolType.constant,
+      offset: 0,
+      size: 1,
+      literal: context.soundSlotCounter - 1,
+      isLabel: true,
       global: isGlobal,
       parentFunc: isGlobal ? undefined : context.curFunc?.name
     });

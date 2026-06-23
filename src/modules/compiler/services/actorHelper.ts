@@ -484,6 +484,12 @@ export function parseActorSuperCall(call: CallExpression, context: CompilerConte
     const a0 = evaluateLiteralExpression(args[0] as Expression, context);
     if (a0)
       context.currentActorPicnum = a0 as number;
+    // If the arg is a GameLabel identifier, also store its name for use in useractor
+    if (args[0].isKind(SyntaxKind.Identifier)) {
+      const sym = context.symbolTable.get(args[0].getText());
+      if (sym && (sym as any).isLabel)
+        context.currentActorPicnumLabel = (sym as any).name;
+    }
   }
   if (args.length >= 2) {
     const a1 = args[1];

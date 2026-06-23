@@ -24,6 +24,7 @@ let input_folder = '';
 let line_print = false;
 let symbol_print = false;
 let stack_size = 8192;
+let sound_slot_start = 400;
 let output_folder = 'compiled';
 let objFolder = 'obj';
 let objFolderExplicitlySet = false;
@@ -590,6 +591,9 @@ async function Main() {
         if (a == '--stack-size' || a == '-ss')
             stack_size = Number(process.argv[i + 1]);
 
+        if (a == '--sound-slot')
+            sound_slot_start = Number(process.argv[i + 1]);
+
         if (a == '--page-size' || a == '-ps')
             heap_page_size = Number(process.argv[i + 1]);
 
@@ -942,7 +946,7 @@ async function Main() {
     if (stack_size < 1024)
         console.log(`WARNING: using a stack size lesser than 1024 is not recommended!`);
 
-    const compiler = new TsToConCompiler({ lineDetail: line_print, mode: compile_mode, stackSize: stack_size, heapNumPages: heap_page_number, varOverrides: varOverrides.size > 0 ? varOverrides : undefined });
+    const compiler = new TsToConCompiler({ lineDetail: line_print, mode: compile_mode, stackSize: stack_size, heapNumPages: heap_page_number, varOverrides: varOverrides.size > 0 ? varOverrides : undefined, soundSlotStart: sound_slot_start });
     const initSys = new CONInit(stack_size, heap_page_size, heap_page_number, precompiled_modules, heap_page_size * heap_page_number, 0, accept_con_modules);
 
     // --- LINK MODE ---

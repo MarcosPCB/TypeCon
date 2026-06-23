@@ -505,6 +505,15 @@ else
         ]
     },
     {
+        name: 'ScreenSound',
+        returns: false,
+        code: `screensound`,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ]
+    },
+    {
         name: 'Operate',
         code: (args: boolean) => {
             return `state _Operate`
@@ -1638,6 +1647,358 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'fromRad', object_belong: ['Math'], returns: true, return_type: 'variable',
         code: (_a?: boolean) => `set rb r0\ndiv rb 1144`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    // Math additions
+    {
+        name: 'hypotenuse', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'calchypotenuse rb r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'getAngle', object_belong: ['Math'], returns: true, return_type: 'variable', returns_fp_bits: 11,
+        code: (_a?: boolean) => 'getangle rb r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'rotatePointX', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'rotatepoint r0 r1 r2 r3 r4 rb ra',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'rotatePointY', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'rotatepoint r0 r1 r2 r3 r4 ra rb',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    // CActor actor-context methods
+    {
+        name: 'AngleToTarget',
+        returns: true, return_type: 'variable', returns_fp_bits: 11,
+        code: (_a?: boolean) => 'getangletotarget rb',
+        arguments: []
+    },
+
+    {
+        name: 'SSP',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'ssp THISACTOR r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'InsertQueue',
+        returns: false, return_type: null,
+        code: 'insertspriteq',
+        arguments: []
+    },
+
+    {
+        name: 'Quake',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'quake r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'StartScreen',
+        returns: false, return_type: null,
+        code: 'startscreen',
+        arguments: []
+    },
+
+    {
+        name: 'StartLevel',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'startlevel r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'Save',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'save r0',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT]
+    },
+
+    {
+        name: 'LockPlayer',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'lockplayer r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'ResetPlayer',
+        returns: false, return_type: null,
+        code: 'resetplayer',
+        arguments: []
+    },
+
+    // Player / global commands
+    {
+        name: 'AddAmmo',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'addammo r0 r1',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'AddInventory',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'addinventory r0 r1',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'AddWeapon',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'addweapon r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'AddHealth',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'addphealth r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'GMaxAmmo',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'gmaxammo r0 rb',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'SMaxAmmo',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'smaxammo r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'TossWeapon',
+        returns: false, return_type: null,
+        code: 'tossweapon',
+        arguments: []
+    },
+
+    {
+        name: 'WackPlayer',
+        returns: false, return_type: null,
+        code: 'wackplayer',
+        arguments: []
+    },
+
+    {
+        name: 'Pstomp',
+        returns: false, return_type: null,
+        code: 'pstomp',
+        arguments: []
+    },
+
+    {
+        name: 'StopAllSounds',
+        returns: false, return_type: null,
+        code: 'stopallsounds',
+        arguments: []
+    },
+
+    {
+        name: 'StopAllMusic',
+        returns: false, return_type: null,
+        code: 'stopallmusic',
+        arguments: []
+    },
+
+    // World geometry (single output)
+    {
+        name: 'Dist',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'dist rb r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'LDist',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'ldist rb r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'FloorZOfSlope',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'getflorzofslope r0 r1 r2 rb',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'CeilZOfSlope',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'getceilzofslope r0 r1 r2 rb',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'UpdateSector',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'updatesector r0 r1 rb',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'DragPoint',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'dragpoint r0 r1 r2',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'MoveSector',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'movesector r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    // Sprite linked-list traversal
+    {
+        name: 'headSpritestat',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'headspritestat rb r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'nextSpritestat',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'nextspritestat rb r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'prevSpritestat',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'prevspritestat rb r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'headSpritesect',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'headspritesect rb r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'nextSpritesect',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'nextspritesect rb r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'prevSpritesect',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'prevspritesect rb r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    // Find nearest actor/sprite
+    {
+        name: 'FindNearActor',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'findnearactor r0 r1 rb',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'FindNearActor3D',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'findnearactor3d r0 r1 rb',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'FindNearActorZ',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'findnearactorz r0 r1 r2 rb',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'FindNearSprite',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'findnearsprite r0 r1 rb',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'FindNearSprite3D',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'findnearsprite3d r0 r1 rb',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'FindNearSpriteZ',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'findnearspritez r0 r1 r2 rb',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    // quote string methods
+    {
+        name: 'copy',
+        type_belong: ['quote'],
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'qstrcpy r1 r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'cat',
+        type_belong: ['quote'],
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'qstrcat r1 r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'ncat',
+        type_belong: ['quote'],
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'qstrncat r2 r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'len',
+        type_belong: ['quote'],
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'qstrlen rb r0',
+        arguments: []
+    },
+
+    {
+        name: 'sub',
+        type_belong: ['quote'],
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'qsubstr r3 r0 r1 r2',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'cmp',
+        type_belong: ['quote'],
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'qstrcmp r1 r0 rb',
         arguments: [CON_NATIVE_FLAGS.VARIABLE]
     }
 ]

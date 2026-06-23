@@ -1,5 +1,5 @@
 import { Expression, SyntaxKind, CallExpression, Identifier } from "ts-morph";
-import { CompilerContext, ESymbolType, SegmentIdentifier, SegmentProperty, SymbolDefinition} from "../Compiler";
+import { CompilerContext, ESymbolType, SegmentIdentifier, SegmentProperty, SymbolDefinition } from "../Compiler";
 import { CON_NATIVE_FLAGS } from "../../../sets/TCSet100/native";
 import { addDiagnostic } from "./addDiagnostic";
 import { unrollMemberExpression } from "./unrollMemberExpression";
@@ -108,6 +108,20 @@ export function resolveNativeArgument(arg: Expression, expected: number, context
     if (expected & CON_NATIVE_FLAGS.CONSTANT) {
       if (arg.isKind(SyntaxKind.NumericLiteral)) {
         return arg.getText();
+      }
+
+      if (arg.isKind(SyntaxKind.Identifier)) {
+        const sym = context.symbolTable.get(arg.getText()) as SymbolDefinition;
+        if (!sym) {
+          addDiagnostic(arg, context, 'error', `Undefined symbol '${arg.getText()}' used as CONSTANT argument`);
+          return '';
+        }
+        // GameLabel / Sound: emit the label name so CON uses the define
+        if (sym.isLabel) return sym.name;
+        // Regular constant: inline the literal
+        if (sym.type & ESymbolType.constant) return String(sym.literal ?? 0);
+        addDiagnostic(arg, context, 'error', `Symbol '${arg.getText()}' is not a constant`);
+        return '';
       }
 
       if (arg.isKind(SyntaxKind.PropertyAccessExpression) || arg.isKind(SyntaxKind.ElementAccessExpression))

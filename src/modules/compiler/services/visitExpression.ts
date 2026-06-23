@@ -1,5 +1,5 @@
 import { Expression, SyntaxKind, BinaryExpression, CallExpression, ObjectLiteralExpression, PropertyAccessExpression, NumericLiteral, PrefixUnaryExpression, ParenthesizedExpression, ArrowFunction, FunctionExpression } from "ts-morph";
-import { CompilerContext, ESymbolType } from "../Compiler";
+import { CompilerContext, ESymbolType, SymbolDefinition } from "../Compiler";
 import { evaluateLiteralExpression } from "../helper/helpers";
 import { visitBinaryExpression } from "./visitBinaryExpression";
 import { visitCallExpression } from "./visitCallExpression";
@@ -20,6 +20,16 @@ export function visitExpression(expr: Expression, context: CompilerContext, reg 
   context.curExpr = ESymbolType.number;
   context.curFpBits = 0;
   context.curSymRet = null;
+
+  // If the expression is a GameLabel/Sound identifier, emit the label name directly
+  // so that VARIABLE-path native args (e.g. sound BARREL_BOOM) use the define name.
+  if (expr.isKind(SyntaxKind.Identifier)) {
+    const labelSym = context.symbolTable.get(expr.getText()) as SymbolDefinition;
+    if (labelSym?.isLabel) {
+      context.curExpr = ESymbolType.number | ESymbolType.constant;
+      return `set ${reg} ${labelSym.name}\n`;
+    }
+  }
 
   const val = evaluateLiteralExpression(expr, context);
 

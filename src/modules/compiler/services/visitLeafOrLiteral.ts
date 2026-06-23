@@ -56,6 +56,10 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
       const off = context.symbolTable.get(name) as SymbolDefinition;
 
       if (off.type & ESymbolType.constant) {
+        if ((off as any).isLabel) {
+          if (direct) return off.name;
+          return code + `set ${reg} ${off.name}\n`;
+        }
         if (direct)
           return String(off.literal);
 

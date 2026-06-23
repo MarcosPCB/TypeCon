@@ -53,6 +53,7 @@ export interface CompilerOptions {
   heapNumPages?: number; // From typecon.json / CLI; used for memory warnings
 
   varOverrides?: Map<string, number>; // --vars NAME=VALUE overrides for gameVar initial values
+  soundSlotStart?: number;            // --sound-slot N: base index for auto-assigned Sound IDs
 }
 
 export enum EHeapType {
@@ -118,6 +119,7 @@ export interface SymbolDefinition {
   CON_code?: string,
   returns?: Exclude<ESymbolType, ESymbolType.enum> | null;
   literal?: string | number | null; //Can hold the sub function address
+  isLabel?: boolean;               // True for GameLabel / Sound — emit symbol name instead of literal in CONSTANT positions
   parent?: SymbolDefinition;
   parentFunc?: string; // Name of the function this symbol belongs to (for locals)
   parentClass?: string; // Name of the class this symbol belongs to
@@ -167,8 +169,11 @@ export interface CompilerContext {
 
   options: CompilerOptions;
 
+  soundSlotCounter: number;  // auto-incremented for Sound declarations with no explicit id
+
   // For CActor:
   currentActorPicnum?: number;
+  currentActorPicnumLabel?: string; // label name if picnum was a GameLabel, e.g. "TILE_EGG"
   currentActorExtra?: number;
   currentActorIsEnemy?: boolean;
   currentActorFirstAction?: string;
@@ -314,6 +319,7 @@ export class TsToConCompiler {
       options: this.options,
 
       globalVarCount: 0,
+      soundSlotCounter: this.options.soundSlotStart ?? 400,
 
       curClass: null,
       curFunc: null,

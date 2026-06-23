@@ -70,7 +70,8 @@ export function visitMethodDeclaration(
     const isDebugTest = md.getLeadingCommentRanges().some(c => /debug-test/i.test(c.getText()));
     if (isDebugTest) localCtx.isDebugTest = true;
 
-    const header = `${localCtx.currentActorHardcoded || type == 'CPlayer' || type == 'CProjectile' ? 'actor' : `useractor ${enemy}`} ${pic} ${extra} ${firstAction}`;
+    const picStr = localCtx.currentActorPicnumLabel ?? String(pic);
+    const header = `${localCtx.currentActorHardcoded || type == 'CPlayer' || type == 'CProjectile' ? 'actor' : `useractor ${enemy}`} ${picStr} ${extra} ${firstAction}`;
     let code = `${context.options.lineDetail ? formatLineDetail(md.getText()) : ''}\n${header} \n${isDebugTest ? '//// DEBUG-TEST ////\n  state _testInit\n' : ''}  findplayer playerDist\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  set rbbp rbp\n`;
     const body = md.getBody() as any;
     if (body) {

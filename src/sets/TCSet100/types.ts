@@ -255,6 +255,14 @@ declare global {
         toRad(degrees: number): FP16;
         /** FP16 radians → integer degrees. */
         fromRad(radians: FP16): number;
+        /** 64-bit-safe Euclidean distance: √(x²+y²). */
+        hypotenuse(x: number, y: number): number;
+        /** BAM angle (0–2047) from Δx/Δy components. */
+        getAngle(dx: number, dy: number): FP11;
+        /** X component after rotating point (px,py) around centre (cx,cy) by angle (BAM). */
+        rotatePointX(cx: number, cy: number, px: number, py: number, angle: number): number;
+        /** Y component after rotating point (px,py) around centre (cx,cy) by angle (BAM). */
+        rotatePointY(cx: number, cy: number, px: number, py: number, angle: number): number;
     }
 
     //Type for native functions
@@ -917,7 +925,21 @@ declare global {
      * and then we have quotes, which are kept separately from the memory and are used in native CON commands.
      * quotes have a 128 character limitation.
      */
-    export type quote = string & { _brand: 'quote' };
+    export type quote = string & {
+        readonly _brand: 'quote';
+        /** Copy src into this quote slot (qstrcpy). */
+        copy(src: quote): void;
+        /** Append src to this quote slot (qstrcat). */
+        cat(src: quote): void;
+        /** Bounded append: append at most maxlen characters from src (qstrncat). */
+        ncat(src: quote, maxlen: number): void;
+        /** Character count of this quote slot (qstrlen). */
+        len(): number;
+        /** Copy a substring of src[start..end] into this quote slot (qsubstr). */
+        sub(src: quote, start: number, end: number): void;
+        /** Compare this quote to other; returns negative/0/positive like strcmp (qstrcmp). */
+        cmp(other: quote): number;
+    };
 
     /**
      * Converts a string to a quote
@@ -930,9 +952,130 @@ declare global {
      */
     export type constant = number & { __brandConstant?: never };
 
+    /**
+     * GameLabel — emits a CON `define NAME value` header line.
+     * Use-sites emit the label NAME rather than the numeric literal.
+     * Compatible with any CONSTANT argument position.
+     *
+     * @example
+     * const TILE_EGG: GameLabel = 2165;
+     * // → define TILE_EGG 2165
+     */
+    export type GameLabel = number;
 
+    /**
+     * Sound flags bitfield for `definesound`.
+     */
+    export enum SoundFlags {
+        None        = 0,
+        Loop        = 1,    // SF_LOOP: repeats if continually played
+        Ambient     = 2,    // SF_MSFX: ambient effect; muted by ambience toggle
+        LoopUntilStop = 3,  // SF_LOOP|SF_MSFX: loops until explicitly stopped
+        PlayerVoice = 4,    // SF_TALK: player voice; affected by Speech volume slider
+        Adult       = 8,    // SF_ADULT: muted when parental lock / non-adult mode active
+        Global      = 16,   // SF_GLOBAL: audible from anywhere in the level
+        OneInstance = 32,   // SF_ONEINST_INTERNAL: only one instance at a time (internal)
+        Speech      = 64,   // SF_SPEECH: NPC speech; affected by Speech volume slider
+        DukeTag     = 128,  // SF_DTAG: used in Duke-Tag mode
+        Explosion   = 144,  // SF_GLOBAL|SF_DTAG: vanilla Duke3D explosion sound behaviour
+    }
 
-    /** 
+    /**
+     * Sound definition — emits `define NAME slot` (if no id given) + `definesound` header lines.
+     * The variable name becomes the sound label, usable anywhere a CONSTANT is accepted.
+     *
+     * @example
+     * const GUN_SHOT: Sound = { file: 'gunshot.wav', pitchMin: 5, pitchMax: 10 };
+     * // → define GUN_SHOT 0
+     * //   definesound GUN_SHOT "gunshot.wav" 5 10 0 0 0
+     */
+    export type Sound = {
+        id?: number | GameLabel;  // explicit slot; omit to auto-assign
+        file: string;
+        pitchMin?: number;
+        pitchMax?: number;
+        flags?: SoundFlags;
+        dist?: number;
+        vol?: number;
+    };
+
+    /**
+     * Configuration object for `CGame.startup()`.
+     * All 27 fields map directly to the CON `gamestartup` positional arguments.
+     */
+    export type CGameStartup = {
+        maxHealth: number;
+        maxArmor: number;
+        maxSteroids: number;
+        maxHoloduke: number;
+        maxJetpack: number;
+        maxScuba: number;
+        maxBoots: number;
+        maxFirstAid: number;
+        initialHealth: number;
+        initialArmor: number;
+        maxAmmoPistol: number;
+        maxAmmoShotgun: number;
+        maxAmmoChaingun: number;
+        maxAmmoRPG: number;
+        maxAmmoShrinker: number;
+        maxAmmoDevastator: number;
+        maxAmmoLaser: number;
+        maxAmmoFreeze: number;
+        maxAmmoShrunk: number;
+        maxAmmoHeat: number;
+        maxAmmoExpander: number;
+        damagePistol: number;
+        damageShotgun: number;
+        damageChaingun: number;
+        damageRPG: number;
+        damageMortar: number;
+        damageGrenade: number;
+    };
+
+    /**
+     * Extend CGame to configure the game's global settings.
+     * All calls in the constructor emit CON header definitions.
+     *
+     * @example
+     * class MyGame extends CGame {
+     *   constructor() {
+     *     super('My TC');
+     *     this.skill(0, 'Easy');
+     *     this.startup({ maxHealth: 100, ... });
+     *     this.precache(false, TILE_WATER, TILE_WATER);
+     *     this.cheat('dnkroz', GOD_CHEAT);
+     *   }
+     * }
+     */
+    export class CGame {
+        constructor(name: string)
+        skill(id: number, name: string): void
+        startup(cfg: CGameStartup): void
+        precache(external: boolean, startTile: number | GameLabel, endTile: number | GameLabel): void
+        cheat(code: string, label: number | GameLabel): void
+    }
+
+    /**
+     * Extend CVolume to define an episode (volume) and its levels.
+     * All calls in the constructor emit CON header definitions.
+     *
+     * @example
+     * class Ep1 extends CVolume {
+     *   constructor() {
+     *     super(0, 'L.A. Meltdown');
+     *     this.level(1, 'e1l1.map', 'dethtoll.mid', 'Hollywood Holocaust');
+     *     this.music(1, 'dethtoll.mid');
+     *   }
+     * }
+     */
+    export class CVolume {
+        constructor(id: number, name: string)
+        level(id: number, file: string, music: string, name: string, par?: number, des?: number): void
+        music(lev: number, file: string): void
+    }
+
+    /**
      * Returns a pointer for thhe specified label
      * @param name - Label (can be an action, move or AI)
      * @returns the pointer of that label
@@ -1271,6 +1414,74 @@ declare global {
      */
     export function PalFrom(r: number, g: number, b: number, time: number): CON_NATIVE<void>;
 
+    // ── Player / ammo / weapon helpers ────────────────────────────────────────
+    /** Add ammo to the current player's weapon slot. */
+    export function AddAmmo(weapon: CON_CONSTANT<number>, amount: number): CON_NATIVE<void>;
+    /** Add an inventory item to the current player. */
+    export function AddInventory(item: CON_CONSTANT<number>, amount: number): CON_NATIVE<void>;
+    /** Give the current player a weapon with ammo. */
+    export function AddWeapon(weapon: number, ammo: number): CON_NATIVE<void>;
+    /** Add health to the current player (clamped). */
+    export function AddHealth(n: number): CON_NATIVE<void>;
+    /** Get the current max-ammo cap for a weapon. */
+    export function GMaxAmmo(weapon: number): CON_NATIVE<number>;
+    /** Set the starting max-ammo cap for a weapon. */
+    export function SMaxAmmo(weapon: number, max: number): CON_NATIVE<void>;
+    /** Toss the current player's active weapon. */
+    export function TossWeapon(): CON_NATIVE<void>;
+    /** Make the current player flinch/recoil. */
+    export function WackPlayer(): CON_NATIVE<void>;
+    /** Stomp the sprite below the current player. */
+    export function Pstomp(): CON_NATIVE<void>;
+    /** Stop all currently playing sound effects. */
+    export function StopAllSounds(): CON_NATIVE<void>;
+    /** Stop all currently playing music. */
+    export function StopAllMusic(): CON_NATIVE<void>;
+
+    // ── Geometry ──────────────────────────────────────────────────────────────
+    /** 2D distance between two sprites (by sprite index). */
+    export function Dist(s1: number, s2: number): CON_NATIVE<number>;
+    /** Fast approximate 2D distance between two sprites. */
+    export function LDist(s1: number, s2: number): CON_NATIVE<number>;
+    /** Floor Z at world position (x,y) in the given sector. */
+    export function FloorZOfSlope(sect: number, x: number, y: number): CON_NATIVE<number>;
+    /** Ceiling Z at world position (x,y) in the given sector. */
+    export function CeilZOfSlope(sect: number, x: number, y: number): CON_NATIVE<number>;
+    /** Return the sector index that contains world point (x,y). */
+    export function UpdateSector(x: number, y: number): CON_NATIVE<number>;
+    /** Move a wall vertex to (x,y). */
+    export function DragPoint(wall: number, x: number, y: number): CON_NATIVE<void>;
+    /** Move sector geometry (Floor/ceiling Z interpolation). */
+    export function MoveSector(sect: number): CON_NATIVE<void>;
+
+    // ── Sprite linked-list traversal ──────────────────────────────────────────
+    /** First sprite in the given status list; returns -1 if empty. */
+    export function headSpritestat(stat: number): CON_NATIVE<number>;
+    /** Next sprite after spr in its status list; returns -1 at end. */
+    export function nextSpritestat(spr: number): CON_NATIVE<number>;
+    /** Previous sprite before spr in its status list; returns -1 at start. */
+    export function prevSpritestat(spr: number): CON_NATIVE<number>;
+    /** First sprite in the given sector; returns -1 if empty. */
+    export function headSpritesect(sect: number): CON_NATIVE<number>;
+    /** Next sprite after spr in its sector list; returns -1 at end. */
+    export function nextSpritesect(spr: number): CON_NATIVE<number>;
+    /** Previous sprite before spr in its sector list; returns -1 at start. */
+    export function prevSpritesect(spr: number): CON_NATIVE<number>;
+
+    // ── Find nearest ──────────────────────────────────────────────────────────
+    /** Nearest actor of tile type within 2D radius; -1 if none. */
+    export function FindNearActor(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
+    /** Nearest actor of tile type within 3D radius; -1 if none. */
+    export function FindNearActor3D(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
+    /** Nearest actor of tile type within 2D radius and Z range; -1 if none. */
+    export function FindNearActorZ(tile: CON_CONSTANT<number>, dist: number, zdist: number): CON_NATIVE<number>;
+    /** Nearest sprite of tile type within 2D radius; -1 if none. */
+    export function FindNearSprite(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
+    /** Nearest sprite of tile type within 3D radius; -1 if none. */
+    export function FindNearSprite3D(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
+    /** Nearest sprite of tile type within 2D radius and Z range; -1 if none. */
+    export function FindNearSpriteZ(tile: CON_CONSTANT<number>, dist: number, zdist: number): CON_NATIVE<number>;
+
     /** @class for actor declaration. Use this as extension to declare your custom actors. */
     export class CActor {
         public defaultStrength: CON_NATIVE<number>;
@@ -1543,12 +1754,12 @@ declare global {
          * @param global - play globally or not
          * @param once (optional) - only play it again if the other instance has finished already
          */
-        public Sound(sound_id: number, global?: boolean, once?: boolean): CON_NATIVE<void>
+        public Sound(sound_id: number | Sound, global?: boolean, once?: boolean): CON_NATIVE<void>
         /**
          * Stops playing a sound
          * @param sound_id - the sound ID
          */
-        public StopSound(sound_id: number): CON_NATIVE<void>
+        public StopSound(sound_id: number | Sound): CON_NATIVE<void>
         /**
          * Returns if the actor is away from wall
          */
@@ -1695,11 +1906,36 @@ declare global {
          */
         public LockPlayer(time: number): CON_NATIVE<void>
         /**
-         * Reload the map (if in Single Player) and the player loses his inventory. 
+         * Reload the map (if in Single Player) and the player loses his inventory.
          * Also if in Single Player mode, execution of subsequent code is halted in a fashion similar to return.
          * @param flags - set to 1 to don't ask the player if they want to load the most recent save (if applicable)
          */
         public ResetPlayer(flags: number): CON_NATIVE<void>
+        /**
+         * Move this actor using its own xvel/yvel without recalculating the angle.
+         * @param clipType - clipping mask (e.g. CLIPMASK0, CLIPMASK1)
+         */
+        public SSP(clipType: number): CON_NATIVE<void>
+        /** Insert this actor into the sprite-processing queue. */
+        public InsertQueue(): CON_NATIVE<void>
+        /**
+         * Trigger a screen quake.
+         * @param strength - quake magnitude
+         */
+        public Quake(strength: number): CON_NATIVE<void>
+        /** Show the startup screen. */
+        public StartScreen(): CON_NATIVE<void>
+        /**
+         * Transition to another level.
+         * @param ep - episode (0-based)
+         * @param level - level (0-based)
+         */
+        public StartLevel(ep: number, level: number): CON_NATIVE<void>
+        /**
+         * Save the game to a slot.
+         * @param slot - save slot number (constant)
+         */
+        public Save(slot: CON_CONSTANT<number>): CON_NATIVE<void>
 
         /**
          * You must define this function for the actor to work
@@ -1791,7 +2027,7 @@ declare global {
 
     export type OnEvent = Partial<{
         [E in TEvents]: (
-            this: CEvent & CActor
+            this: CEvent<E> & CActor
         ) => void | number;
     }>;
 
@@ -1803,8 +2039,18 @@ declare global {
         };
     }>
 
-    /** @class for declaring events. Use this as extension. */
-    export class CEvent {
+    /**
+     * Base class for event handlers.
+     *
+     * Extend with an explicit type argument to get the right method set:
+     *   - `CEvent<TEventPAE>` (or a specific PAE string like `'Spawn'`): `Sound`, `StopSound`
+     *   - `CEvent<TEventDE>` (or a specific DE string like `'DisplayEnd'`): `RotateSprite`, `ScreenSound`, `ScreenText`, …
+     *
+     * Actor struct properties (`picnum`, `x`, `y`, etc.) are **never** available on a
+     * standalone `CEvent` — use `CActor` directly, or `OnEvent` inside a `CActor` subclass
+     * (which gives `this: CEvent<E> & CActor`).
+     */
+    export class CEvent<T extends TEvents = TEvents> {
         /** @todo */
         protected argument?: number | number[];
 
@@ -1812,7 +2058,27 @@ declare global {
          * Starts the event declaration
          * @param event - the event that will be defined. See {@link TEvents}
          */
-        constructor(event: TEvents)
+        constructor(event: T)
+
+        // ── PAE-only methods ────────────────────────────────────────────────
+        // Available when T extends TEventPAE. THISACTOR is valid; actor struct
+        // properties are NOT accessible — use CActor / OnEvent for those.
+
+        /**
+         * Plays a sound. Only valid in per-actor events (Game, Spawn, etc.).
+         * @param sound_id Sound ID or Sound label.
+         * @param global If true, plays globally (audible anywhere).
+         * @param once If true, plays at most one instance at a time.
+         */
+        public Sound(...args: T extends TEventPAE ? [sound_id: number | Sound, global?: boolean, once?: boolean] : never): CON_NATIVE<void>;
+        /**
+         * Stops a playing sound. Only valid in per-actor events.
+         * @param sound_id Sound ID or Sound label.
+         */
+        public StopSound(...args: T extends TEventPAE ? [sound_id: number | Sound] : never): CON_NATIVE<void>;
+
+        // ── Display-event methods ───────────────────────────────────────────
+        // Available when T extends TEventDE (DisplayRooms, DisplayEnd, etc.).
 
         /**
          * Displays a sprite onto the screen
@@ -1858,7 +2124,7 @@ declare global {
          * Plays a sound during display events
          * @param sound - the sound ID to be played
          */
-        public ScreenSound(sound: number): CON_NATIVE<void>;
+        public ScreenSound(sound: number | Sound): CON_NATIVE<void>;
 
         /**
          * Writes text to the screen
@@ -3362,8 +3628,8 @@ declare global {
         public Shoot(picnum: number | CActor, initFn?: ((id: number) => void), use_zvel?: boolean, zvel?: number, additive_zvel?: boolean): CON_NATIVE<number>
         public HitRadius(radius: number, furthestDmg: number, farDmg: number, closeDmg: number, closestDmg: number): CON_NATIVE<void>
         public Flash(): CON_NATIVE<void>
-        public Sound(sound_id: number, global?: boolean, once?: boolean): CON_NATIVE<void>
-        public StopSound(sound_id: number): CON_NATIVE<void>
+        public Sound(sound_id: number | Sound, global?: boolean, once?: boolean): CON_NATIVE<void>
+        public StopSound(sound_id: number | Sound): CON_NATIVE<void>
         public IsAwayFromWall(): CON_NATIVE<boolean>
         public IsInWater(): CON_NATIVE<boolean>
         public IsOnWater(): CON_NATIVE<boolean>
@@ -3710,7 +3976,7 @@ declare global {
         q16Horz: CON_NATIVE<number>;
     }
 
-    export const projectiles: IProjectile[];
+    export const projectiles: CProjectile[];
     export const tsprites: ITSprite[];
     export const tiledata: ITileData[];
     export const paldata: IPalData[];

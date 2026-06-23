@@ -256,6 +256,7 @@ set rb ra
   }
 
   if (fnNameRaw == 'Quote' && !fnObj) {
+    context.curExpr = ESymbolType.quote;
     if (args[0].isKind(SyntaxKind.StringLiteral)) {
       let text = args[0].getText().replace(/[`'"]/g, "");
       if (text.length > 128) {
@@ -282,10 +283,10 @@ set rb ra
   if (variable) {
     if (variable.type & ESymbolType.array)
       typeName = 'array';
-    else {
-      if (variable.type & ESymbolType.string)
-        typeName = 'string';
-    }
+    else if (variable.type & ESymbolType.quote)
+      typeName = 'quote';
+    else if (variable.type & ESymbolType.string)
+      typeName = 'string';
   }
 
   const nativeFn = findNativeFunction(fnNameRaw, fnObj, typeName);

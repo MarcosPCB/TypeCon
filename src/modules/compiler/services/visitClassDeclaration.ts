@@ -1,4 +1,4 @@
-import { ClassDeclaration, SyntaxKind, Statement, Block, ObjectLiteralExpression, ExpressionStatement, CallExpression, Expression } from "ts-morph";
+import { ClassDeclaration, SyntaxKind, Statement, Block, ObjectLiteralExpression, ExpressionStatement, CallExpression, Expression, PropertyAssignment, StringLiteral } from "ts-morph";
 import { CompilerContext, SymbolDefinition, ESymbolType, EHeapType } from "../Compiler";
 import { evaluateLiteralExpression } from "../helper/helpers";
 import { indent } from "../helper/indent";
@@ -22,7 +22,8 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
   let code = context.options.lineDetail ? `// class ${className}\n` : '';
 
   const base = cd.getExtends()?.getExpression().getText() || "";
-  let type = base;
+  // Strip namespace prefix so "TCSet100.CGame" matches the same as "CGame"
+  let type = base.includes('.') ? base.split('.').pop()! : base;
   // const isEvent = base === "CEvent"; // demonstration if needed
 
   // We'll create a local context for parsing this class
@@ -46,6 +47,14 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
     mainBFunc: false,
     curFunc: undefined,
   };
+
+  if (type === 'CGame') {
+    return visitCGameDeclaration(cd, localCtx);
+  }
+
+  if (type === 'CVolume') {
+    return visitCVolumeDeclaration(cd, localCtx);
+  }
 
   if (type === 'CInput') {
     type = 'CEvent';
@@ -116,6 +125,21 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
   // For plain classes (type == ''): handled in the defstate constructor section below.
   if (ctors.length > 0 && (type === 'CEvent' || type === 'CInput')) {
     code += visitConstructorDeclaration(ctors[0], localCtx, type);
+  }
+
+  // Fallback: if no constructor (or empty constructor) set currentEventName from
+  // the generic type argument — e.g. `extends CEvent<'Spawn'>` → EVENT_SPAWN.
+  if (type === 'CEvent' && !localCtx.currentEventName) {
+    const typeArgs = cd.getExtends()?.getTypeArguments() ?? [];
+    if (typeArgs.length > 0) {
+      const eventNameRaw = typeArgs[0].getText().replace(/[`'"]/g, '');
+      if (EventList.includes(eventNameRaw as TEvents))
+        localCtx.currentEventName = eventNameRaw.toUpperCase();
+      else
+        addDiagnostic(cd, localCtx, 'error', `Event '${eventNameRaw}' in type argument is not a valid event name`);
+    } else {
+      addDiagnostic(cd, localCtx, 'error', `CEvent subclass '${className}' has no event name — add a super() call or use extends CEvent<'EventName'>`);
+    }
   }
 
   if (type == 'CPlayer') {
@@ -643,4 +667,153 @@ endevent
   context.globalVarCount = localCtx.globalVarCount + 2;
 
   return code;
+}
+
+/** Extract a string literal value, preserving internal quotes/apostrophes. */
+function getStringLiteralValue(node: Expression): string {
+  if (node.isKind(SyntaxKind.StringLiteral))
+    return (node as StringLiteral).getLiteralText();
+  return node.getText().replace(/^[`'"]|[`'"]$/g, '');
+}
+
+/******************************************************************************
+ * Helper: resolve an argument expression to either a label name or a literal.
+ * Used by CGame/CVolume to support GameLabel symbols in header defines.
+ *****************************************************************************/
+function resolveHeaderArg(arg: Expression, context: CompilerContext): string {
+  if (arg.isKind(SyntaxKind.Identifier)) {
+    const sym = context.symbolTable.get(arg.getText()) as SymbolDefinition;
+    if (sym?.isLabel) return sym.name;
+    if (sym?.type & ESymbolType.constant) return String(sym.literal ?? 0);
+  }
+  const val = evaluateLiteralExpression(arg, context);
+  return val !== null && val !== undefined ? String(val) : arg.getText();
+}
+
+/******************************************************************************
+ * CGame class handler — emits setgamename, defineskillname, gamestartup,
+ * precache, and definecheat lines to context.headerDefines.
+ *****************************************************************************/
+// Fixed CON gamestartup argument order — must match the 27-param EDuke32 spec exactly
+const CGAME_STARTUP_KEYS: string[] = [
+  'maxHealth', 'maxArmor', 'maxSteroids', 'maxHoloduke', 'maxJetpack',
+  'maxScuba', 'maxBoots', 'maxFirstAid', 'initialHealth', 'initialArmor',
+  'maxAmmoPistol', 'maxAmmoShotgun', 'maxAmmoChaingun', 'maxAmmoRPG',
+  'maxAmmoShrinker', 'maxAmmoDevastator', 'maxAmmoLaser', 'maxAmmoFreeze',
+  'maxAmmoShrunk', 'maxAmmoHeat', 'maxAmmoExpander',
+  'damagePistol', 'damageShotgun', 'damageChaingun', 'damageRPG',
+  'damageMortar', 'damageGrenade',
+];
+
+function visitCGameDeclaration(cd: ClassDeclaration, context: CompilerContext): string {
+  const ctors = cd.getConstructors();
+  if (ctors.length === 0) return '';
+
+  const body = ctors[0].getBody() as Block;
+  if (!body) return '';
+
+  for (const st of body.getStatements()) {
+    if (!st.isKind(SyntaxKind.ExpressionStatement)) continue;
+    const expr = (st as ExpressionStatement).getExpression();
+    if (!expr.isKind(SyntaxKind.CallExpression)) continue;
+    const call = expr as CallExpression;
+    const callee = call.getExpression().getText();
+    const args = call.getArguments();
+
+    if (callee === 'super') {
+      // super(name) → setgamename "name"
+      if (args.length >= 1) {
+        const name = getStringLiteralValue(args[0] as Expression);
+        context.headerDefines.push(`setgamename "${name}"\n`);
+      }
+    } else if (callee === 'this.skill') {
+      // this.skill(id, name) → defineskillname id "name"
+      if (args.length >= 2) {
+        const id = resolveHeaderArg(args[0] as Expression, context);
+        const name = getStringLiteralValue(args[1] as Expression);
+        context.headerDefines.push(`defineskillname ${id} "${name}"\n`);
+      }
+    } else if (callee === 'this.startup') {
+      // this.startup({...}) → gamestartup v0..v26
+      if (args.length >= 1 && args[0].isKind(SyntaxKind.ObjectLiteralExpression)) {
+        const obj = args[0] as ObjectLiteralExpression;
+        const propMap: Record<string, number> = {};
+        for (const prop of obj.getProperties()) {
+          if (!prop.isKind(SyntaxKind.PropertyAssignment)) continue;
+          const pa = prop as PropertyAssignment;
+          const val = evaluateLiteralExpression(pa.getInitializer() as Expression, context);
+          if (val !== null && val !== undefined) propMap[pa.getName()] = val as number;
+        }
+        const values = (CGAME_STARTUP_KEYS as string[]).map(k => String(propMap[k] ?? 0));
+        context.headerDefines.push(`gamestartup ${values.join(' ')}\n`);
+      }
+    } else if (callee === 'this.precache') {
+      // this.precache(external, startTile, endTile) → precache startTile endTile flag
+      if (args.length >= 3) {
+        const external = args[0].isKind(SyntaxKind.TrueKeyword) ? 1 : 0;
+        const start = resolveHeaderArg(args[1] as Expression, context);
+        const end   = resolveHeaderArg(args[2] as Expression, context);
+        context.headerDefines.push(`precache ${start} ${end} ${external}\n`);
+      }
+    } else if (callee === 'this.cheat') {
+      // this.cheat(code, label) → definecheat "code" label
+      if (args.length >= 2) {
+        const codeStr = getStringLiteralValue(args[0] as Expression);
+        const label = resolveHeaderArg(args[1] as Expression, context);
+        context.headerDefines.push(`definecheat "${codeStr}" ${label}\n`);
+      }
+    }
+  }
+  return '';
+}
+
+/******************************************************************************
+ * CVolume class handler — emits definevolumename, definelevelname, and music
+ * lines to context.headerDefines.
+ *****************************************************************************/
+function visitCVolumeDeclaration(cd: ClassDeclaration, context: CompilerContext): string {
+  const ctors = cd.getConstructors();
+  if (ctors.length === 0) return '';
+
+  const body = ctors[0].getBody() as Block;
+  if (!body) return '';
+
+  let volId = '0';
+
+  for (const st of body.getStatements()) {
+    if (!st.isKind(SyntaxKind.ExpressionStatement)) continue;
+    const expr = (st as ExpressionStatement).getExpression();
+    if (!expr.isKind(SyntaxKind.CallExpression)) continue;
+    const call = expr as CallExpression;
+    const callee = call.getExpression().getText();
+    const args = call.getArguments();
+
+    if (callee === 'super') {
+      // super(volId, name) → definevolumename volId "name"
+      if (args.length >= 1) volId = resolveHeaderArg(args[0] as Expression, context);
+      if (args.length >= 2) {
+        const name = getStringLiteralValue(args[1] as Expression);
+        context.headerDefines.push(`definevolumename ${volId} "${name}"\n`);
+      }
+    } else if (callee === 'this.level') {
+      // this.level(id, file, music, name, par?, des?) → definelevelname vol id "file" "music" "name" [par des]
+      if (args.length >= 4) {
+        const id    = resolveHeaderArg(args[0] as Expression, context);
+        const file  = getStringLiteralValue(args[1] as Expression);
+        const music = getStringLiteralValue(args[2] as Expression);
+        const name  = getStringLiteralValue(args[3] as Expression);
+        const par   = args.length >= 5 ? ` ${resolveHeaderArg(args[4] as Expression, context)}` : '';
+        const des   = args.length >= 6 ? ` ${resolveHeaderArg(args[5] as Expression, context)}` : '';
+        context.headerDefines.push(`definelevelname ${volId} ${id} "${file}" "${music}" "${name}"${par}${des}\n`);
+      }
+    } else if (callee === 'this.music') {
+      // this.music(lev, file) → music vol lev "file"
+      if (args.length >= 2) {
+        const lev  = resolveHeaderArg(args[0] as Expression, context);
+        const file = getStringLiteralValue(args[1] as Expression);
+        context.headerDefines.push(`music ${volId} ${lev} "${file}"\n`);
+      }
+    }
+  }
+  return '';
 }
