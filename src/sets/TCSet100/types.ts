@@ -1146,7 +1146,79 @@ declare global {
         FindNearSprite3D(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
         /** Nearest sprite of tile type within 2D radius and Z range; -1 if none. */
         FindNearSpriteZ(tile: CON_CONSTANT<number>, dist: number, zdist: number): CON_NATIVE<number>;
+        readonly numSectors:      CON_NATIVE_GAMEVAR<'NUMSECTORS', number>;
+        readonly numWalls:        CON_NATIVE_GAMEVAR<'NUMWALLS', number>;
+        readonly numSprites:      CON_NATIVE_GAMEVAR<'NUMSPRITES', number>;
+        marker:           CON_NATIVE_GAMEVAR<'MARKER', number>;
+        monstersOff:      CON_NATIVE_GAMEVAR<'MONSTERS_OFF', number>;
+        ffire:            CON_NATIVE_GAMEVAR<'FFIRE', number>;
+        respawnInventory: CON_NATIVE_GAMEVAR<'RESPAWN_INVENTORY', number>;
+        respawnItems:     CON_NATIVE_GAMEVAR<'RESPAWN_ITEMS', number>;
+        respawnMonsters:  CON_NATIVE_GAMEVAR<'RESPAWN_MONSTERS', number>;
         state: IMapState;
+    }
+
+    export interface IGameSession {
+        readonly coop:           CON_NATIVE_GAMEVAR<'COOP', number>;
+        readonly multiMode:      CON_NATIVE_GAMEVAR<'MULTIMODE', number>;
+        gameTypeFlags:           CON_NATIVE_GAMEVAR<'gametype_flags', number>;
+        readonly myConnectIndex: CON_NATIVE_GAMEVAR<'myconnectindex', number>;
+        readonly numPlayers:     CON_NATIVE_GAMEVAR<'numplayers', number>;
+        randomSeed:              CON_NATIVE_GAMEVAR<'randomseed', number>;
+        screenPeek:              CON_NATIVE_GAMEVAR<'screenpeek', number>;
+    }
+
+    export interface IGameDisplay {
+        readonly xDim:        CON_NATIVE_GAMEVAR<'xdim', number>;
+        readonly yDim:        CON_NATIVE_GAMEVAR<'ydim', number>;
+        readonly windowX1:    CON_NATIVE_GAMEVAR<'windowx1', number>;
+        readonly windowX2:    CON_NATIVE_GAMEVAR<'windowx2', number>;
+        readonly windowY1:    CON_NATIVE_GAMEVAR<'windowy1', number>;
+        readonly windowY2:    CON_NATIVE_GAMEVAR<'windowy2', number>;
+        readonly framerate:   CON_NATIVE_GAMEVAR<'framerate', number>;
+        readonly totalClock:  CON_NATIVE_GAMEVAR<'totalclock', number>;
+        rendMode:             CON_NATIVE_GAMEVAR<'rendmode', number>;
+        yxAspect:             CON_NATIVE_GAMEVAR<'yxaspect', number>;
+        viewingRange:         CON_NATIVE_GAMEVAR<'viewingrange', number>;
+        displayMirror:        CON_NATIVE_GAMEVAR<'display_mirror', number>;
+        currentMenu:          CON_NATIVE_GAMEVAR<'current_menu', number>;
+        currentWeapon:        CON_NATIVE_GAMEVAR<'currentweapon', number>;
+        gs:                   CON_NATIVE_GAMEVAR<'gs', number>;
+        menuTile:             CON_NATIVE_GAMEVAR<'MENU_TILE', number>;
+        gunPos:               CON_NATIVE_GAMEVAR<'gun_pos', number>;
+        lookingAngSR1:        CON_NATIVE_GAMEVAR<'looking_angSR1', number>;
+        lookingArc:           CON_NATIVE_GAMEVAR<'looking_arc', number>;
+        weaponXOffset:        CON_NATIVE_GAMEVAR<'weapon_xoffset', number>;
+        weaponCount:          CON_NATIVE_GAMEVAR<'weaponcount', number>;
+    }
+
+    export interface IGameCamera {
+        ang:            CON_NATIVE_GAMEVAR<'cameraang', number>;
+        readonly clock: CON_NATIVE_GAMEVAR<'cameraclock', number>;
+        dist:           CON_NATIVE_GAMEVAR<'cameradist', number>;
+        horiz:          CON_NATIVE_GAMEVAR<'camerahoriz', number>;
+        sect:           CON_NATIVE_GAMEVAR<'camerasect', number>;
+        x:              CON_NATIVE_GAMEVAR<'camerax', number>;
+        y:              CON_NATIVE_GAMEVAR<'cameray', number>;
+        z:              CON_NATIVE_GAMEVAR<'cameraz', number>;
+    }
+
+    export interface IGamePhysics {
+        gravitationalConstant: CON_NATIVE_GAMEVAR<'gravitationalconstant', number>;
+        clipMask0:             CON_NATIVE_GAMEVAR<'CLIPMASK0', number>;
+        clipMask1:             CON_NATIVE_GAMEVAR<'CLIPMASK1', number>;
+    }
+
+    export interface IGameCombat {
+        angRange:              CON_NATIVE_GAMEVAR<'ANGRANGE', number>;
+        autoAimAngle:          CON_NATIVE_GAMEVAR<'AUTOAIMANGLE', number>;
+        zRange:                CON_NATIVE_GAMEVAR<'ZRANGE', number>;
+        grenadeLifetime:       CON_NATIVE_GAMEVAR<'GRENADE_LIFETIME', number>;
+        grenadeLifetimeVar:    CON_NATIVE_GAMEVAR<'GRENADE_LIFETIME_VAR', number>;
+        pipebombControl:       CON_NATIVE_GAMEVAR<'PIPEBOMB_CONTROL', number>;
+        stickybombLifetime:    CON_NATIVE_GAMEVAR<'STICKYBOMB_LIFETIME', number>;
+        stickybombLifetimeVar: CON_NATIVE_GAMEVAR<'STICKYBOMB_LIFETIME_VAR', number>;
+        tripbombControl:       CON_NATIVE_GAMEVAR<'TRIPBOMB_CONTROL', number>;
     }
 
     export interface IGame {
@@ -1196,6 +1268,12 @@ declare global {
          * @param menuType - menu type constant
          */
         CMenu(menuType: CON_CONSTANT<number>): CON_NATIVE<void>;
+        readonly session: IGameSession;
+        readonly display: IGameDisplay;
+        readonly camera:  IGameCamera;
+        readonly physics: IGamePhysics;
+        readonly combat:  IGameCombat;
+        logoFlags:        CON_NATIVE_GAMEVAR<'LOGO_FLAGS', number>;
     }
 
     export const game: CON_NATIVE_OBJECT<IGame>;

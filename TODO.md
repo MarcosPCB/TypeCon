@@ -1,9 +1,3 @@
-## General CON instructions
- - Implement remaining CON instructions
-
- ## Events
- - Implement proper events' functions
-
  ## TS methods, classes and functions
  - Analyse each TS class and method to see if they should be included and to what extent
  - Implement remaining TS classes and methods
@@ -32,6 +26,3 @@
 
 ## New enemy example
  - A sort of chamaleon enemy
-
-## Improve _GetFreePages performance
- - Save the maximum gap available so next time we don't have to iterate over the entire free list
