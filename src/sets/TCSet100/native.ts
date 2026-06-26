@@ -340,6 +340,7 @@ export const nativeFunctions: CON_NATIVE_FUNCTION[] = [
         code: 'endofgame ',
         returns: false,
         return_type: null,
+        object_belong: ['game'],
         arguments: [
             CON_NATIVE_FLAGS.CONSTANT
         ]
@@ -813,6 +814,13 @@ sub rb 3
             CON_NATIVE_FLAGS.VARIABLE,
         ]
     },
+    {
+        name: 'SetAspect',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'setaspect r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
     {
         name: 'log',
         code: 'echo',
@@ -1664,15 +1672,27 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     },
 
     {
-        name: 'rotatePointX', object_belong: ['Math'], returns: true, return_type: 'variable',
-        code: (_a?: boolean) => 'rotatepoint r0 r1 r2 r3 r4 rb ra',
+        name: 'rotatePoint', object_belong: ['Math'], returns: true, return_type: 'object',
+        code: (_a?: boolean) => 'state _Math_rotatePoint',
         arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
 
     {
-        name: 'rotatePointY', object_belong: ['Math'], returns: true, return_type: 'variable',
-        code: (_a?: boolean) => 'rotatepoint r0 r1 r2 r3 r4 ra rb',
-        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+        name: 'getIncAngle', object_belong: ['Math'], returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'getincangle rb r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'LineIntersect', object_belong: ['Math'], returns: true, return_type: 'object',
+        code: (_a?: boolean) => 'state _Math_LineIntersect',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'RayIntersect', object_belong: ['Math'], returns: true, return_type: 'object',
+        code: (_a?: boolean) => 'state _Math_RayIntersect',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
 
     // CActor actor-context methods
@@ -1714,15 +1734,67 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'StartLevel',
         returns: false, return_type: null,
+        object_belong: ['game'],
         code: (_a?: boolean) => 'startlevel r0 r1',
         arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
 
     {
+        name: 'EndOfLevel',
+        returns: false, return_type: null,
+        object_belong: ['game'],
+        code: 'endoflevel ',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT]
+    },
+
+    {
+        name: 'InitTimer',
+        returns: false, return_type: null,
+        object_belong: ['game'],
+        code: (_a?: boolean) => 'inittimer r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'SetGamePalette',
+        returns: false, return_type: null,
+        object_belong: ['game'],
+        code: (_a?: boolean) => 'setgamepalette r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'StartCutscene',
+        returns: false, return_type: null,
+        object_belong: ['game'],
+        code: 'startcutscene ',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT]
+    },
+
+    {
+        name: 'IsCutscenePlaying',
+        returns: true, return_type: 'variable',
+        object_belong: ['game'],
+        code: (constants: string[]) => `set rb 0\nifcutscene ${constants[0]}\nset rb 1`,
+        arguments: [CON_NATIVE_FLAGS.CONSTANT]
+    },
+
+    {
+        name: 'CMenu',
+        returns: false, return_type: null,
+        object_belong: ['game'],
+        code: 'cmenu ',
+        arguments: [CON_NATIVE_FLAGS.CONSTANT]
+    },
+
+    {
         name: 'Save',
         returns: false, return_type: null,
-        code: (_a?: boolean) => 'save r0',
-        arguments: [CON_NATIVE_FLAGS.CONSTANT]
+        object_belong: ['game'],
+        code: (args: boolean) =>
+            args ? `ife r1 1\n  save r0\nelse\n  savenn r0` : `savenn r0`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL],
+        arguments_default: [0, 0]
     },
 
     {
@@ -1739,10 +1811,32 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
         arguments: []
     },
 
-    // Player / global commands
+    {
+        name: 'FindPlayer',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'findplayer rb',
+        arguments: []
+    },
+
+    {
+        name: 'Tip',
+        returns: false, return_type: null,
+        code: 'tip',
+        arguments: []
+    },
+
+    {
+        name: 'PlayerHitSpace',
+        returns: true, return_type: 'variable',
+        code: `ifphitspace {\nset rb 1\n} else {\nset rb 0\n}`,
+        arguments: []
+    },
+
+    // Player-interaction commands (actor context, accessed as this.player.X())
     {
         name: 'AddAmmo',
         returns: false, return_type: null,
+        object_belong: ['this.player'],
         code: (_a?: boolean) => 'addammo r0 r1',
         arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1750,6 +1844,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'AddInventory',
         returns: false, return_type: null,
+        object_belong: ['this.player'],
         code: (_a?: boolean) => 'addinventory r0 r1',
         arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1757,6 +1852,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'AddWeapon',
         returns: false, return_type: null,
+        object_belong: ['this.player'],
         code: (_a?: boolean) => 'addweapon r0 r1',
         arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1764,6 +1860,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'AddHealth',
         returns: false, return_type: null,
+        object_belong: ['this.player'],
         code: (_a?: boolean) => 'addphealth r0',
         arguments: [CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1771,6 +1868,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'GMaxAmmo',
         returns: true, return_type: 'variable',
+        object_belong: ['this.player'],
         code: (_a?: boolean) => 'gmaxammo r0 rb',
         arguments: [CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1778,6 +1876,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'SMaxAmmo',
         returns: false, return_type: null,
+        object_belong: ['this.player'],
         code: (_a?: boolean) => 'smaxammo r0 r1',
         arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1785,6 +1884,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'TossWeapon',
         returns: false, return_type: null,
+        object_belong: ['this.player'],
         code: 'tossweapon',
         arguments: []
     },
@@ -1792,6 +1892,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'WackPlayer',
         returns: false, return_type: null,
+        object_belong: ['this.player'],
         code: 'wackplayer',
         arguments: []
     },
@@ -1799,6 +1900,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'Pstomp',
         returns: false, return_type: null,
+        object_belong: ['this.player'],
         code: 'pstomp',
         arguments: []
     },
@@ -1811,16 +1913,183 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     },
 
     {
+        name: 'IsSoundPlaying',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `set rb 0\nifsound r0\nset rb 1`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'StopActorSound',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'stopactorsound RETURN r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'IsActorSound',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => `set rb 0\nifactorsound RETURN r0\nset rb 1`,
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'SetActorSoundPitch',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'setactorsoundpitch RETURN r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
         name: 'StopAllMusic',
         returns: false, return_type: null,
+        object_belong: ['game.map'],
         code: 'stopallmusic',
         arguments: []
+    },
+
+    // Game functions
+
+    {
+        name: 'GetTimeDate',
+        returns: true, return_type: 'object',
+        return_size: 7,
+        code: (_a?: boolean) =>
+            `sub rsp 7\ngettimedate flat[rsp] flat[rsp+1] flat[rsp+2] flat[rsp+3] flat[rsp+4] flat[rsp+5] flat[rsp+6]\nset rb rsp`,
+        arguments: []
+    },
+
+    {
+        name: 'UserQuote',
+        returns: false, return_type: null,
+        code: (_a?: boolean) => 'userquote r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'GetTicks',
+        returns: true, return_type: 'variable',
+        object_belong: ['game'],
+        code: (_a?: boolean) => 'getticks rb',
+        arguments: []
+    },
+
+    {
+        name: 'StartTrack',
+        returns: false, return_type: null,
+        object_belong: ['game.map'],
+        code: (_a?: boolean) => 'starttrackslot r0 r1',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'GetMusicPosition',
+        returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
+        code: (_a?: boolean) => 'getmusicposition rb',
+        arguments: []
+    },
+
+    {
+        name: 'SetMusicPosition',
+        returns: false, return_type: null,
+        object_belong: ['game.map'],
+        code: (_a?: boolean) => 'setmusicposition r0',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'Save',
+        returns: false, return_type: null,
+        object_belong: ['game.map.state'],
+        code: 'savemapstate',
+        arguments: []
+    },
+    {
+        name: 'Load',
+        returns: false, return_type: null,
+        object_belong: ['game.map.state'],
+        code: 'loadmapstate',
+        arguments: []
+    },
+    {
+        name: 'Clear',
+        returns: false, return_type: null,
+        object_belong: ['game.map.state'],
+        code: 'clearmapstate',
+        arguments: []
+    },
+
+    // game.map analysis commands
+    {
+        name: 'CheckActivatorMotion',
+        returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
+        code: 'checkactivatormotion r0\nset rb RETURN\n',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'SectorOfWall',
+        returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
+        code: (_a?: boolean) => 'sectorofwall r0 rb',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'UpdateSectorZ',
+        returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
+        code: (_a?: boolean) => 'updatesectorz r0 r1 r2 rb',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'UpdateSectorNeighbor',
+        returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
+        code: (_a?: boolean) => 'set rb -1\nupdatesectorneighbour r0 r1 rb',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'UpdateSectorNeighborZ',
+        returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
+        code: (_a?: boolean) => 'set rb -1\nupdatesectorneighbourz r0 r1 r2 rb',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'Hitscan',
+        returns: true, return_type: 'object',
+        object_belong: ['game.map'],
+        code: (_a?: boolean) => 'state _Map_Hitscan',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'NearTag',
+        returns: true, return_type: 'object',
+        object_belong: ['game.map'],
+        code: (_a?: boolean) => 'state _Map_NearTag',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'GetZRange',
+        returns: true, return_type: 'object',
+        object_belong: ['game.map'],
+        code: (_a?: boolean) => 'state _Map_GetZRange',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
 
     // World geometry (single output)
     {
         name: 'Dist',
         returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'dist rb r0 r1',
         arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1828,6 +2097,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'LDist',
         returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'ldist rb r0 r1',
         arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1835,6 +2105,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'FloorZOfSlope',
         returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'getflorzofslope r0 r1 r2 rb',
         arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1842,6 +2113,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'CeilZOfSlope',
         returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'getceilzofslope r0 r1 r2 rb',
         arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1849,13 +2121,22 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'UpdateSector',
         returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'updatesector r0 r1 rb',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
+    },
+
+    {
+        name: 'CheckSpriteSight',
+        returns: true, return_type: 'variable',
+        code: (_a?: boolean) => 'canseespr r0 r1 rb',
         arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
 
     {
         name: 'DragPoint',
         returns: false, return_type: null,
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'dragpoint r0 r1 r2',
         arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1863,6 +2144,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'MoveSector',
         returns: false, return_type: null,
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'movesector r0',
         arguments: [CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1914,6 +2196,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'FindNearActor',
         returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'findnearactor r0 r1 rb',
         arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1921,6 +2204,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'FindNearActor3D',
         returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'findnearactor3d r0 r1 rb',
         arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1928,6 +2212,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'FindNearActorZ',
         returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'findnearactorz r0 r1 r2 rb',
         arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1935,6 +2220,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'FindNearSprite',
         returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'findnearsprite r0 r1 rb',
         arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1942,6 +2228,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'FindNearSprite3D',
         returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'findnearsprite3d r0 r1 rb',
         arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -1949,6 +2236,7 @@ setarray nwsCurrAmmo[flat[rbp]] ra`;
     {
         name: 'FindNearSpriteZ',
         returns: true, return_type: 'variable',
+        object_belong: ['game.map'],
         code: (_a?: boolean) => 'findnearspritez r0 r1 r2 rb',
         arguments: [CON_NATIVE_FLAGS.CONSTANT, CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE]
     },
@@ -2459,6 +2747,15 @@ export const nativeVars_Sprites: CON_NATIVE_VAR[] = [
         readonly: false,
         init: 0,
         code: 'htflags'
+    },
+    {
+        name: 'spriteflags',
+        var_type: CON_NATIVE_TYPE.native,
+        type: CON_NATIVE_FLAGS.VARIABLE,
+        readonly: false,
+        init: 0,
+        override_code: true,
+        code: ['set ra 0\n', 'spriteflags ra\n'] as any
     },
     {
         name: 'pal',

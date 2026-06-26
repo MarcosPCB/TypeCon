@@ -49,18 +49,34 @@ export function visitCallExpression(call: CallExpression, context: CompilerConte
           //In this case, we know this is not a native function
           //Search in the context for any objects/classes that contain the function
           let o: SymbolDefinition | EnumDefinition;
+          let _nativeResolved = false;
 
           if (!context.curClass) {
             obj = segments[1] as SegmentProperty;
             o = context.symbolTable.get(obj.name);
 
             if (!o || !o.children) {
-              addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
-              return '';
+              // Try native nested method via this.X.Y() path (e.g. this.player.WackPlayer() in actor body)
+              const pathParts: string[] = ['this'];
+              for (let k = 1; k < segments.length - 1; k++) {
+                if (segments[k].kind == 'property')
+                  pathParts.push((segments[k] as SegmentProperty).name);
+              }
+              const candidatePath = pathParts.join('.');
+              const methodName = (segments[segments.length - 1] as SegmentProperty).name;
+              const found = findNativeFunction(methodName, candidatePath);
+              if (found) {
+                fnNameRaw = methodName;
+                fnObj = candidatePath;
+                _nativeResolved = true;
+              } else {
+                addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
+                return '';
+              }
             }
           } else o = context.curClass;
 
-          for (let i = context.curClass ? 1 : 2; i < segments.length; i++) {
+          for (let i = _nativeResolved ? segments.length : (context.curClass ? 1 : 2); i < segments.length; i++) {
             if (segments[i].kind == 'index') {
               if (!(o.type & ESymbolType.array)) {
                 addDiagnostic(call, context, 'error', `Invalid index at non-array ${o.name}: ${fnNameRaw}`);
@@ -71,7 +87,21 @@ export function visitCallExpression(call: CallExpression, context: CompilerConte
             }
 
             obj = segments[i] as SegmentProperty;
-            if (!o.children[obj.name]) {
+            if (!o.children || !o.children[obj.name]) {
+              // Fallback: check for a native nested method (e.g. this.player.WackPlayer())
+              const pathParts: string[] = ['this'];
+              for (let k = context.curClass ? 1 : 2; k <= i; k++) {
+                if (segments[k].kind == 'property')
+                  pathParts.push((segments[k] as SegmentProperty).name);
+              }
+              const candidatePath = pathParts.join('.');
+              const methodName = (segments[segments.length - 1] as SegmentProperty).name;
+              const found = findNativeFunction(methodName, candidatePath);
+              if (found) {
+                fnNameRaw = methodName;
+                fnObj = candidatePath;
+                break;
+              }
               addDiagnostic(call, context, 'error', `Invalid property ${obj.name}: ${fnNameRaw}`);
               return '';
             }
@@ -85,6 +115,20 @@ export function visitCallExpression(call: CallExpression, context: CompilerConte
               }
 
               if (!(o.type & ESymbolType.object) && !(o.type & ESymbolType.array) && !(o.type & ESymbolType.module)) {
+                // Fallback: check for a native nested method on a typed property (e.g. this.player.WackPlayer())
+                const pathParts: string[] = ['this'];
+                for (let k = context.curClass ? 1 : 2; k <= i; k++) {
+                  if (segments[k].kind == 'property')
+                    pathParts.push((segments[k] as SegmentProperty).name);
+                }
+                const candidatePath = pathParts.join('.');
+                const methodName = (segments[segments.length - 1] as SegmentProperty).name;
+                const found = findNativeFunction(methodName, candidatePath);
+                if (found) {
+                  fnNameRaw = methodName;
+                  fnObj = candidatePath;
+                  break;
+                }
                 addDiagnostic(call, context, 'error', `Invalid object ${obj.name}: ${fnNameRaw}`);
                 return '';
               }
@@ -156,8 +200,23 @@ export function visitCallExpression(call: CallExpression, context: CompilerConte
 
           obj = segments[i] as SegmentProperty;
           if (!o.children[obj.name]) {
-            addDiagnostic(call, context, 'error', `Invalid property ${obj.name}: ${fnNameRaw}`);
-            return '';
+            // Before that, we check if this method is a native nested one
+            const fullObjStr = segments.map(s => {
+              if(s.kind == 'property' && (s as SegmentProperty).name == (obj as SegmentProperty).name)
+                return '';
+              return s.kind == 'identifier' ? (s as SegmentIdentifier).name : ((s as SegmentProperty).name || '');
+            }).filter((s) => s != '').join('.');
+            
+            const found = findNativeFunction(obj.name, fullObjStr);
+            if(!found) {
+              addDiagnostic(call, context, 'error', `Invalid property ${obj.name}: ${fnNameRaw}`);
+              return '';
+            }
+
+            fnNameRaw = obj.name;
+            fnObj = fullObjStr;
+
+            break;
           }
 
           o = o.children[obj.name] as SymbolDefinition;

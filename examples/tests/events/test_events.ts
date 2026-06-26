@@ -50,3 +50,12 @@ class TestCutscene extends CEvent {
     constructor() { super('CutScene'); }
     public Append(): void {}
 }
+
+// Verify this.argument reads/writes RETURN
+class TestArgument extends CEvent<'GetMenuTile'> {
+    public Append(): void {
+        const tile: number = this.argument;
+        if (tile == 0)
+            this.argument = 1;
+    }
+}

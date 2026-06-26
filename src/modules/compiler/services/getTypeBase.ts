@@ -50,7 +50,7 @@ export function getTypeBase(tn: TypeNode, ctx: CompilerContext): string | null {
      * 3.  Inline object literal  { a: string }
      * ──────────────────────────────────────────────────────────────────── */
     if (Node.isTypeLiteral(tn)) {
-      storeTypeAlias(tn as unknown as TypeAliasDeclaration, ctx);   // unnamed literal
+      // Unnamed inline literal — no TypeAliasDeclaration exists to register, just return "object"
       return "object";
     }
 
@@ -67,9 +67,9 @@ export function getTypeBase(tn: TypeNode, ctx: CompilerContext): string | null {
         if (aliasDecl) {
           const aliasedNode = aliasDecl.getTypeNode();
           if (aliasedNode) {
-            // cache literal shapes declared via alias
+            // cache literal shapes declared via alias — pass the TypeAliasDeclaration, not the bare TypeLiteralNode
             if (Node.isTypeLiteral(aliasedNode)) {
-              storeTypeAlias(aliasedNode as unknown as TypeAliasDeclaration, ctx);
+              storeTypeAlias(aliasDecl, ctx);
             }
             return getTypeBase(aliasedNode, ctx);   // recurse
           }

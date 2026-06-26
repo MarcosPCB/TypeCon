@@ -259,10 +259,14 @@ declare global {
         hypotenuse(x: number, y: number): number;
         /** BAM angle (0–2047) from Δx/Δy components. */
         getAngle(dx: number, dy: number): FP11;
-        /** X component after rotating point (px,py) around centre (cx,cy) by angle (BAM). */
-        rotatePointX(cx: number, cy: number, px: number, py: number, angle: number): number;
-        /** Y component after rotating point (px,py) around centre (cx,cy) by angle (BAM). */
-        rotatePointY(cx: number, cy: number, px: number, py: number, angle: number): number;
+        /** X & Y components after rotating point (px,py) around centre (cx,cy) by angle (BAM). */
+        rotatePoint(cx: number, cy: number, px: number, py: number, angle: number): vec2;
+        /** Shortest angular increment (signed, in BAM units) needed to move from currentAngle to targetAngle. */
+        getIncAngle(currentAngle: number, targetAngle: number): number;
+        /** Line-segment intersection: returns the intersection point of ray (ox,oy,oz)+(dx,dy,dz) with wall (x1,y1)-(x2,y2). */
+        LineIntersect(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, x1: number, y1: number, x2: number, y2: number): IntersectResult;
+        /** Ray intersection: returns the intersection point of ray from (x,y,z) in direction (vx,vy,vz) with wall (x1,y1)-(x2,y2). */
+        RayIntersect(x: number, y: number, z: number, vx: number, vy: number, vz: number, x1: number, y1: number, x2: number, y2: number): IntersectResult;
     }
 
     //Type for native functions
@@ -1075,6 +1079,127 @@ declare global {
         music(lev: number, file: string): void
     }
 
+    export interface IMapState {
+        Save(): CON_NATIVE<void>;
+        Load(): CON_NATIVE<void>;
+        Clear(): CON_NATIVE<void>;
+    }
+
+    export type HitscanResult = { sector: number; wall: number; sprite: number; x: number; y: number; z: number; };
+    export type NearTagResult = { sector: number; wall: number; sprite: number; dist: number; };
+    export type ZRangeResult  = { ceilZ: number; ceilHit: number; florZ: number; florHit: number; };
+    export type IntersectResult = { hit: number; x: number; y: number; z: number; };
+    /** Time and date values returned by {@link GetTimeDate}. */
+    export type TimeDate = { sec: number; min: number; hour: number; day: number; month: number; year: number; dayOfWeek: number; };
+
+    export interface IMap {
+        readonly level: CON_NATIVE_GAMEVAR<'LEVEL', number>;
+        readonly volume: CON_NATIVE_GAMEVAR<'VOLUME', number>;
+        readonly skill: CON_NATIVE_GAMEVAR<'SKILL', number>;
+        /** Stop all currently playing music. */
+        StopAllMusic(): CON_NATIVE<void>;
+        /** Start playing a music track on the given volume slot. */
+        StartTrack(slot: number, track: number): CON_NATIVE<void>;
+        /** Get the current playback position (in samples) of the active music track. */
+        GetMusicPosition(): CON_NATIVE<number>;
+        /** Seek the active music track to the given sample position. */
+        SetMusicPosition(pos: number): CON_NATIVE<void>;
+        /** Returns the number of activated sectors with the given lo-tag that are currently moving. */
+        CheckActivatorMotion(lotag: number): CON_NATIVE<number>;
+        /** Returns the sector index that contains the given wall. */
+        SectorOfWall(wall: number): CON_NATIVE<number>;
+        /** Returns the sector index containing world point (x,y,z). */
+        UpdateSectorZ(x: number, y: number, z: number): CON_NATIVE<number>;
+        /** Returns the sector index containing (x,y), searching from neighboring sectors. */
+        UpdateSectorNeighbor(x: number, y: number): CON_NATIVE<number>;
+        /** Returns the sector index containing (x,y,z), searching from neighboring sectors. */
+        UpdateSectorNeighborZ(x: number, y: number, z: number): CON_NATIVE<number>;
+        /** Cast a hitscan ray from (x,y,z) in sector sect with direction (vx,vy,vz). */
+        Hitscan(x: number, y: number, z: number, sect: number, vx: number, vy: number, vz: number, clipmask: number): CON_NATIVE<HitscanResult>;
+        /** Find the nearest tagged wall/sector/sprite within range of (x,y,z). */
+        NearTag(x: number, y: number, z: number, sect: number, ang: number, range: number, tagsearch: number): CON_NATIVE<NearTagResult>;
+        /** Get the ceiling and floor Z extents at world point (x,y,z) in sector sect. */
+        GetZRange(x: number, y: number, z: number, sect: number, walldist: number, clipmask: number): CON_NATIVE<ZRangeResult>;
+        /** Return the sector index that contains world point (x,y). */
+        UpdateSector(x: number, y: number): CON_NATIVE<number>;
+        /** Floor Z at world position (x,y) in the given sector. */
+        FloorZOfSlope(sect: number, x: number, y: number): CON_NATIVE<number>;
+        /** Ceiling Z at world position (x,y) in the given sector. */
+        CeilZOfSlope(sect: number, x: number, y: number): CON_NATIVE<number>;
+        /** Move a wall vertex to (x,y). */
+        DragPoint(wall: number, x: number, y: number): CON_NATIVE<void>;
+        /** Activate sector movement for the given sector. */
+        MoveSector(sect: number): CON_NATIVE<void>;
+        /** 2D distance between two sprites (by sprite index). */
+        Dist(s1: number, s2: number): CON_NATIVE<number>;
+        /** Fast approximate 2D distance between two sprites. */
+        LDist(s1: number, s2: number): CON_NATIVE<number>;
+        /** Nearest actor of tile type within 2D radius; -1 if none. */
+        FindNearActor(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
+        /** Nearest actor of tile type within 3D radius; -1 if none. */
+        FindNearActor3D(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
+        /** Nearest actor of tile type within 2D radius and Z range; -1 if none. */
+        FindNearActorZ(tile: CON_CONSTANT<number>, dist: number, zdist: number): CON_NATIVE<number>;
+        /** Nearest sprite of tile type within 2D radius; -1 if none. */
+        FindNearSprite(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
+        /** Nearest sprite of tile type within 3D radius; -1 if none. */
+        FindNearSprite3D(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
+        /** Nearest sprite of tile type within 2D radius and Z range; -1 if none. */
+        FindNearSpriteZ(tile: CON_CONSTANT<number>, dist: number, zdist: number): CON_NATIVE<number>;
+        state: IMapState;
+    }
+
+    export interface IGame {
+        /** Milliseconds elapsed since the engine started. */
+        getTicks(): CON_NATIVE<number>;
+        readonly map: IMap;
+        /** Transition to another level. */
+        StartLevel(ep: number, level: number): CON_NATIVE<void>;
+        /**
+         * Save the current game state to a slot.
+         * @param slot - save slot number
+         * @param notify - if true, display the save notification (default: false)
+         */
+        Save(slot: number, notify?: boolean): CON_NATIVE<void>;
+        /**
+         * End the game after an optional delay.
+         * @param delay - delay in game tics before ending (constant)
+         */
+        EndOfGame(delay: CON_CONSTANT<number>): CON_NATIVE<void>;
+        /**
+         * End the current level with the given exit type.
+         * @param exitType - exit type constant (e.g. 0 = normal, -1 = secret)
+         */
+        EndOfLevel(exitType: CON_CONSTANT<number>): CON_NATIVE<void>;
+        /**
+         * (Re-)initialize the game timer to the given tick rate.
+         * @param ticsPerSec - ticks per second (120 = default)
+         */
+        InitTimer(ticsPerSec: number): CON_NATIVE<void>;
+        /**
+         * Switch the active game palette.
+         * @param pal - palette index
+         */
+        SetGamePalette(pal: number): CON_NATIVE<void>;
+        /**
+         * Start playing a cutscene animation.
+         * @param animType - animation type constant (e.g. ANIM_INNARDS)
+         */
+        StartCutscene(animType: CON_CONSTANT<number>): CON_NATIVE<void>;
+        /**
+         * Returns true if the given cutscene animation is currently playing.
+         * @param animType - animation type constant
+         */
+        IsCutscenePlaying(animType: CON_CONSTANT<number>): CON_NATIVE<boolean>;
+        /**
+         * Open a game menu.
+         * @param menuType - menu type constant
+         */
+        CMenu(menuType: CON_CONSTANT<number>): CON_NATIVE<void>;
+    }
+
+    export const game: CON_NATIVE_OBJECT<IGame>;
+
     /**
      * Returns a pointer for thhe specified label
      * @param name - Label (can be an action, move or AI)
@@ -1400,12 +1525,6 @@ declare global {
     export function IsRespawnActive(): CON_NATIVE<boolean>;
 
     /**
-     * Ends the game
-     * @param delay - the delay before the game ends
-     */
-    export function EndOfGame(delay: constant): CON_NATIVE<void>;
-
-    /**
      * This is used to flash the screen a given color.
      * @param r the red value (0 - 63)
      * @param g the green value (0 - 63)
@@ -1414,45 +1533,20 @@ declare global {
      */
     export function PalFrom(r: number, g: number, b: number, time: number): CON_NATIVE<void>;
 
-    // ── Player / ammo / weapon helpers ────────────────────────────────────────
-    /** Add ammo to the current player's weapon slot. */
-    export function AddAmmo(weapon: CON_CONSTANT<number>, amount: number): CON_NATIVE<void>;
-    /** Add an inventory item to the current player. */
-    export function AddInventory(item: CON_CONSTANT<number>, amount: number): CON_NATIVE<void>;
-    /** Give the current player a weapon with ammo. */
-    export function AddWeapon(weapon: number, ammo: number): CON_NATIVE<void>;
-    /** Add health to the current player (clamped). */
-    export function AddHealth(n: number): CON_NATIVE<void>;
-    /** Get the current max-ammo cap for a weapon. */
-    export function GMaxAmmo(weapon: number): CON_NATIVE<number>;
-    /** Set the starting max-ammo cap for a weapon. */
-    export function SMaxAmmo(weapon: number, max: number): CON_NATIVE<void>;
-    /** Toss the current player's active weapon. */
-    export function TossWeapon(): CON_NATIVE<void>;
-    /** Make the current player flinch/recoil. */
-    export function WackPlayer(): CON_NATIVE<void>;
-    /** Stomp the sprite below the current player. */
-    export function Pstomp(): CON_NATIVE<void>;
     /** Stop all currently playing sound effects. */
     export function StopAllSounds(): CON_NATIVE<void>;
-    /** Stop all currently playing music. */
-    export function StopAllMusic(): CON_NATIVE<void>;
+    /** Stop a specific sound effect globally. */
+    export function StopSound(sound_id: number | Sound): CON_NATIVE<void>;
+    /** Returns true if the given sound is currently playing. */
+    export function IsSoundPlaying(sound_id: number | Sound): CON_NATIVE<boolean>;
+    /** Display the user-defined quote at slot index. */
+    export function UserQuote(slot: number): CON_NATIVE<void>;
 
-    // ── Geometry ──────────────────────────────────────────────────────────────
-    /** 2D distance between two sprites (by sprite index). */
-    export function Dist(s1: number, s2: number): CON_NATIVE<number>;
-    /** Fast approximate 2D distance between two sprites. */
-    export function LDist(s1: number, s2: number): CON_NATIVE<number>;
-    /** Floor Z at world position (x,y) in the given sector. */
-    export function FloorZOfSlope(sect: number, x: number, y: number): CON_NATIVE<number>;
-    /** Ceiling Z at world position (x,y) in the given sector. */
-    export function CeilZOfSlope(sect: number, x: number, y: number): CON_NATIVE<number>;
-    /** Return the sector index that contains world point (x,y). */
-    export function UpdateSector(x: number, y: number): CON_NATIVE<number>;
-    /** Move a wall vertex to (x,y). */
-    export function DragPoint(wall: number, x: number, y: number): CON_NATIVE<void>;
-    /** Move sector geometry (Floor/ceiling Z interpolation). */
-    export function MoveSector(sect: number): CON_NATIVE<void>;
+    /** Returns the current time and date as a {@link TimeDate} object. */
+    export function GetTimeDate(): CON_NATIVE<TimeDate>;
+
+    /** Returns true if sprite spr1 has line-of-sight to sprite spr2. */
+    export function CheckSpriteSight(spr1: number, spr2: number): CON_NATIVE<boolean>;
 
     // ── Sprite linked-list traversal ──────────────────────────────────────────
     /** First sprite in the given status list; returns -1 if empty. */
@@ -1468,19 +1562,26 @@ declare global {
     /** Previous sprite before spr in its sector list; returns -1 at start. */
     export function prevSpritesect(spr: number): CON_NATIVE<number>;
 
-    // ── Find nearest ──────────────────────────────────────────────────────────
-    /** Nearest actor of tile type within 2D radius; -1 if none. */
-    export function FindNearActor(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
-    /** Nearest actor of tile type within 3D radius; -1 if none. */
-    export function FindNearActor3D(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
-    /** Nearest actor of tile type within 2D radius and Z range; -1 if none. */
-    export function FindNearActorZ(tile: CON_CONSTANT<number>, dist: number, zdist: number): CON_NATIVE<number>;
-    /** Nearest sprite of tile type within 2D radius; -1 if none. */
-    export function FindNearSprite(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
-    /** Nearest sprite of tile type within 3D radius; -1 if none. */
-    export function FindNearSprite3D(tile: CON_CONSTANT<number>, dist: number): CON_NATIVE<number>;
-    /** Nearest sprite of tile type within 2D radius and Z range; -1 if none. */
-    export function FindNearSpriteZ(tile: CON_CONSTANT<number>, dist: number, zdist: number): CON_NATIVE<number>;
+    export interface IActorPlayer {
+        /** Add ammo to the interacting player's weapon slot. */
+        AddAmmo(weapon: CON_CONSTANT<number>, amount: number): CON_NATIVE<void>;
+        /** Add an inventory item to the interacting player. */
+        AddInventory(item: CON_CONSTANT<number>, amount: number): CON_NATIVE<void>;
+        /** Give the interacting player a weapon with ammo. */
+        AddWeapon(weapon: number, ammo: number): CON_NATIVE<void>;
+        /** Add health to the interacting player (clamped). */
+        AddHealth(n: number): CON_NATIVE<void>;
+        /** Get the current max-ammo cap for a weapon. */
+        GMaxAmmo(weapon: number): CON_NATIVE<number>;
+        /** Set the starting max-ammo cap for a weapon. */
+        SMaxAmmo(weapon: number, max: number): CON_NATIVE<void>;
+        /** Toss the interacting player's active weapon. */
+        TossWeapon(): CON_NATIVE<void>;
+        /** Make the interacting player flinch/recoil. */
+        WackPlayer(): CON_NATIVE<void>;
+        /** Stomp the sprite below the interacting player. */
+        Pstomp(): CON_NATIVE<void>;
+    }
 
     /** @class for actor declaration. Use this as extension to declare your custom actors. */
     export class CActor {
@@ -1573,11 +1674,13 @@ declare global {
         /** Model display flags (spriteext) */
         public mdFlags: CON_NATIVE<number>;
         /** The current sector object */
-        public curSector: CON_NATIVE<CSector>;
+        public curSector: CON_NATIVE<ISector>;
         /** The current sector ID */
         public curSectorID: CON_NATIVE<number>;
         /** The special flags active for the sprite */
         public flags: CON_NATIVE<number>;
+        /** SFLAG_* bits — write-only; controls behaviour flags like SFLAG_BADGUY, SFLAG_SHADOW, etc. */
+        public spriteflags: CON_NATIVE<number>;
         /** The Lotag and Hitag of the sprite */
         public tags: CON_NATIVE<tag>;
         public blend: CON_NATIVE<number>;
@@ -1620,6 +1723,9 @@ declare global {
         protected actions: TAction<string>;
         protected moves: TMove<string>;
         protected ais: TAi<string>;
+
+        /** Player-interaction commands — act on the player currently interacting with this actor. */
+        public readonly player: IActorPlayer;
 
         /**
          * Play an action
@@ -1756,10 +1862,21 @@ declare global {
          */
         public Sound(sound_id: number | Sound, global?: boolean, once?: boolean): CON_NATIVE<void>
         /**
-         * Stops playing a sound
-         * @param sound_id - the sound ID
+         * Stop a sound playing on this actor.
+         * @param sound_id - the sound ID or Sound label
          */
-        public StopSound(sound_id: number | Sound): CON_NATIVE<void>
+        public StopActorSound(sound_id: number | Sound): CON_NATIVE<void>
+        /**
+         * Returns true if this actor is currently playing the given sound.
+         * @param sound_id - the sound ID or Sound label
+         */
+        public IsActorSound(sound_id: number | Sound): CON_NATIVE<boolean>
+        /**
+         * Set the pitch of a sound playing on this actor.
+         * @param sound_id - the sound ID or Sound label
+         * @param pitch - pitch value
+         */
+        public SetActorSoundPitch(sound_id: number | Sound, pitch: number): CON_NATIVE<void>
         /**
          * Returns if the actor is away from wall
          */
@@ -1845,11 +1962,14 @@ declare global {
         public WhichWeaponHit(): CON_NATIVE<number>
 
         /**
-         * @todo no implemented yet
          * Calculates the angle necessary for the current sprite to face whatever target is
          * or was at the coordinates htlastvx and htlastvy.
          */
         public AngleToTarget(): CON_NATIVE<number>
+        /** Returns the 2D distance to the nearest player. */
+        public FindPlayer(): CON_NATIVE<number>
+        /** Plays the player tip-hat animation. */
+        public Tip(): CON_NATIVE<void>
 
         /**
          * Spawns the hard-coded debris. Scraps inherit the owner palette.
@@ -1925,17 +2045,6 @@ declare global {
         public Quake(strength: number): CON_NATIVE<void>
         /** Show the startup screen. */
         public StartScreen(): CON_NATIVE<void>
-        /**
-         * Transition to another level.
-         * @param ep - episode (0-based)
-         * @param level - level (0-based)
-         */
-        public StartLevel(ep: number, level: number): CON_NATIVE<void>
-        /**
-         * Save the game to a slot.
-         * @param slot - save slot number (constant)
-         */
-        public Save(slot: CON_CONSTANT<number>): CON_NATIVE<void>
 
         /**
          * You must define this function for the actor to work
@@ -2051,8 +2160,9 @@ declare global {
      * (which gives `this: CEvent<E> & CActor`).
      */
     export class CEvent<T extends TEvents = TEvents> {
-        /** @todo */
-        protected argument?: number | number[];
+        /** The event's return value. Read to get the value the engine passed in;
+         *  write to return a value back (e.g. a replacement tile in EVENT_GETMENUTILE). */
+        protected argument: CON_NATIVE_GAMEVAR<'RETURN', number>;
 
         /**
          * Starts the event declaration
@@ -2125,6 +2235,13 @@ declare global {
          * @param sound - the sound ID to be played
          */
         public ScreenSound(sound: number | Sound): CON_NATIVE<void>;
+
+        /**
+         * Set the display aspect ratio. Only valid in EVENT_DISPLAYROOMS.
+         * @param daxRange - horizontal range value
+         * @param daAspect - aspect ratio value
+         */
+        public SetAspect(...args: T extends 'DisplayRooms' ? [daxRange: number, daAspect: number] : never): CON_NATIVE<void>;
 
         /**
          * Writes text to the screen
@@ -2254,12 +2371,12 @@ declare global {
         public ang: CON_NATIVE<number>;
 
         public wallPoint2: CWall;
-        public next: { wall: CWall, sector: CSector };
+        public next: { wall: CWall, sector: ISector };
         public readonly uloTag: CON_NATIVE<number>;
         public readonly uhiTag: CON_NATIVE<number>;
     }
 
-    export class CSector {
+    export class ISector {
         public wallPtr: CON_NATIVE<number>;
         public wallNum: CON_NATIVE<number>;
 
@@ -2279,7 +2396,7 @@ declare global {
         public readonly uhiTag: CON_NATIVE<number>;
     }
 
-    export const sectors: CSector[];
+    export const sectors: ISector[];
 
     /**
      * Weapon flags.
@@ -3167,7 +3284,7 @@ declare global {
         public inventory: CON_NATIVE<IPlayerInventory>;
 
         public ang: CON_NATIVE<number>;
-        public currSector: CON_NATIVE<CSector>;
+        public currSector: CON_NATIVE<ISector>;
         public currSectorID: CON_NATIVE<number>;
 
         public i: CON_NATIVE<number>;
@@ -3574,7 +3691,7 @@ declare global {
         /** Texture offset */
         public texOffset: CON_NATIVE<vec2>;
         /** Current sector */
-        public curSector: CON_NATIVE<CSector>;
+        public curSector: CON_NATIVE<ISector>;
         /** Current sector ID */
         public curSectorID: CON_NATIVE<number>;
         /** Distance to nearest player */

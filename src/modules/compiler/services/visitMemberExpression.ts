@@ -427,6 +427,10 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
         }
 
         if (seg.kind == 'property') {
+          // this.argument inside a CEvent body → the EDuke32 RETURN gamevar
+          if (obj.kind == 'this' && seg.name == 'argument' && context.currentEventName && !context.curClass)
+            return code + (assignment ? `set RETURN ${reg}\n` : `set ${reg} RETURN\n`);
+
           if (obj.kind == 'this' && (context.curClass || context.symbolTable.has(seg.name))) {
             if (context.curClass && context.curClass.num_elements == 0) {
               addDiagnostic(expr, context, 'error', `Class ${context.curClass.name} has no properties`);

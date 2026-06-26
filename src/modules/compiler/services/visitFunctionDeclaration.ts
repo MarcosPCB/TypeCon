@@ -66,6 +66,13 @@ export function visitFunctionDeclaration(fd: FunctionDeclaration, context: Compi
       case 'FP14':
       case 'FP16':
       case 'FP30':
+      // Sound and GameLabel are TypeCON types that resolve to a slot/define number at runtime
+      case 'Sound':
+      case 'GameLabel':
+      case 'number | Sound':
+      case 'Sound | number':
+      case 'number | GameLabel':
+      case 'GameLabel | number':
         break;
 
       case 'quote':
