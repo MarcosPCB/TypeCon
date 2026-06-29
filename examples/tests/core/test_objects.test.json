@@ -1,0 +1,11 @@
+{
+    "name": "Core Objects Test",
+    "source": ["test_objects.ts"],
+    "tests": [
+        {
+            "name": "Plain class instantiation, property access, and nested objects",
+            "runEvent": "EVENT_INITCOMPLETE",
+            "noInit": true
+        }
+    ]
+}

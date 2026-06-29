@@ -1,0 +1,11 @@
+{
+    "name": "Core Events Return Test",
+    "source": ["test_events_return.ts"],
+    "tests": [
+        {
+            "name": "this.argument read in InitComplete event",
+            "runEvent": "EVENT_INITCOMPLETE",
+            "noInit": true
+        }
+    ]
+}

@@ -1,0 +1,11 @@
+{
+    "name": "Core Classes Test",
+    "source": ["test_classes.ts"],
+    "tests": [
+        {
+            "name": "Class methods mutate state; array-backed class with aggregate method",
+            "runEvent": "EVENT_INITCOMPLETE",
+            "noInit": true
+        }
+    ]
+}

@@ -1,0 +1,11 @@
+{
+    "name": "Core Type-Object Records Test",
+    "source": ["test_type_objects.ts"],
+    "tests": [
+        {
+            "name": "Type-alias object literals, property access, and nested type objects",
+            "runEvent": "EVENT_INITCOMPLETE",
+            "noInit": true
+        }
+    ]
+}

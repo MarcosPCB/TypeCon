@@ -1,0 +1,11 @@
+{
+    "name": "Core Interfaces Test",
+    "source": ["test_interfaces.ts"],
+    "tests": [
+        {
+            "name": "Interface struct layout, typed variable init, and nested interface access",
+            "runEvent": "EVENT_INITCOMPLETE",
+            "noInit": true
+        }
+    ]
+}

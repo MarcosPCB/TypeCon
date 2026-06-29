@@ -1,0 +1,11 @@
+{
+    "name": "Core GameVars Test",
+    "source": ["test_gamevars.ts"],
+    "tests": [
+        {
+            "name": "gameVar default init, assignment, arithmetic, and conditional read",
+            "runEvent": "EVENT_INITCOMPLETE",
+            "noInit": true
+        }
+    ]
+}
