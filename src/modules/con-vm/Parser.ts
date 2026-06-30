@@ -463,12 +463,17 @@ export class CONParser {
       else        return { op: 'setactorvar', index, field, src: reg };
     }
 
-    // for VAR allsprites { body } — iterate over all active sprite indices
+    // for VAR range COUNT { body } or for VAR allsprites { body }
     if (low === 'for') {
       this.sc.next();
       const loopVar = this.sc.next()!;
-      const iterator = this.sc.next()!; // e.g. 'allsprites'
-      // consume iterator keyword — only allsprites is supported in the VM currently
+      const iterator = this.sc.next()!; // 'range' or 'allsprites'
+      if (iterator.toLowerCase() === 'range') {
+        const count = this.parseOperand(); // COUNT (gamevar or literal)
+        const body = this.parseBody();
+        return { op: 'for_range', loopVar, count, body };
+      }
+      // allsprites (or any other unrecognised iterator — treat as allsprites)
       const body = this.parseBody();
       return { op: 'for_allsprites', loopVar, body };
     }
@@ -726,6 +731,8 @@ export class CONParser {
     if (low === 'debug')     { this.sc.next(); this.parseOperand(); return { op: 'noop' }; }
     if (low === 'nullop')    { this.sc.next(); return { op: 'nullop' }; }
     if (low === 'noop')      { this.sc.next(); return { op: 'noop' }; }
+    if (low === 'getcurraddress') { this.sc.next(); const dst = this.parseOperand(); return { op: 'getcurraddress', dst }; }
+    if (low === 'jump')      { this.sc.next(); const target = this.parseOperand(); return { op: 'jump', target }; }
 
     // Quote / string ops
     if (low === 'qputs') {

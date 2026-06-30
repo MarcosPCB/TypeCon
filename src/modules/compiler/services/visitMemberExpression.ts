@@ -220,10 +220,9 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
             context.localVarCount = localVars;
           }
           code += `state popi\n`;
-          if (sym.type & (ESymbolType.object | ESymbolType.array))
-            code += `mul ra ${((sym as SymbolDefinition).size / (sym as SymbolDefinition).num_elements || 1) + 1}\nadd ri ra\nadd ri 1\n`
-          else
-            code += `add ri ra\nadd ri 1\n`;
+          // Heap arrays store one flat[] slot per element (number or heap pointer).
+          // Stride is always 1; the +1 skips the length header at flat[ptr+0].
+          code += `add ri ra\nadd ri 1\n`;
 
           if (sym.type & (ESymbolType.string | ESymbolType.array))
             context.curExpr = ESymbolType.string | ESymbolType.array;

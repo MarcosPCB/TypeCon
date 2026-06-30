@@ -1184,6 +1184,461 @@ state pop
         ],
         type_belong: ['string']
     },
+    // ── New string methods ────────────────────────────────────────────────
+    {
+        name: 'charCodeAt',
+        returns: true,
+        return_type: 'variable',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE],
+        type_belong: ['string'],
+        code: () => `
+set ri r1
+add ri r0
+add ri 1
+set rb flat[ri]
+`
+    },
+    {
+        name: 'at',
+        returns: true,
+        return_type: 'string',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE],
+        type_belong: ['string'],
+        code: () => `
+set rd flat[r1]
+ifl r0 0
+  add r0 rd
+set rc 0
+ifge r0 0
+  ifl r0 rd {
+    set rsi r1
+    add rsi r0
+    add rsi 1
+    set rc flat[rsi]
+  }
+state pushr2
+set r0 2
+set r1 2
+state alloc
+state popr2
+setarray flat[rb] 1
+set ri rb
+add ri 1
+setarray flat[ri] rc
+`
+    },
+    {
+        name: 'indexOf',
+        returns: true,
+        return_type: 'variable',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL],
+        arguments_default: [0, 0],
+        type_belong: ['string'],
+        code: (args?: boolean) => `
+${!args ? 'set r1 0\n' : ''}set rd flat[r2]
+set ra flat[r0]
+ifl r1 0
+  set r1 0
+set rb -1
+set rsi rd
+sub rsi ra
+add rsi 1
+ifge rsi 1
+  ifle r1 rsi {
+    add rsp 1
+    setarray flat[rsp] rsi
+    set rc r1
+    whilevarl rc flat[rsp] {
+      set ri 0
+      whilevarl ri ra {
+        set rsi r2
+        add rsi rc
+        add rsi ri
+        add rsi 1
+        set rsi flat[rsi]
+        set rd r0
+        add rd ri
+        add rd 1
+        set rd flat[rd]
+        ifn rsi rd
+          exit
+        add ri 1
+      }
+      ife ri ra {
+        set rb rc
+        set rc flat[rsp]
+      } else {
+        add rc 1
+      }
+    }
+    sub rsp 1
+  }
+`
+    },
+    {
+        name: 'startsWith',
+        returns: true,
+        return_type: 'variable',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE],
+        type_belong: ['string'],
+        code: () => `
+set rd flat[r0]
+set ra flat[r1]
+set rb 0
+ifle rd ra {
+  set rb 1
+  set rc 0
+  whilevarl rc rd {
+    set rsi r1
+    add rsi rc
+    add rsi 1
+    set rsi flat[rsi]
+    set ri r0
+    add ri rc
+    add ri 1
+    set ri flat[ri]
+    ifn rsi ri {
+      set rb 0
+      exit
+    }
+    add rc 1
+  }
+}
+`
+    },
+    {
+        name: 'endsWith',
+        returns: true,
+        return_type: 'variable',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE],
+        type_belong: ['string'],
+        code: () => `
+set rd flat[r0]
+set ra flat[r1]
+set rb 0
+ifle rd ra {
+  set rb 1
+  set rc ra
+  sub rc rd
+  set ra 0
+  whilevarl ra rd {
+    set rsi r1
+    add rsi rc
+    add rsi ra
+    add rsi 1
+    set rsi flat[rsi]
+    set ri r0
+    add ri ra
+    add ri 1
+    set ri flat[ri]
+    ifn rsi ri {
+      set rb 0
+      exit
+    }
+    add ra 1
+  }
+}
+`
+    },
+    {
+        name: 'toUpperCase',
+        returns: true,
+        return_type: 'string',
+        arguments: [],
+        type_belong: ['string'],
+        code: () => `
+set rd flat[r0]
+state pushr2
+set r0 rd
+add r0 1
+set r1 2
+state alloc
+state popr2
+setarray flat[rb] rd
+set rc 0
+whilevarl rc rd {
+  set rsi r0
+  add rsi rc
+  add rsi 1
+  set rsi flat[rsi]
+  ifge rsi 97
+    ifle rsi 122
+      sub rsi 32
+  set ri rb
+  add ri rc
+  add ri 1
+  setarray flat[ri] rsi
+  add rc 1
+}
+`
+    },
+    {
+        name: 'toLowerCase',
+        returns: true,
+        return_type: 'string',
+        arguments: [],
+        type_belong: ['string'],
+        code: () => `
+set rd flat[r0]
+state pushr2
+set r0 rd
+add r0 1
+set r1 2
+state alloc
+state popr2
+setarray flat[rb] rd
+set rc 0
+whilevarl rc rd {
+  set rsi r0
+  add rsi rc
+  add rsi 1
+  set rsi flat[rsi]
+  ifge rsi 65
+    ifle rsi 90
+      add rsi 32
+  set ri rb
+  add ri rc
+  add ri 1
+  setarray flat[ri] rsi
+  add rc 1
+}
+`
+    },
+    {
+        name: 'trim',
+        returns: true,
+        return_type: 'string',
+        arguments: [],
+        type_belong: ['string'],
+        code: () => `
+set rd flat[r0]
+set rc 0
+whilevarl rc rd {
+  set rsi r0
+  add rsi rc
+  add rsi 1
+  set rsi flat[rsi]
+  ifn rsi 32
+    exit
+  add rc 1
+}
+set ra rd
+sub ra 1
+whilevarl rc ra {
+  set ri r0
+  add ri ra
+  add ri 1
+  set ri flat[ri]
+  ife ri 32
+    sub ra 1
+  else
+    exit
+}
+set rd ra
+sub rd rc
+add rd 1
+state pushr2
+set r0 rd
+add r0 1
+set r1 2
+state alloc
+state popr2
+setarray flat[rb] rd
+set rsi r0
+add rsi rc
+add rsi 1
+set ri rb
+add ri 1
+copy flat[rsi] flat[ri] rd
+`
+    },
+    {
+        name: 'trimStart',
+        returns: true,
+        return_type: 'string',
+        arguments: [],
+        type_belong: ['string'],
+        code: () => `
+set rd flat[r0]
+set rc 0
+whilevarl rc rd {
+  set rsi r0
+  add rsi rc
+  add rsi 1
+  set rsi flat[rsi]
+  ifn rsi 32
+    exit
+  add rc 1
+}
+set ra rd
+sub ra rc
+set rd ra
+state pushr2
+set r0 rd
+add r0 1
+set r1 2
+state alloc
+state popr2
+setarray flat[rb] rd
+set rsi r0
+add rsi rc
+add rsi 1
+set ri rb
+add ri 1
+copy flat[rsi] flat[ri] rd
+`
+    },
+    {
+        name: 'trimEnd',
+        returns: true,
+        return_type: 'string',
+        arguments: [],
+        type_belong: ['string'],
+        code: () => `
+set rd flat[r0]
+set ra 0
+set rc 0
+whilevarl rc rd {
+  set rsi rd
+  sub rsi 1
+  sub rsi rc
+  set ri r0
+  add ri rsi
+  add ri 1
+  set ri flat[ri]
+  ifn ri 32 {
+    set ra rsi
+    add ra 1
+    exit
+  }
+  add rc 1
+}
+set rd ra
+state pushr2
+set r0 rd
+add r0 1
+set r1 2
+state alloc
+state popr2
+setarray flat[rb] rd
+set rsi r0
+add rsi 1
+set ri rb
+add ri 1
+copy flat[rsi] flat[ri] rd
+`
+    },
+    {
+        name: 'repeat',
+        returns: true,
+        return_type: 'string',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE],
+        type_belong: ['string'],
+        code: () => `
+set rd flat[r1]
+set ra r0
+mul ra rd
+state pushr2
+set r0 ra
+add r0 1
+set r1 2
+state alloc
+state popr2
+set ra r0
+mul ra rd
+setarray flat[rb] ra
+add rsp 1
+setarray flat[rsp] rb
+set ra 0
+set rc 0
+whilevarl rc r0 {
+  set rsi r1
+  add rsi 1
+  set ri flat[rsp]
+  add ri ra
+  add ri 1
+  copy flat[rsi] flat[ri] rd
+  add ra rd
+  add rc 1
+}
+set rb flat[rsp]
+sub rsp 1
+`
+    },
+    {
+        name: 'padStart',
+        returns: true,
+        return_type: 'string',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL],
+        arguments_default: [0, 32],
+        type_belong: ['string'],
+        code: (args?: boolean) => `
+${!args ? 'set r1 32\n' : ''}set rd flat[r2]
+set rb r2
+ifg r0 rd {
+  state pushr3
+  add r0 1
+  set r1 2
+  state alloc
+  state popr3
+  setarray flat[rb] r0
+  set ra r0
+  sub ra rd
+  add rsp 1
+  setarray flat[rsp] ra
+  set rc 0
+  whilevarl rc flat[rsp] {
+    set ri rb
+    add ri rc
+    add ri 1
+    setarray flat[ri] r1
+    add rc 1
+  }
+  set ra flat[rsp]
+  sub rsp 1
+  set rsi r2
+  add rsi 1
+  set ri rb
+  add ri ra
+  add ri 1
+  copy flat[rsi] flat[ri] rd
+}
+`
+    },
+    {
+        name: 'padEnd',
+        returns: true,
+        return_type: 'string',
+        arguments: [CON_NATIVE_FLAGS.VARIABLE, CON_NATIVE_FLAGS.VARIABLE | CON_NATIVE_FLAGS.OPTIONAL],
+        arguments_default: [0, 32],
+        type_belong: ['string'],
+        code: (args?: boolean) => `
+${!args ? 'set r1 32\n' : ''}set rd flat[r2]
+set rb r2
+ifg r0 rd {
+  state pushr3
+  add r0 1
+  set r1 2
+  state alloc
+  state popr3
+  setarray flat[rb] r0
+  set rsi r2
+  add rsi 1
+  set ri rb
+  add ri 1
+  copy flat[rsi] flat[ri] rd
+  set rc rd
+  whilevarl rc r0 {
+    set ri rb
+    add ri rc
+    add ri 1
+    setarray flat[ri] r1
+    add rc 1
+  }
+}
+`
+    },
+    // ── End new string methods ────────────────────────────────────────────
     {
         name: 'forEach',
         code: (args?: boolean, fn?: string) => {
@@ -1286,6 +1741,520 @@ state popd
 state pop
 `
         }
+    },
+    // ----------------------------------------------------------------
+    // Array value methods
+    // ----------------------------------------------------------------
+    {
+        name: 'indexOf',
+        code: () => {
+            return `
+set rd flat[r1]
+set rb -1
+set rc 0
+for rc range rd {
+  set rsi r1
+  add rsi 1
+  add rsi rc
+  ife flat[rsi] r0 {
+    set rb rc
+    exit
+  }
+}
+`;
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        type_belong: ['array']
+    },
+    {
+        name: 'includes',
+        code: () => {
+            return `
+set rd flat[r1]
+set rb 0
+set rc 0
+for rc range rd {
+  set rsi r1
+  add rsi 1
+  add rsi rc
+  ife flat[rsi] r0 {
+    set rb 1
+    exit
+  }
+}
+`;
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        type_belong: ['array']
+    },
+    {
+        name: 'at',
+        code: () => {
+            return `
+set rd flat[r1]
+ifl r0 0
+  add r0 rd
+set rsi r1
+add rsi 1
+add rsi r0
+set rb flat[rsi]
+`;
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        type_belong: ['array']
+    },
+    {
+        name: 'fill',
+        code: () => {
+            return `
+set rd flat[r1]
+set rc 0
+for rc range rd {
+  set rsi r1
+  add rsi 1
+  add rsi rc
+  setarray flat[rsi] r0
+}
+`;
+        },
+        returns: false,
+        return_type: null,
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        type_belong: ['array']
+    },
+    {
+        name: 'reverse',
+        code: () => {
+            return `
+set rd flat[r0]
+sub rd 1
+set rc 0
+whilel rc rd {
+  set rsi r0
+  add rsi 1
+  add rsi rc
+  set ri r0
+  add ri 1
+  add ri rd
+  set ra flat[rsi]
+  add rsp 1
+  setarray flat[rsp] ra
+  set ra flat[ri]
+  setarray flat[rsi] ra
+  set ra flat[rsp]
+  sub rsp 1
+  setarray flat[ri] ra
+  add rc 1
+  sub rd 1
+}
+`;
+        },
+        returns: false,
+        return_type: null,
+        arguments: [],
+        type_belong: ['array']
+    },
+    {
+        name: 'concat',
+        code: () => {
+            return `
+set rd flat[r1]
+set ra flat[r0]
+state pushr3
+set r0 rd
+add r0 ra
+add r0 1
+set r1 1
+state alloc
+state popr3
+set rd flat[r1]
+set ra flat[r0]
+set rsi rd
+add rsi ra
+setarray flat[rb] rsi
+set rsi r1
+add rsi 1
+set ri rb
+add ri 1
+copy flat[rsi] flat[ri] rd
+set rsi r0
+add rsi 1
+set ri rb
+add ri 1
+add ri rd
+copy flat[rsi] flat[ri] ra
+`;
+        },
+        returns: true,
+        return_type: 'array',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        type_belong: ['array']
+    },
+    // ----------------------------------------------------------------
+    // Array callback methods
+    // ----------------------------------------------------------------
+    {
+        name: 'map',
+        code: (_args?: boolean, fn?: string) => {
+            return `
+set rd flat[r1]
+state pushr3
+set r0 rd
+add r0 1
+set r1 1
+state alloc
+state popr3
+setarray flat[rb] rd
+add rsp 1
+setarray flat[rsp] rb
+set rc 0
+for rc range rd {
+  set rsi r1
+  add rsi 1
+  add rsi rc
+  state pushr2
+  set r0 flat[rsi]
+  set r1 rc
+  state pushc
+  state pushd
+  ${fn}
+  state popd
+  state popc
+  state popr2
+  set rsi flat[rsp]
+  add rsi 1
+  add rsi rc
+  setarray flat[rsi] rb
+}
+set rb flat[rsp]
+sub rsp 1
+`;
+        },
+        returns: true,
+        return_type: 'array',
+        arguments: [
+            CON_NATIVE_FLAGS.FUNCTION
+        ],
+        type_belong: ['array']
+    },
+    {
+        name: 'filter',
+        code: (_args?: boolean, fn?: string) => {
+            return `
+set rd flat[r1]
+state pushr3
+set r0 rd
+add r0 1
+set r1 1
+state alloc
+state popr3
+setarray flat[rb] 0
+add rsp 1
+setarray flat[rsp] rb
+add rsp 1
+setarray flat[rsp] 0
+set rc 0
+for rc range rd {
+  set rsi r1
+  add rsi 1
+  add rsi rc
+  state pushr2
+  set r0 flat[rsi]
+  set r1 rc
+  state pushc
+  state pushd
+  ${fn}
+  state popd
+  state popc
+  state popr2
+  ifn rb 0 {
+    set rsi rsp
+    sub rsi 1
+    set rsi flat[rsi]
+    set ra flat[rsp]
+    add rsi 1
+    add rsi ra
+    set ri r1
+    add ri 1
+    add ri rc
+    setarray flat[rsi] flat[ri]
+    add ra 1
+    setarray flat[rsp] ra
+  }
+}
+set rd flat[rsp]
+sub rsp 1
+set rb flat[rsp]
+sub rsp 1
+setarray flat[rb] rd
+`;
+        },
+        returns: true,
+        return_type: 'array',
+        arguments: [
+            CON_NATIVE_FLAGS.FUNCTION
+        ],
+        type_belong: ['array']
+    },
+    {
+        name: 'find',
+        code: (_args?: boolean, fn?: string) => {
+            return `
+set rd flat[r1]
+add rsp 1
+setarray flat[rsp] -1
+set rc 0
+for rc range rd {
+  set rsi r1
+  add rsi 1
+  add rsi rc
+  state pushr2
+  set r0 flat[rsi]
+  set r1 rc
+  state pushc
+  state pushd
+  ${fn}
+  state popd
+  state popc
+  state popr2
+  ifn rb 0 {
+    set rsi r1
+    add rsi 1
+    add rsi rc
+    setarray flat[rsp] flat[rsi]
+    exit
+  }
+}
+set rb flat[rsp]
+sub rsp 1
+`;
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.FUNCTION
+        ],
+        type_belong: ['array']
+    },
+    {
+        name: 'findIndex',
+        code: (_args?: boolean, fn?: string) => {
+            return `
+set rd flat[r1]
+add rsp 1
+setarray flat[rsp] -1
+set rc 0
+for rc range rd {
+  set rsi r1
+  add rsi 1
+  add rsi rc
+  state pushr2
+  set r0 flat[rsi]
+  set r1 rc
+  state pushc
+  state pushd
+  ${fn}
+  state popd
+  state popc
+  state popr2
+  ifn rb 0 {
+    setarray flat[rsp] rc
+    exit
+  }
+}
+set rb flat[rsp]
+sub rsp 1
+`;
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.FUNCTION
+        ],
+        type_belong: ['array']
+    },
+    {
+        name: 'some',
+        code: (_args?: boolean, fn?: string) => {
+            return `
+set rd flat[r1]
+set rb 0
+set rc 0
+for rc range rd {
+  set rsi r1
+  add rsi 1
+  add rsi rc
+  state pushr2
+  set r0 flat[rsi]
+  set r1 rc
+  state pushc
+  state pushd
+  ${fn}
+  state popd
+  state popc
+  state popr2
+  ifn rb 0 {
+    set rb 1
+    exit
+  }
+}
+`;
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.FUNCTION
+        ],
+        type_belong: ['array']
+    },
+    {
+        name: 'every',
+        code: (_args?: boolean, fn?: string) => {
+            return `
+set rd flat[r1]
+set rb 1
+set rc 0
+for rc range rd {
+  set rsi r1
+  add rsi 1
+  add rsi rc
+  state pushr2
+  set r0 flat[rsi]
+  set r1 rc
+  state pushc
+  state pushd
+  ${fn}
+  state popd
+  state popc
+  state popr2
+  ife rb 0 {
+    set rb 0
+    exit
+  }
+}
+`;
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.FUNCTION
+        ],
+        type_belong: ['array']
+    },
+    {
+        name: 'reduce',
+        code: (_args?: boolean, fn?: string) => {
+            return `
+add rsp 1
+setarray flat[rsp] r1
+set rd flat[r2]
+set rc 0
+for rc range rd {
+  set rsi r2
+  add rsi 1
+  add rsi rc
+  set ra flat[rsp]
+  state pushr3
+  set r0 ra
+  set r1 flat[rsi]
+  set r2 rc
+  state pushc
+  state pushd
+  ${fn}
+  state popd
+  state popc
+  state popr3
+  setarray flat[rsp] rb
+}
+set rb flat[rsp]
+sub rsp 1
+`;
+        },
+        returns: true,
+        return_type: 'variable',
+        arguments: [
+            CON_NATIVE_FLAGS.FUNCTION,
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        type_belong: ['array']
+    },
+    // ----------------------------------------------------------------
+    // splice(start, deleteCount) — removes deleteCount elements at start
+    // ----------------------------------------------------------------
+    {
+        name: 'splice',
+        code: () => {
+            return `
+set rd flat[r2]
+ifl r0 0
+  add r0 rd
+ifl r0 0
+  set r0 0
+ifg r0 rd
+  set r0 rd
+set ra rd
+sub ra r0
+ifl r1 0
+  set r1 0
+ifg r1 ra
+  set r1 ra
+state pushr3
+set r0 r1
+add r0 1
+set r1 1
+state alloc
+state popr3
+setarray flat[rb] r1
+set rsi r2
+add rsi 1
+add rsi r0
+set ri rb
+add ri 1
+copy flat[rsi] flat[ri] r1
+add rsp 1
+setarray flat[rsp] rb
+set ra rd
+sub ra r0
+sub ra r1
+ifg ra 0 {
+  set rsi r2
+  add rsi 1
+  add rsi r0
+  add rsi r1
+  set ri r2
+  add ri 1
+  add ri r0
+  copy flat[rsi] flat[ri] ra
+}
+sub rd r1
+setarray flat[r2] rd
+set rb flat[rsp]
+sub rsp 1
+`;
+        },
+        returns: true,
+        return_type: 'array',
+        arguments: [
+            CON_NATIVE_FLAGS.VARIABLE,
+            CON_NATIVE_FLAGS.VARIABLE
+        ],
+        type_belong: ['array']
     },
     {
         name: 'GetReference',

@@ -350,6 +350,21 @@ export function executeStatements(
         break;
       }
 
+      // ── for VAR range COUNT { body } ─────────────────────────────────────
+      case 'for_range': {
+        const count = readOperand(s.count, state);
+        for (let i = 0; i < count; i++) {
+          state.vars.set(s.loopVar, i);
+          try {
+            executeStatements(s.body, state, stateMap, depth + 1);
+          } catch (e) {
+            if (e instanceof BreakSignal) break;
+            throw e;
+          }
+        }
+        break;
+      }
+
       // ── for VAR allsprites { body } ───────────────────────────────────────
       // Iterates over all sprite indices that have any actor fields set (simulates
       // EDuke32's allsprites iterator which loops over live sprites in the map).
@@ -371,6 +386,59 @@ export function executeStatements(
 
       // ── State call ────────────────────────────────────────────────────────
       case 'state': {
+        // _subFunctions_ dispatch — shortcircuit the getcurraddress/jump mechanism
+        // that the real CON bytecode engine uses for indirect function dispatch.
+        // We locate the matching switch case directly, push the two stack slots
+        // that the real mechanism places there (rd save + dummy continuation addr),
+        // run the case body, and clean up regardless of how the case exits.
+        if (s.name.startsWith('_subFunctions_')) {
+          const sfBody = stateMap.get(s.name);
+          if (sfBody) {
+            // Navigate: body[...] → ife(rd==1){ switch ... }
+            const ifeStmt = sfBody.find(st => st.op === 'ife' &&
+              (st as any).a?.kind === 'var' && (st as any).a?.name === 'rd' &&
+              (st as any).b?.value === 1) as any;
+            const switchStmt = ifeStmt?.body?.find((st: any) => st.op === 'switch') as any;
+            if (switchStmt) {
+              const rsi = state.vars.get('rsi') ?? 0;
+              const matched = switchStmt.cases.find((c: any) => c.value === rsi);
+              const flat = state.arrays.get('flat') ?? [];
+              // Simulate state pushd: save rd onto flat[] stack
+              const rdSave = state.vars.get('rd') ?? 0;
+              let rsp = (state.vars.get('rsp') ?? 0) + 1;
+              while (flat.length <= rsp) flat.push(0);
+              flat[rsp] = rdSave;
+              // Push dummy continuation address (addr_B) that the return path's
+              // second state pop will consume
+              rsp++;
+              while (flat.length <= rsp) flat.push(0);
+              flat[rsp] = 0;
+              state.vars.set('rsp', rsp);
+              state.arrays.set('flat', flat);
+              if (matched) {
+                const _p = _vmLS; _vmLS = s.name;
+                try {
+                  executeStatements(matched.body, state, stateMap, depth + 1);
+                } catch (e) {
+                  // jump (ExitStateSignal), terminate, exit, and break are all
+                  // valid ways to exit a subfunction case body
+                  if (!(e instanceof ExitStateSignal) &&
+                      !(e instanceof BreakSignal) &&
+                      !(e instanceof TerminateSignal) &&
+                      !(e instanceof ContinueSignal)) throw e;
+                }
+                _vmLS = _p;
+              }
+              // Simulate state popd: restore rd from the pushd slot
+              const rsp2 = state.vars.get('rsp') ?? 0;
+              const flat2 = state.arrays.get('flat') ?? [];
+              state.vars.set('rd', flat2[rsp2] ?? 0);
+              state.vars.set('rsp', rsp2 - 1);
+            }
+          }
+          break;
+        }
+
         // Native override: CFile_GetBuffer — compiled code has a +1 off-by-one
         // bug from BufferToSourceIndex(true). Return flat[this+2] directly.
         // r0 holds the CFile 'this' pointer at the point of the state call.
@@ -474,6 +542,18 @@ export function executeStatements(
       case 'continue': throw new ContinueSignal();  // next loop iteration
       case 'terminate': throw new ExitStateSignal(); // exits current defstate
       case 'break': throw new TerminateSignal(); // exits actor/event entirely
+
+      // ── Jump / Address ────────────────────────────────────────────────────
+      // getcurraddress stores a dummy sentinel — real bytecode-level jumps are
+      // not possible in the AST-walking simulator; _subFunctions_ dispatch is
+      // handled by a dedicated shortcircuit in the 'state' case above.
+      case 'getcurraddress':
+        writeOperand(s.dst, 0, state);
+        break;
+      // jump exits the current defstate, matching its real-CON behaviour of
+      // transferring control out of the current code block.
+      case 'jump':
+        throw new ExitStateSignal();
 
       // ── Quote operations ──────────────────────────────────────────────────
       case 'qputs': {

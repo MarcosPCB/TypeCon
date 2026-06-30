@@ -1,5 +1,5 @@
 import { CallExpression, Expression, SyntaxKind, StringLiteral } from "ts-morph";
-import { CompilerContext, ESymbolType, SymbolDefinition, EnumDefinition, SegmentProperty, SegmentIdentifier, SegmentIndex } from "../Compiler";
+import { CompilerContext, ESymbolType, SymbolDefinition, EnumDefinition, SegmentProperty, SegmentIdentifier, SegmentIndex, EHeapType } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
 import { findNativeFunction } from "../helper/helpers";
 import { CON_NATIVE_FLAGS } from "../../../sets/TCSet100/native";
@@ -329,6 +329,101 @@ set rb ra
       code += `state pushr1\nset r0 ra\nstate _convertString2Quote\nstate popr1\n${reg != 'rb' ? `set ${reg} rb\n` : ''}`
       return code;
     }
+  }
+
+  // ── Object namespace ─────────────────────────────────────────────────────
+  if (fnObj === 'Object') {
+    const resolveObjSym = (argIdx: number): SymbolDefinition | null => {
+      const argExpr = args[argIdx] as Expression;
+      if (!argExpr.isKind(SyntaxKind.Identifier)) return null;
+      const name = argExpr.getText();
+      return (context.symbolTable.get(name) ?? context.paramMap[name]) as SymbolDefinition ?? null;
+    };
+
+    if (fnNameRaw === 'assign') {
+      if (args.length !== 2) { addDiagnostic(call, context, 'error', 'Object.assign requires exactly 2 arguments'); return ''; }
+      const dstSym = resolveObjSym(0);
+      const srcSym = resolveObjSym(1);
+      if (!dstSym || !srcSym || !dstSym.class_name) {
+        addDiagnostic(call, context, 'error', 'Object.assign: arguments must be identifiers pointing to class instances (use new ClassName())');
+        return '';
+      }
+      const classSym = context.symbolTable.get(dstSym.class_name) as SymbolDefinition;
+      if (!classSym?.children) { addDiagnostic(call, context, 'error', `Object.assign: cannot find class ${dstSym.class_name}`); return ''; }
+      const size = Object.values(classSym.children).filter(c => typeof (c as SymbolDefinition).offset === 'number')
+        .reduce((acc, c) => acc + ((c as SymbolDefinition).size ?? 1), 0);
+      // Load dst heap ptr into ri, src heap ptr into rsi
+      code += `set ri rbp\nadd ri ${dstSym.offset}\nset ri flat[ri]\n`;
+      code += `set rsi rbp\nadd rsi ${srcSym.offset}\nset rsi flat[rsi]\n`;
+      code += `copy flat[rsi] flat[ri] ${size}\n`;
+      code += `set rb ri\n`;
+      context.curExpr = ESymbolType.object;
+      return code;
+    }
+
+    if (fnNameRaw === 'keys') {
+      if (args.length !== 1) { addDiagnostic(call, context, 'error', 'Object.keys requires exactly 1 argument'); return ''; }
+      const objSym = resolveObjSym(0);
+      if (!objSym) { addDiagnostic(call, context, 'error', 'Object.keys: argument must be a simple identifier'); return ''; }
+      const classSym = objSym.class_name
+        ? context.symbolTable.get(objSym.class_name) as SymbolDefinition
+        : (objSym.children ? objSym : null);
+      if (!classSym?.children) { addDiagnostic(call, context, 'error', 'Object.keys: cannot resolve struct type'); return ''; }
+      const fields = Object.keys(classSym.children)
+        .filter(k => typeof (classSym.children[k] as SymbolDefinition).offset === 'number')
+        .sort((a, b) => (classSym.children[a] as SymbolDefinition).offset - (classSym.children[b] as SymbolDefinition).offset);
+      const count = fields.length;
+      code += `state pushr2\nset r0 ${count + 1}\nset r1 ${EHeapType.array}\nstate alloc\nstate popr2\n`;
+      code += `setarray flat[rb] ${count}\n`;
+      for (let i = 0; i < fields.length; i++) {
+        const name = fields[i];
+        code += `add rsp 1\nsetarray flat[rsp] rb\n`;
+        code += `state pushr2\nset r0 ${name.length + 1}\nset r1 ${EHeapType.string}\nstate alloc\nstate popr2\n`;
+        code += `setarray flat[rb] ${name.length}\nset ri rb\n`;
+        for (let j = 0; j < name.length; j++) code += `add ri 1\nsetarray flat[ri] ${name.charCodeAt(j)}\n`;
+        code += `set ra rb\nset rb flat[rsp]\nsub rsp 1\n`;
+        code += `set ri rb\nadd ri ${i + 1}\nsetarray flat[ri] ra\n`;
+      }
+      code += `set ra rb\n`;
+      context.curExpr = ESymbolType.array;
+      return code;
+    }
+
+    if (fnNameRaw === 'values') {
+      if (args.length !== 1) { addDiagnostic(call, context, 'error', 'Object.values requires exactly 1 argument'); return ''; }
+      const objSym = resolveObjSym(0);
+      if (!objSym || !objSym.class_name) {
+        addDiagnostic(call, context, 'error', 'Object.values: argument must be an identifier pointing to a class instance');
+        return '';
+      }
+      const classSym = context.symbolTable.get(objSym.class_name) as SymbolDefinition;
+      if (!classSym?.children) { addDiagnostic(call, context, 'error', `Object.values: cannot find class ${objSym.class_name}`); return ''; }
+      const fields = Object.keys(classSym.children)
+        .filter(k => typeof (classSym.children[k] as SymbolDefinition).offset === 'number')
+        .sort((a, b) => (classSym.children[a] as SymbolDefinition).offset - (classSym.children[b] as SymbolDefinition).offset);
+      const count = fields.length;
+      // Load obj heap ptr
+      code += `set ri rbp\nadd ri ${objSym.offset}\nset ri flat[ri]\n`;
+      code += `add rsp 1\nsetarray flat[rsp] ri\n`; // save obj_ptr
+      code += `state pushr2\nset r0 ${count + 1}\nset r1 ${EHeapType.array}\nstate alloc\nstate popr2\n`;
+      code += `setarray flat[rb] ${count}\n`;
+      code += `add rsp 1\nsetarray flat[rsp] rb\n`; // save array_ptr
+      for (let i = 0; i < fields.length; i++) {
+        const fieldSym = classSym.children[fields[i]] as SymbolDefinition;
+        code += `set rsi rsp\nsub rsi 1\nset rsi flat[rsi]\n`; // rsi = obj_ptr
+        if (fieldSym.offset !== 0) code += `add rsi ${fieldSym.offset}\n`;
+        code += `set ri flat[rsp]\nadd ri ${i + 1}\n`; // ri = &arr[i]
+        code += `setarray flat[ri] flat[rsi]\n`;
+      }
+      code += `set rb flat[rsp]\nsub rsp 1\n`; // rb = array_ptr
+      code += `sub rsp 1\n`; // pop obj_ptr
+      code += `set ra rb\n`;
+      context.curExpr = ESymbolType.array;
+      return code;
+    }
+
+    addDiagnostic(call, context, 'error', `Unknown Object method: Object.${fnNameRaw}`);
+    return '';
   }
 
   let variable = context.paramMap[fnObj];

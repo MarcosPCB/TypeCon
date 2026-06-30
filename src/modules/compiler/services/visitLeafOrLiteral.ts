@@ -233,6 +233,8 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
 
     code += `state popr10\n`;
 
+    context.curExpr = ESymbolType.array;  // re-assert: inner visitExpression calls reset curExpr
+
     return code;
   }
 
@@ -256,6 +258,54 @@ export function visitLeafOrLiteral(expr: Expression, context: CompilerContext, d
 
   if (expr.isKind(SyntaxKind.NewExpression)) {
     const className = expr.getExpression().getText();
+
+    if (className === 'Array') {
+      context.curExpr |= ESymbolType.array;
+      const ctorArgs = expr.getArguments();
+
+      if (ctorArgs.length === 0) {
+        // new Array() — empty array, same as []
+        code += `state pushr2\nset r0 ${pageSize}\nset r1 ${EHeapType.array}\nstate alloc\nstate popr2\n`;
+        code += `setarray flat[rb] 0\n`;
+        if (reg !== 'rb') code += `set ${reg} rb\n`;
+        return code;
+      }
+
+      if (ctorArgs.length === 1) {
+        // new Array(n) — allocate n slots, length header = n
+        code += visitExpression(ctorArgs[0] as Expression, context);
+        code += `add rsp 1\nsetarray flat[rsp] ra\n`;
+        code += `state pushr3\nset r0 ra\nadd r0 1\nset r1 ${EHeapType.array}\nstate alloc\nstate popr3\n`;
+        code += `set ra flat[rsp]\nsub rsp 1\n`;
+        code += `setarray flat[rb] ra\n`;
+        if (reg !== 'rb') code += `set ${reg} rb\n`;
+        context.curExpr = ESymbolType.array;
+        return code;
+      }
+
+      // new Array(a, b, c, ...) — delegate to array-literal path
+      // Build as if it were an ArrayLiteralExpression
+      code += `state pushr10\nset r10 0\n`;
+      ctorArgs.forEach((a) => {
+        code += visitExpression(a as Expression, context);
+        code += `add rsp 1\nsetarray flat[rsp] ra\n`;
+        code += `add r10 1\n`;
+      });
+      code += `state pushr2\nset r0 r10\nset r1 ${EHeapType.array}\nstate alloc\nstate popr2\n`;
+      code += `setarray flat[rb] r10\n`;
+      code += `set ri rb\nadd ri r10\n`;
+      for (let i = ctorArgs.length - 1; i >= 0; i--) {
+        code += `set ra flat[rsp]\nsub rsp 1\n`;
+        code += `setarray flat[ri] ra\n`;
+        code += `sub ri 1\n`;
+      }
+      code += `set ra rb\n`;
+      if (reg !== 'ra') code += `set ${reg} ra\n`;
+      code += `state popr10\n`;
+      context.curExpr = ESymbolType.array;
+      return code;
+    }
+
     const sym = context.symbolTable.get(className);
 
     if (!sym) {

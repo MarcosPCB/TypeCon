@@ -4180,3 +4180,11 @@ declare global {
     /** Shorthand for `players[THISACTOR]` — the player connected to the current actor. Only meaningful inside a `CActor`. */
     export const player: CPlayer;
 }
+
+// TypeCON padStart/padEnd take a numeric char code for fill, not a string.
+// Add overloads so TypeScript accepts number as the fill argument.
+interface String {
+    padStart(targetLength: number, padCode?: number): string;
+    padEnd(targetLength: number, padCode?: number): string;
+}
+

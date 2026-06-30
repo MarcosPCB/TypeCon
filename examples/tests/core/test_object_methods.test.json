@@ -1,0 +1,11 @@
+{
+    "name": "Core Object Methods Test",
+    "source": ["test_object_methods.ts"],
+    "tests": [
+        {
+            "name": "Object.assign, Object.values, Object.keys",
+            "runEvent": "EVENT_INITCOMPLETE",
+            "noInit": true
+        }
+    ]
+}

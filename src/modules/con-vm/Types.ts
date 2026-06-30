@@ -43,8 +43,11 @@ export type Statement =
   | { op: 'getactorvar'; index: Operand; field: string; dst: Operand }
   | { op: 'setactorvar'; index: Operand; field: string; src: Operand }
   | { op: 'for_allsprites'; loopVar: string; body: Statement[] }
+  | { op: 'for_range'; loopVar: string; count: Operand; body: Statement[] }
   | { op: 'ifhitweapon'; body: Statement[]; elseBody?: Statement[] }
   | { op: 'readarrayfromfile' | 'writearraytofile'; arr: string; quote: Operand }
   | { op: 'defstate'; name: string; body: Statement[] }
   | { op: 'marker'; name: string }
+  | { op: 'getcurraddress'; dst: Operand }
+  | { op: 'jump'; target: Operand }
   | { op: 'nullop' | 'noop' };

@@ -1,0 +1,11 @@
+{
+    "name": "Core String Methods Test",
+    "source": ["test_string_methods.ts"],
+    "tests": [
+        {
+            "name": "charCodeAt/at/indexOf/startsWith/endsWith/toUpperCase/toLowerCase/trim/repeat/pad",
+            "runEvent": "EVENT_INITCOMPLETE",
+            "noInit": true
+        }
+    ]
+}

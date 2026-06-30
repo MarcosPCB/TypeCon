@@ -1,0 +1,11 @@
+{
+    "name": "Array Methods Test",
+    "source": ["test_array_methods.ts"],
+    "tests": [
+        {
+            "name": "Array methods: indexOf, includes, at, fill, reverse, concat, map, filter, find, findIndex, some, every, reduce, splice, new Array()",
+            "runEvent": "EVENT_INITCOMPLETE",
+            "noInit": true
+        }
+    ]
+}
