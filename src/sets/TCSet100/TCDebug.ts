@@ -161,19 +161,32 @@ whilel rc r4 {
             ',"r6":' + sysFrame.r6;
 
         sysFrame.r0 = sysFrame.r1 = sysFrame.r2 = sysFrame.r3 = 0;
-        CONUnsafe(`set r0 r7\nset r1 r8\nset r2 r9\nset r3 r10`);
+        CONUnsafe(`set r0 r7
+            set r1 r8
+            set r2 r9
+            set r3 r10`);
         json = json + ',"r7":' + sysFrame.r0 + ',"r8":' + sysFrame.r1 + ',"r9":' + sysFrame.r2 + ',"r10":' + sysFrame.r3;
 
         sysFrame.r0 = sysFrame.r1 = sysFrame.r2 = sysFrame.r3 = 0;
-        CONUnsafe(`set r0 r11\nset r1 r12\nset r2 r13\nset r3 r14`);
+        CONUnsafe(`set r0 r11
+            set r1 r12
+            set r2 r13
+            set r3 r14`);
         json = json + ',"r11":' + sysFrame.r0 + ',"r12":' + sysFrame.r1 + ',"r13":' + sysFrame.r2 + ',"r14":' + sysFrame.r3;
 
         sysFrame.r0 = sysFrame.r1 = sysFrame.r2 = sysFrame.r3 = 0;
-        CONUnsafe(`set r0 r15\nset r1 r16\nset r2 r17\nset r3 r18`);
+        CONUnsafe(`set r0 r15
+            set r1 r16
+            set r2 r17
+            set r3 r18`);
         json = json + ',"r15":' + sysFrame.r0 + ',"r16":' + sysFrame.r1 + ',"r17":' + sysFrame.r2 + ',"r18":' + sysFrame.r3;
 
         sysFrame.r0 = sysFrame.r1 = sysFrame.r2 = sysFrame.r3 = sysFrame.r4 = 0;
-        CONUnsafe(`set r0 r19\nset r1 r20\nset r2 r21\nset r3 r22\nset r4 r23`);
+        CONUnsafe(`set r0 r19
+            set r1 r20
+            set r2 r21
+            set r3 r22
+            set r4 r23`);
         json = json + ',"r19":' + sysFrame.r0 + ',"r20":' + sysFrame.r1 + ',"r21":' + sysFrame.r2 + ',"r22":' + sysFrame.r3 + ',"r23":' + sysFrame.r4;
 
         json = json + ',"ra":' + sysFrame.ra + ',"rb":' + sysFrame.rb + ',"rc":' + sysFrame.rc +
@@ -182,15 +195,22 @@ whilel rc r4 {
             ',"rds":' + sysFrame.rds;
 
         sysFrame.r0 = sysFrame.r1 = sysFrame.r2 = sysFrame.r3 = 0;
-        CONUnsafe(`set r0 rbbp\nset r1 rssp\nset r2 rsw\nset r3 rswc`);
+        CONUnsafe(`set r0 rbbp
+            set r1 rssp
+            set r2 rsw
+            set r3 rswc`);
         json = json + ',"rbbp":' + sysFrame.r0 + ',"rssp":' + sysFrame.r1 + ',"rsw":' + sysFrame.r2 + ',"rswc":' + sysFrame.r3;
 
         sysFrame.r0 = sysFrame.r1 = sysFrame.r2 = sysFrame.r3 = 0;
-        CONUnsafe(`set r0 rfx0\nset r1 rfx1\nset r2 rfx2\nset r3 rfx3`);
+        CONUnsafe(`set r0 rfx0
+            set r1 rfx1
+            set r2 rfx2
+            set r3 rfx3`);
         json = json + ',"rfx0":' + sysFrame.r0 + ',"rfx1":' + sysFrame.r1 + ',"rfx2":' + sysFrame.r2 + ',"rfx3":' + sysFrame.r3;
 
         sysFrame.r0 = sysFrame.r1 = 0;
-        CONUnsafe(`set r0 heaptables\nset r1 heapsize`);
+        CONUnsafe(`set r0 heaptables
+            set r1 heapsize`);
         json = json + ',"heaptables":' + sysFrame.r0 + ',"heapsize":' + sysFrame.r1 + ',"PAGE_SIZE":4}';
 
         json = json + ',"actorFields":{}';
