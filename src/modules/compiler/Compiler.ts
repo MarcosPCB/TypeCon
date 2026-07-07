@@ -108,6 +108,7 @@ export interface SymbolDefinition {
   size?: number;         // How many slots this symbol occupies.
   num_elements?: number;
   heap?: boolean,
+  astNode?: any,        // ClassDeclaration — stored so derived classes can re-run parent event handlers
   global?: boolean,
   readonly?: boolean,
   native_pointer?: 'sprites' | 'sectors' | 'walls' | 'players' | 'projectiles',
@@ -117,6 +118,7 @@ export interface SymbolDefinition {
 
   children?: { [key: string]: SymbolDefinition | EnumDefinition }; // For nested objects or enums.
   CON_code?: string,
+  nativeAlias?: boolean,  // True for CON_FUNC_ALIAS props — callable via this.Method() → plain native dispatch
   returns?: Exclude<ESymbolType, ESymbolType.enum> | null;
   literal?: string | number | null; //Can hold the sub function address
   isLabel?: boolean;               // True for GameLabel / Sound — emit symbol name instead of literal in CONSTANT positions
@@ -187,6 +189,9 @@ export interface CompilerContext {
 
   // For event classes if needed
   currentEventName?: string;
+
+  // Set when compiling a derived plain class — the name of the parent class being extended
+  currentParentClass?: string;
 
   // New field to store type aliases:
   typeAliases: Map<string, TypeAliasDefinition>;

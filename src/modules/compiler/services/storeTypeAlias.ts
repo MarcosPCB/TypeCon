@@ -31,7 +31,9 @@ export function storeTypeAlias(ta: TypeAliasDeclaration, context: CompilerContex
     typeLiteral.getMembers().forEach((member: any) => {
       if (member.getKind() === SyntaxKind.PropertySignature) {
         const prop = member;
-        members[prop.getName()] = prop.getType().getText();
+        // Use declared type text to preserve aliases like FP16, FP14, constant, pointer.
+        // Fall back to resolved type text only when no explicit annotation is present.
+        members[prop.getName()] = prop.getTypeNode()?.getText() ?? prop.getType().getText();
       }
     });
     context.typeAliases.set(aliasName, { name: aliasName, members });

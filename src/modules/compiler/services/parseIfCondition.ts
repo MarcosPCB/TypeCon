@@ -32,6 +32,10 @@ export function parseIfCondition(expr: Expression, context: CompilerContext): If
         const r = evaluateLiteralExpression(bin.getRight(), context);
         return { op: mapping[op], left: typeof l !== 'undefined' ? Number(l) : bin.getLeft(), right: typeof r !== 'undefined' ? Number(r) : bin.getRight() };
       }
+      if (op === "&" || op === "|") {
+        // Evaluate the whole bitwise expression into rd, then test != 0
+        return { op: "ifn", left: expr, right: 0 };
+      }
       addDiagnostic(expr, context, "error", `if condition must be (A&&B), (A||B), a comparison, or a function call. Found operator "${op}"`);
       return undefined;
     }

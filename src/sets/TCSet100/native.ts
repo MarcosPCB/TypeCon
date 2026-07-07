@@ -4020,7 +4020,7 @@ export const nativeVars_Players: CON_NATIVE_VAR[] = [
                 init: 0
             },
             {
-                name: 'subOrNot',
+                name: 'bSubWeapon',
                 var_type: CON_NATIVE_TYPE.array,
                 type: CON_NATIVE_FLAGS.ARRAY,
                 readonly: false,

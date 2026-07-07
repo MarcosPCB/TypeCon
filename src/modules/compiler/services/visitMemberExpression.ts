@@ -285,6 +285,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
       if (sym.type & ESymbolType.constant)
         code = `set ${reg} ${sym.literal}\n`;
 
+      context.curFpBits = (sym as SymbolDefinition).fp_bits ?? 0;
       return code;
     }
   }
@@ -427,7 +428,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
         if (seg.kind == 'property') {
           // this.argument inside a CEvent body → the EDuke32 RETURN gamevar
-          if (obj.kind == 'this' && seg.name == 'argument' && context.currentEventName && !context.curClass)
+          if (obj.kind == 'this' && seg.name == 'argument' && context.currentEventName)
             return code + (assignment ? `set RETURN ${reg}\n` : `set ${reg} RETURN\n`);
 
           if (obj.kind == 'this' && (context.curClass || context.symbolTable.has(seg.name))) {
@@ -536,6 +537,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
             if (pSym.type & ESymbolType.constant)
               return `set ${reg} ${pSym.literal}\n`;
 
+            context.curFpBits = pSym.fp_bits ?? 0;
             return code + (assignment ? `setarray flat[ri] ${reg}\n` : `set ${reg} flat[ri]\n`);
           }
 

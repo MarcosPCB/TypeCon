@@ -1,4 +1,5 @@
-import { CallExpression, Expression, SyntaxKind, StringLiteral } from "ts-morph";
+import { CallExpression, Expression, SyntaxKind, StringLiteral, ArrayLiteralExpression, ObjectLiteralExpression, PropertyAssignment, Identifier, VariableDeclaration } from "ts-morph";
+import { visitStatement } from "./visitStatement";
 import { CompilerContext, ESymbolType, SymbolDefinition, EnumDefinition, SegmentProperty, SegmentIdentifier, SegmentIndex, EHeapType } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
 import { findNativeFunction } from "../helper/helpers";
@@ -314,6 +315,106 @@ set rb ra
     return code;
   }
 
+  // FastSwitch — compiles to CON native switch/case/break/endswitch
+  // range/exclude props are expanded into individual case labels at compile time
+  if (fnNameRaw === 'FastSwitch' && !fnObj) {
+    if (args.length !== 2) {
+      addDiagnostic(call, context, 'error', 'FastSwitch requires exactly 2 arguments: (cases, index)');
+      return '';
+    }
+    const casesArg = args[0];
+    const indexArg = args[1] as Expression;
+    let casesArrayExpr: ArrayLiteralExpression | undefined;
+    if (casesArg.isKind(SyntaxKind.ArrayLiteralExpression)) {
+      casesArrayExpr = casesArg as ArrayLiteralExpression;
+    } else if (casesArg.isKind(SyntaxKind.Identifier)) {
+      const sym = (casesArg as Identifier).getSymbol();
+      const decl = sym?.getDeclarations()[0];
+      if (decl?.isKind(SyntaxKind.VariableDeclaration)) {
+        const varInit = (decl as VariableDeclaration).getInitializer();
+        if (varInit?.isKind(SyntaxKind.ArrayLiteralExpression)) {
+          casesArrayExpr = varInit as ArrayLiteralExpression;
+        }
+      }
+    }
+    if (!casesArrayExpr) {
+      addDiagnostic(call, context, 'error', 'FastSwitch: first argument must be an array literal or a local variable initialized to one');
+      return '';
+    }
+    code += visitExpression(indexArg, context, 'ra');
+    code += `switch ra\n`;
+    const resolveConst = (expr: Expression): number | null => {
+      const lit = expr.getType().getLiteralValue();
+      if (lit !== undefined) return Number(lit);
+      const n = Number(expr.getText());
+      if (!isNaN(n)) return n;
+      return null;
+    };
+    for (const caseExpr of casesArrayExpr.getElements()) {
+      if (!caseExpr.isKind(SyntaxKind.ObjectLiteralExpression)) continue;
+      const props: Record<string, any> = {};
+      for (const pp of (caseExpr as ObjectLiteralExpression).getProperties()) {
+        if (pp.isKind(SyntaxKind.PropertyAssignment))
+          props[(pp as PropertyAssignment).getName()] = (pp as PropertyAssignment).getInitializer();
+      }
+      if (!props.code) {
+        addDiagnostic(call, context, 'error', 'FastSwitch: each case must have a code property');
+        continue;
+      }
+      const caseValues: number[] = [];
+      if (props.values) {
+        for (const v of (props.values as ArrayLiteralExpression).getElements()) {
+          const val = resolveConst(v as Expression);
+          if (val === null) {
+            addDiagnostic(call, context, 'error', `FastSwitch: value must be a compile-time constant: ${(v as Expression).getText()}`);
+            continue;
+          }
+          caseValues.push(val);
+        }
+      }
+      if (props.range && props.range.isKind(SyntaxKind.ObjectLiteralExpression)) {
+        const rangeObj = props.range as ObjectLiteralExpression;
+        let startVal: number | null = null;
+        let endVal: number | null = null;
+        for (const rp of rangeObj.getProperties()) {
+          if (!rp.isKind(SyntaxKind.PropertyAssignment)) continue;
+          const pa = rp as PropertyAssignment;
+          const val = resolveConst(pa.getInitializer() as Expression);
+          if (pa.getName() === 'start') startVal = val;
+          else if (pa.getName() === 'end') endVal = val;
+        }
+        if (startVal === null || endVal === null) {
+          addDiagnostic(call, context, 'error', 'FastSwitch: range must have start and end with constant values');
+          continue;
+        }
+        const excluded = new Set<number>();
+        if (props.exclude) {
+          for (const excl of (props.exclude as ArrayLiteralExpression).getElements()) {
+            const ev = resolveConst(excl as Expression);
+            if (ev !== null) excluded.add(ev);
+          }
+        }
+        for (let i = startVal; i <= endVal; i++) {
+          if (!excluded.has(i)) caseValues.push(i);
+        }
+      }
+      for (const v of caseValues) code += `  case ${v}:\n`;
+      const codeBody = (props.code as any).getBody?.();
+      if (codeBody) {
+        const stmts: any[] = codeBody.getStatements?.() ?? [];
+        for (const s of stmts) {
+          const stmtCode = visitStatement(s, context);
+          for (const line of stmtCode.split('\n')) {
+            if (line.trim()) code += `    ${line}\n`;
+          }
+        }
+      }
+      code += `  break\n`;
+    }
+    code += `endswitch\n`;
+    return code;
+  }
+
   if (fnNameRaw == 'Quote' && !fnObj) {
     context.curExpr = ESymbolType.quote;
     if (args[0].isKind(SyntaxKind.StringLiteral)) {
@@ -441,6 +542,12 @@ set rb ra
       typeName = 'quote';
     else if (variable.type & ESymbolType.string)
       typeName = 'string';
+  }
+
+  // CON_FUNC_ALIAS: this.Method() where Method is a native alias — dispatch as plain native
+  if (isThisDirectCall && (context.curClass?.children?.[fnNameRaw] as SymbolDefinition)?.nativeAlias) {
+    fnObj = undefined;
+    isThisDirectCall = false;
   }
 
   const nativeFn = findNativeFunction(fnNameRaw, fnObj, typeName);

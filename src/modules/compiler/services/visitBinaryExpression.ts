@@ -242,7 +242,7 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
     }
   }
 
-  if (typeof valD === 'undefined')
+  if (typeof valD === 'undefined' || typeof valD === 'object')
     code += visitExpression(right, context);
 
   // Restore rd from the spill slot after right-side evaluation.
@@ -289,7 +289,7 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
   const litText = right.isKind(SyntaxKind.NumericLiteral) ? right.getText() : null;
   const litIsFloat = litText !== null && litText.includes('.');
   let rhs: string;
-  if (typeof valD !== 'undefined') {
+  if (typeof valD !== 'undefined' && typeof valD !== 'object') {
     const n = Number(valD);
     rhs = (litIsFloat && leftFpBits > 0) ? String(Math.round(n * (1 << leftFpBits))) : String(n);
   } else {
@@ -383,6 +383,10 @@ export function visitBinaryExpression(bin: BinaryExpression, context: CompilerCo
       break;
     case "||":
       code += `set rb 0\nifeither rd ${rhs}\n  set rb 1\n`;
+      break;
+    case "??":
+      // Nullish coalescing: return left if non-zero, otherwise right
+      code += `set rb rd\nife rd 0 {\n  set rb ${rhs}\n}\n`;
       break;
     default:
       addDiagnostic(bin, context, "error", `Unhandled operator "${opText}"`);

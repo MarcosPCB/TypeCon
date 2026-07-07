@@ -22,6 +22,9 @@ export function visitUnaryExpression(expr: Expression, context: CompilerContext,
       case SyntaxKind.MinusToken:
         code += `inv ${reg}\n`;
         break;
+      case SyntaxKind.TildeToken:
+        code += `xor ${reg} -1\n`;
+        break;
       case SyntaxKind.ExclamationToken:
         //addDiagnostic(expr, context, "error", `"!" not allowed in normal expressions (only if patterns)`);
         code += `ifge ${reg} 1\n  set ${reg} 0\nelse ifle ${reg} 0\n  set ${reg} 1\n`

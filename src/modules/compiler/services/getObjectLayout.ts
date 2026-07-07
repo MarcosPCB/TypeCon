@@ -2,6 +2,8 @@ import { CompilerContext, SymbolDefinition } from "../Compiler";
 import { getObjectSize } from "./getObjectSize";
 import { getSymbolType } from "./getSymbolType";
 
+const FP_BITS: Record<string, 11 | 14 | 16 | 30> = { FP11: 11, FP14: 14, FP16: 16, FP30: 30 };
+
 export function getObjectTypeLayout(typeName: string, context: CompilerContext): { [key: string]: SymbolDefinition } {
     if (context.typeAliases.has(typeName)) {
       const typeDef = context.typeAliases.get(typeName)!;
@@ -26,6 +28,7 @@ export function getObjectTypeLayout(typeName: string, context: CompilerContext):
               offset: i,
               size: getObjectSize(baseType, context),
               num_elements: Object.keys(children).length,
+              fp_bits: FP_BITS[baseType],
               children
             };
           } else {
@@ -35,6 +38,7 @@ export function getObjectTypeLayout(typeName: string, context: CompilerContext):
               type: getSymbolType(t, context),
               offset: i,
               size: 1,
+              fp_bits: FP_BITS[baseType],
               children
             };
           }
@@ -49,6 +53,7 @@ export function getObjectTypeLayout(typeName: string, context: CompilerContext):
             offset: i,
             size: context.typeAliases.has(t) ? getObjectSize(t, context) : 1,
             num_elements: context.typeAliases.has(t) ? Object.keys(children).length : 1,
+            fp_bits: FP_BITS[t],
             CON_code: code,
             children
           };

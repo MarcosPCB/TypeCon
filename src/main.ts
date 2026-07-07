@@ -1093,7 +1093,7 @@ async function Main() {
                 } else {
                     const outPath = path.join(objFolder, path.basename(f, '.ts') + '.tco');
                     console.log(`Writing ${outPath}`);
-                    fs.writeFileSync(outPath, JSON.stringify(result.module, (k, v) => k === 'parent' ? undefined : v, 2));
+                    fs.writeFileSync(outPath, JSON.stringify(result.module, (k, v) => (k === 'parent' || k === 'astNode') ? undefined : v, 2));
                 }
             } else {
                 console.log(colorText(`Failed to compile module ${f}`, 'red'));

@@ -721,6 +721,17 @@ declare global {
     }
 
     /**
+     * 2D vector type
+     * @type vec2
+     * @property {number} x - X position
+     * @property {number} y - Y position
+     */
+    export type vec2f = {
+        x: FP16,
+        y: FP16
+    }
+
+    /**
      * 3D vector type
      * @type vec3
      * @property {number} x - X position
@@ -747,6 +758,19 @@ declare global {
     }
 
     /**
+     * 2D Positioning type with angle and scaling
+     * @type pos2f
+     * @property {vec2f} xy - 2D vector for positioning
+     * @property {FP16} scale - Scaling factor (for screen drawing 65536 is the regular size)
+     * @property {FP11} ang - Angle (0 to 2048)
+     */
+    export type pos2f = {
+        xy: vec2f,
+        scale: FP16,
+        ang: FP11
+    }
+
+    /**
      * 3D Positioning type with angle and scaling
      * @type pos3
      * @property {vec3} xyz - 3D vector for positioning
@@ -767,7 +791,7 @@ declare global {
     export type TStyle = {
         shade: number,
         pal: number,
-        orientation: EOrientationFlags
+        orientation: EOrientationFlags | number
     }
 
     /**
@@ -2212,9 +2236,9 @@ declare global {
 
     export type TEvents = TEventPAE | TEventDE | TEventIE | TEventWE | TEventPIE | TEventME;
 
-    export type OnEvent = Partial<{
+    export type OnEvent<T = {}> = Partial<{
         [E in TEvents]: (
-            this: CEvent<E> & CActor
+            this: CEvent<E> & CActor & T
         ) => void | number;
     }>;
 
@@ -3281,17 +3305,17 @@ declare global {
     /**
      * Fast switch allows to write a faster switch operation
      * @param cases An array of {@link IFastSwitch} containing clauses
+     * @param index The index to switch on
      */
-    export function FastSwitch(cases: IFastSwitch[]);
+    export function FastSwitch(cases: IFastSwitch[], index: number);
 
     export interface IPlayerWeapon {
         ammoAmount: CON_NATIVE<number[]>;
         gotWeapon: CON_NATIVE<number[]>;
         maxAmmoAmount: CON_NATIVE<number[]>;
-        subOrNot: CON_NATIVE<number[]>
         currWeapon: CON_NATIVE<number>;
         weaponAnim: CON_NATIVE<number>;
-        bSubWeapon: CON_NATIVE<number>;
+        bSubWeapon: CON_NATIVE<number[]>;
         hbombHoldDelay: CON_NATIVE<number>;
         hbombOn: CON_NATIVE<number>;
         holsterWeapon: CON_NATIVE<number>;

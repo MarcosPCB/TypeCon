@@ -61,6 +61,18 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
     localCtx.currentEventName = 'PROCESSINPUT';
   }
 
+  // Detect inheritance from another user-defined plain class
+  let parentClassName: string | undefined;
+  const BUILTIN_TYPES = new Set(['CActor', 'CPlayer', 'CProjectile', 'CEvent', 'CInput', 'CGame', 'CVolume']);
+  if (type !== '' && !BUILTIN_TYPES.has(type)) {
+    const maybeSym = context.symbolTable.get(type) as SymbolDefinition | undefined;
+    if (maybeSym && (maybeSym.type & ESymbolType.class)) {
+      parentClassName = type;
+      type = '';
+      context.currentParentClass = parentClassName;
+    }
+  }
+
   let cls: SymbolDefinition;
 
   if (type == '') {
@@ -70,14 +82,19 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
       return '';
     }
 
+    const parentSymDef = parentClassName
+      ? (context.symbolTable.get(parentClassName) as SymbolDefinition)
+      : undefined;
+
     context.symbolTable.set(className, {
       name: className,
       type: ESymbolType.class,
       offset: 0,
-      num_elements: 0,
+      num_elements: parentSymDef?.num_elements ?? 0,
       size: 0,
       heap: true,
-      children: {}
+      children: parentSymDef ? { ...parentSymDef.children } : {},
+      astNode: cd,
     });
 
     cls = context.symbolTable.get(className) as SymbolDefinition;
@@ -178,10 +195,35 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
     });
   }
 
+  // Pre-register all method names before processing properties so that self-referential
+  // calls within Events handlers (e.g. this.OnDraw() inside DrawWeapon) resolve correctly.
+  if (type == '') {
+    context.curClass = cls;
+    const methodsForPreReg = cd.getInstanceMethods();
+    for (const m of methodsForPreReg) {
+      const mName = m.getName();
+      const retText = m.getReturnTypeNode()?.getText();
+      const retClassSym = retText ? context.symbolTable.get(retText) as SymbolDefinition : undefined;
+      const retIsClass = retClassSym && (retClassSym.type & ESymbolType.class);
+      context.symbolTable.set(mName, {
+        name: `${className}_${mName}`,
+        type: ESymbolType.function,
+        offset: 0,
+        parentClass: className,
+        returns: retIsClass ? ESymbolType.class : (retText && retText !== 'void' ? ESymbolType.number : undefined),
+      });
+      cls.children[mName] = context.symbolTable.get(mName) as SymbolDefinition;
+    }
+  }
+
   // visit properties
   const properties = cd.getProperties();
   let codeV = '';
   let hasLabels = false;
+  let hasOnEvent = false;
+  let globalPtrName: string | undefined;
+  let ptrAddr: string | undefined;
+  let eventCode = '';
 
   for (const p of properties) {
     if (p.getTypeNode().getText().match(/\b(TAction|IAction|TMove|IMove|TAi|IAi)\b/)) {
@@ -208,14 +250,34 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
       parseVarForActionsMovesAi(p, localCtx, className);
     }
 
-    if (p.getTypeNode().getText() == 'OnEvent') {
+    if (/^OnEvent(<.*>)?$/.test(p.getTypeNode().getText())) {
       const init = p.getInitializerOrThrow();
 
       if (init.isKind(SyntaxKind.ObjectLiteralExpression)) {
         const events = init.getProperties();
 
+        hasOnEvent = true;
+        if (type === '' && !globalPtrName) {
+          globalPtrName = `_g_${className}_ptr`;
+          if (!context.symbolTable.has(globalPtrName)) {
+            localCtx.globalVarCount++;
+            context.symbolTable.set(globalPtrName, {
+              name: globalPtrName,
+              offset: localCtx.globalVarCount - 1,
+              global: true,
+              type: ESymbolType.number
+            });
+            context.globalAllocations.push({ name: globalPtrName, size: 1 });
+          }
+          ptrAddr = context.options.mode === 'module'
+            ? `_G_ADDR_${globalPtrName}`
+            : String(localCtx.globalVarCount - 1);
+        }
+
         for (const e of events) {
-          if (!e.isKind(SyntaxKind.MethodDeclaration)) {
+          const isArrow = e.isKind(SyntaxKind.PropertyAssignment) &&
+            (e as any).getInitializer?.()?.isKind(SyntaxKind.ArrowFunction);
+          if (!e.isKind(SyntaxKind.MethodDeclaration) && !isArrow) {
             addDiagnostic(e, context, 'error', `OnEvent property must only contain functions: ${p.getText()}`);
             return '';
           }
@@ -231,25 +293,47 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
             ...localCtx,
             localVarOffset: {},
             localVarCount: 0,
-            paramMap: {}
+            paramMap: {},
+            curClass: type === '' ? cls : localCtx.curClass,
+            currentEventName: eFnName.toUpperCase(),
           };
 
-          code += `${context.options.lineDetail ? formatLineDetail(e.getText(), '\n') : ''}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n  ifactor ${localCtx.currentActorPicnum} {\n`;
-          const body = e.getBody() as any;
+          const isPlainClass = type === '';
+          const lineDetail = context.options.lineDetail ? formatLineDetail(e.getText(), '\n') : '';
+
+          let evtCode = `${lineDetail}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+          evtCode += isPlainClass
+            ? `  set ra flat[${ptrAddr}]\n  setarray flat[rbp] ra\n  add rsp 1\n`
+            : `  ifactor ${localCtx.currentActorPicnum} {\n`;
+
+          // Support both method shorthand (Game() {}) and arrow property (Game: () => {})
+          const body = (isArrow ? (e as any).getInitializer().getBody() : (e as any).getBody()) as any;
           if (body) {
             const stmts = body.getStatements() as Statement[];
-
             stmts.forEach(s => {
-              code += visitStatement(s, evntLocalCtx);
+              evtCode += visitStatement(s, evntLocalCtx);
             });
           }
 
-          code += `  }\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nendevent \n\n`;
+          evtCode += isPlainClass
+            ? `  sub rsp 1\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nendevent \n\n`
+            : `  }\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nendevent \n\n`;
+
+          if (isPlainClass) eventCode += evtCode;
+          else code += evtCode;
         }
       }
     } else if (type == '') {
       const pName = p.getName();
       const pType = p.getTypeNode().getText();
+
+      // CON_FUNC_ALIAS: register as callable native alias (no heap slot)
+      if (pType.startsWith('CON_FUNC_ALIAS')) {
+        cls.children[pName] = { name: pName, offset: -1, type: ESymbolType.function, nativeAlias: true } as SymbolDefinition;
+        continue;
+      }
+      // Skip other CON_ type annotations and static properties — not heap slots
+      if (pType.startsWith('CON_') || p.isStatic()) continue;
 
       cls.children[pName] = { name: pName, offset: cls.num_elements, type: ESymbolType.number };
 
@@ -278,19 +362,24 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
             isArray = true;
           }
 
-          const type = context.typeAliases.get(t);
+          const typeAlias = context.typeAliases.get(t);
 
-          if (!type) {
+          if (!typeAlias) {
+            if (t.includes('|')) {
+              // Union type (e.g. CProjectile | number) — treat as plain number
+              cls.children[pName].type = ESymbolType.number;
+              break;
+            }
             addDiagnostic(p, context, 'error', `Undeclared type ${pType}`);
             return '';
           }
 
-          if (type.literal) {
-            if (type.literal == 'string' && isArray)
+          if (typeAlias.literal) {
+            if (typeAlias.literal == 'string' && isArray)
               cls.children[pName].type = ESymbolType.string | ESymbolType.array;
             else if (isArray)
               cls.children[pName].type = ESymbolType.array;
-            else cls.children[pName].type = type.literal as any;
+            else cls.children[pName].type = typeAlias.literal as any;
           } else {
             cls.children[pName].type = ESymbolType.object | (isArray ? ESymbolType.array : 0);
             cls.children[pName].children = getObjectTypeLayout(t, context);
@@ -418,24 +507,29 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
     }
   }
 
-  if (type == '') {
-    context.curClass = cls;
-    // Pre-register all method names before the constructor is compiled so that
-    // forward references (calling a method defined later in the file) resolve correctly.
-    const methodsForPreReg = cd.getInstanceMethods();
-    for (const m of methodsForPreReg) {
-      const mName = m.getName();
-      const retText = m.getReturnTypeNode()?.getText();
-      const retClassSym = retText ? context.symbolTable.get(retText) as SymbolDefinition : undefined;
-      const retIsClass = retClassSym && (retClassSym.type & ESymbolType.class);
-      context.symbolTable.set(mName, {
-        name: `${className}_${mName}`,
-        type: ESymbolType.function,
-        offset: 0,
-        parentClass: className,
-        returns: retIsClass ? ESymbolType.class : (retText && retText !== 'void' ? ESymbolType.number : undefined),
-      });
-      cls.children[mName] = context.symbolTable.get(mName) as SymbolDefinition;
+  // Pre-scan parent's OnEvent so we can allocate _g_Child_ptr before the constructor is generated
+  if (parentClassName && !hasOnEvent) {
+    const pSym = context.symbolTable.get(parentClassName) as SymbolDefinition | undefined;
+    const pCd = pSym?.astNode as ClassDeclaration | undefined;
+    if (pCd) {
+      for (const pp of pCd.getProperties()) {
+        if (/^OnEvent(<.*>)?$/.test(pp.getTypeNode()?.getText() ?? '')) {
+          globalPtrName = `_g_${className}_ptr`;
+          if (!context.symbolTable.has(globalPtrName)) {
+            localCtx.globalVarCount++;
+            context.symbolTable.set(globalPtrName, {
+              name: globalPtrName, offset: localCtx.globalVarCount - 1,
+              global: true, type: ESymbolType.number
+            });
+            context.globalAllocations.push({ name: globalPtrName, size: 1 });
+          }
+          ptrAddr = context.options.mode === 'module'
+            ? `_G_ADDR_${globalPtrName}`
+            : String(localCtx.globalVarCount - 1);
+          hasOnEvent = true;
+          break;
+        }
+      }
     }
   }
 
@@ -443,8 +537,52 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
     code = `${context.options.lineDetail ? formatLineDetail(ctors[0].getText()) : ''}\ndefstate ${className}_constructor \n  set ra rbp \n  state push \n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
     code += indent(`state pushr2\nset r0 ${cls.num_elements}\nset r1 ${EHeapType.object}\nstate alloc\nstate popr2\nsetarray flat[rbp] rb\nadd rsp 1\n`, 1);
     code += visitConstructorDeclaration(ctors[0], context, '');
+    if (hasOnEvent && ptrAddr)
+      code += `  set ra flat[rbp]\n  setarray flat[${ptrAddr}] ra\n`;
     code += `  set rb flat[rbp]\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\nends \n\n`;
   }
+
+  // Monomorphize parent's event handlers into child's context (re-generate with child's method dispatch)
+  if (parentClassName && hasOnEvent) {
+    const pSym = context.symbolTable.get(parentClassName) as SymbolDefinition | undefined;
+    const pCd = pSym?.astNode as ClassDeclaration | undefined;
+    if (pCd) {
+      for (const pp of pCd.getProperties()) {
+        if (!/^OnEvent(<.*>)?$/.test(pp.getTypeNode()?.getText() ?? '')) continue;
+        const pInit = pp.getInitializer();
+        if (!pInit?.isKind(SyntaxKind.ObjectLiteralExpression)) break;
+        const evts = (pInit as ObjectLiteralExpression).getProperties();
+        for (const ev of evts) {
+          const isArrow = ev.isKind(SyntaxKind.PropertyAssignment) &&
+            (ev as any).getInitializer?.()?.isKind(SyntaxKind.ArrowFunction);
+          if (!ev.isKind(SyntaxKind.MethodDeclaration) && !isArrow) continue;
+          const eFnName = ev.getName();
+          if (!EventList.includes(eFnName as TEvents)) continue;
+          const evntLocalCtx: CompilerContext = {
+            ...localCtx,
+            localVarOffset: {},
+            localVarCount: 0,
+            paramMap: {},
+            curClass: cls,
+            currentEventName: eFnName.toUpperCase(),
+          };
+          const lineDetail = context.options.lineDetail ? formatLineDetail(ev.getText(), '\n') : '';
+          let evtCode = `${lineDetail}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+          evtCode += `  set ra flat[${ptrAddr}]\n  setarray flat[rbp] ra\n  add rsp 1\n`;
+          const body = (isArrow ? (ev as any).getInitializer().getBody() : (ev as any).getBody()) as any;
+          if (body) {
+            const stmts = body.getStatements() as Statement[];
+            stmts.forEach(s => { evtCode += visitStatement(s, evntLocalCtx); });
+          }
+          evtCode += `  sub rsp 1\n  sub rbp 1\n  set rsp rbp\n  set rssp rsbp\n  state pop\n  set rsbp ra\n  state pop\n  set rbp ra\n  state _GC\nendevent \n\n`;
+          eventCode += evtCode;
+        }
+        break;
+      }
+    }
+  }
+
+  if (hasOnEvent) code += eventCode;
 
   // visit methods
   const methods = cd.getInstanceMethods();
@@ -539,6 +677,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
   code += codeV;
 
   context.curClass = null;
+  context.currentParentClass = undefined;
 
   let prefix = projectileDefineCode + labels + '\n';
 

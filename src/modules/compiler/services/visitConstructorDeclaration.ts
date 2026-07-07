@@ -1,4 +1,4 @@
-import { ConstructorDeclaration, Block, ExpressionStatement, SyntaxKind, CallExpression, Expression } from "ts-morph";
+import { ConstructorDeclaration, Block, ExpressionStatement, SyntaxKind, CallExpression, Expression, ClassDeclaration } from "ts-morph";
 import { CompilerContext, ESymbolType, SymbolDefinition } from "../Compiler";
 import { addDiagnostic } from "./addDiagnostic";
 import { EventList } from "../types";
@@ -7,6 +7,7 @@ import { parseActorSuperCall, PROJECTILE_FIELD_MAP, parseProjectileSuperCall } f
 import { getObjectTypeLayout } from "./getObjectLayout";
 import { visitStatement } from "./visitStatement";
 import { evaluateLiteralExpression } from "../helper/helpers";
+import { visitExpression } from "./visitExpression";
 
  /******************************************************************************
    * CONSTRUCTOR
@@ -170,15 +171,17 @@ export function visitConstructorDeclaration(
           curFunc: undefined,
         };
         ctor.getParameters().forEach((p, i) => {
-          const type = p.getType();
+          // Use the source-level type annotation text to avoid import-path-qualified names
+          // (e.g. p.getType().getText() can return "import('...').TWeaponAnim", but
+          // p.getTypeNode()?.getText() returns "TWeaponAnim")
+          const typeText = p.getTypeNode()?.getText() ?? p.getType().getText();
           let t: Exclude<ESymbolType, ESymbolType.enum> = ESymbolType.number;
           let children: Record<string, SymbolDefinition>;
-          let con = '';
-          switch (type.getText()) {
+          switch (typeText) {
             case 'string':
             case 'pointer':
             case 'boolean':
-              t = ESymbolType[type.getText()];
+              t = ESymbolType[typeText as 'string' | 'pointer' | 'boolean'];
               break;
 
             case 'constant':
@@ -200,18 +203,25 @@ export function visitConstructorDeclaration(
               break;
 
             default:
-              let tText = type.getText();
+              let tText = typeText;
 
-              if (type.getText().endsWith('[]')) {
+              if (tText.endsWith('[]')) {
                 t = ESymbolType.object | ESymbolType.array;
                 tText = tText.slice(0, tText.length - 2);
               } else t = ESymbolType.object;
 
+              // Union types (e.g. CProjectile | number, TWeaponOffset | undefined) → number
+              if (tText.includes('|')) {
+                t = ESymbolType.number;
+                break;
+              }
+
               const alias = context.typeAliases.get(tText);
 
               if (!alias) {
-                addDiagnostic(ctor, context, 'error', `Undeclared type alias ${tText}`);
-                return '';
+                // Unknown type — treat as number to avoid aborting the whole constructor
+                t = ESymbolType.number;
+                break;
               }
 
               children = getObjectTypeLayout(tText, context);
@@ -219,6 +229,27 @@ export function visitConstructorDeclaration(
           localCtx.paramMap[p.getName()] = { name: p.getName(), offset: i, type: t, children };
         });
         for (const st of statements) {
+          // Intercept super() for plain class inheritance — inline parent's constructor body
+          if (context.currentParentClass && st.isKind(SyntaxKind.ExpressionStatement)) {
+            const expr = (st as ExpressionStatement).getExpression();
+            if (expr.isKind(SyntaxKind.CallExpression) &&
+                (expr as CallExpression).getExpression().getText() === 'super') {
+              const call = expr as CallExpression;
+              // Evaluate super() args into r0..rN (parent constructor parameters)
+              call.getArguments().forEach((arg, i) => {
+                code += indent(visitExpression(arg as Expression, localCtx, `r${i}`), 1);
+              });
+              // Re-run parent's constructor body inline in the child's frame
+              const parentSymDef = context.symbolTable.get(context.currentParentClass) as SymbolDefinition | undefined;
+              const parentCdNode = parentSymDef?.astNode as ClassDeclaration | undefined;
+              const parentCtorList = parentCdNode?.getConstructors() ?? [];
+              if (parentCtorList.length > 0) {
+                const parentBodyCtx: CompilerContext = { ...localCtx, currentParentClass: undefined };
+                code += visitConstructorDeclaration(parentCtorList[0], parentBodyCtx, '');
+              }
+              continue;
+            }
+          }
           code += indent(visitStatement(st, localCtx), 1);
         }
       }
