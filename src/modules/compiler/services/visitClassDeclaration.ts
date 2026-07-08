@@ -299,7 +299,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
           };
 
           const isPlainClass = type === '';
-          const lineDetail = context.options.lineDetail ? formatLineDetail(e.getText(), '\n') : '';
+          const lineDetail = context.options.lineDetail ? '\n' + formatLineDetail(e.getText()) : '';
 
           let evtCode = `${lineDetail}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
           evtCode += isPlainClass
@@ -566,7 +566,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
             curClass: cls,
             currentEventName: eFnName.toUpperCase(),
           };
-          const lineDetail = context.options.lineDetail ? formatLineDetail(ev.getText(), '\n') : '';
+          const lineDetail = context.options.lineDetail ? '\n' + formatLineDetail(ev.getText()) : '';
           let evtCode = `${lineDetail}\nonevent EVENT_${eFnName.toUpperCase()}\nset ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
           evtCode += `  set ra flat[${ptrAddr}]\n  setarray flat[rbp] ra\n  add rsp 1\n`;
           const body = (isArrow ? (ev as any).getInitializer().getBody() : (ev as any).getBody()) as any;
@@ -660,7 +660,7 @@ export function visitClassDeclaration(cd: ClassDeclaration, context: CompilerCon
               }
             });
 
-            codeV += `${context.options.lineDetail ? formatLineDetail(e.getText(), '\n') : ''}\n${localCtx.currentActorHardcoded || type === 'CProjectile' ? 'actor' : `useractor ${localCtx.currentActorIsEnemy ? 1 : 0}`} ${picnum} ${extra} ${action}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
+            codeV += `${context.options.lineDetail ? '\n' + formatLineDetail(e.getText()) : ''}\n${localCtx.currentActorHardcoded || type === 'CProjectile' ? 'actor' : `useractor ${localCtx.currentActorIsEnemy ? 1 : 0}`} ${picnum} ${extra} ${action}\n  set ra rbp\n  state push\n  set ra rsbp\n  state push\n  set rsbp rssp\n  set rbp rsp\n  add rbp 1\n`;
 
             stmts.forEach(s => {
               if (!s.isKind(SyntaxKind.ReturnStatement))

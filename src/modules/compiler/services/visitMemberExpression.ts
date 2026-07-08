@@ -318,11 +318,11 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
           if (segments[1].kind != 'index') {
             if (obj.name === 'userdef' || obj.name === 'input' || obj.name === 'player') {
               singletonNoIndex = true;
-              code += obj.name === 'userdef'
-                ? `set ri 0\n`
-                : obj.name === 'player'
-                  ? `set ri THISACTOR\n`
-                  : `set ri myconnectindex\n`;
+              if (obj.name === 'userdef')
+                code += `set ri 0\n`;
+              else if (obj.name !== 'player')
+                code += `set ri myconnectindex\n`;
+              // player singleton: THISACTOR inlined at each getp[]/setp[] site
             } else if (sym && !(sym as SymbolDefinition).native_pointer_index) {
               addDiagnostic(expr, context, "error", `Missing index for ${obj.name}: ${expr.getText()}`);
               return "set ra 0\n";
@@ -547,6 +547,8 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
 
           currSegIndex = singletonNoIndex || obj.kind === 'this' ? 2 : 3;
 
+          const pIndex = (obj.kind === 'this' || (obj.name === 'player' && singletonNoIndex)) ? 'THISACTOR' : 'ri';
+
           switch (obj.name) {
             case 'sprites':
               nativeVar = nativeVars_Sprites;
@@ -666,7 +668,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
                   if (assignment)
                     code += `state pop\n`;
 
-                  code += `${assignment ? 'set' : 'get'}${op}[${obj.kind === 'this' ? 'THISACTOR' : 'ri'}].`;
+                  code += `${assignment ? 'set' : 'get'}${op}[${pIndex}].`;
                   code += `${nVar.code} ${reg}\n`;
                 }
 
@@ -702,7 +704,7 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
                   for (let i = 0; i < pushes; i++)
                     code += `state pop\n`;
                   if (!overriden)
-                    code += `${assignment ? 'set' : 'get'}${op}[${obj.kind === 'this' ? 'THISACTOR' : 'ri'}].`;
+                    code += `${assignment ? 'set' : 'get'}${op}[${pIndex}].`;
 
                   code += `${v.code} ${reg}\n`;
                 }
@@ -728,14 +730,14 @@ export function visitMemberExpression(expr: Expression, context: CompilerContext
             if (assignment)
               code += `state pop\n`;
 
-            code += `${assignment ? 'set' : 'get'}${op}[${obj.kind === 'this' ? 'THISACTOR' : 'ri'}].`;
+            code += `${assignment ? 'set' : 'get'}${op}[${pIndex}].`;
             code += `${nVar.code} ${reg}\n`;
           } else if (nVar.type == CON_NATIVE_FLAGS.VARIABLE) {
             if (nVar.override_code) {
               code += (nVar.code as unknown as string[])[assignment ? 1 : 0];
             } else if (nVar.var_type == CON_NATIVE_TYPE.native) {
               if (!overriden)
-                code += `${assignment ? 'set' : 'get'}${op}[${obj.kind === 'this' ? 'THISACTOR' : 'ri'}].`;
+                code += `${assignment ? 'set' : 'get'}${op}[${pIndex}].`;
 
               code += `${nVar.code} ${reg}\n`;
             } else code += `set ${assignment ? (nVar.code + ` ${reg}\n`)
