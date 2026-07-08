@@ -318,6 +318,14 @@ export class CWeapon {
                     0, 0, xDim, yDim
                 );
             }
+        },
+        WeapKey2: () => {
+            if(weaponSlotSub[player.weaponSystem.currWeapon]
+                & (player.weaponSystem.bSubWeapon[this.slot] + 1)
+            ) {
+                returnVar = -1;
+                this.Show();
+            }
         }
     }
 }
