@@ -16,6 +16,13 @@ import { AnimUtils } from './AnimUtils';
 // Bit field for weapon slot and sub activation -> 3 means both sub slots are enabld
 const weaponSlotSub: number[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
+type TShowHideFuncs = {
+    show: () => void,
+    hide: () => void
+}
+
+const weaponShowHideFuncs: TShowHideFuncs[] = new Array(20);
+
 class CWK1 extends CEvent {
     constructor() {
         super('WeapKey1')
@@ -170,51 +177,6 @@ export class CWeapon {
 
     private RotateSpriteF: CON_FUNC_ALIAS<typeof CEvent.prototype.RotateSpriteF> = CEvent.prototype.RotateSpriteF;
 
-    constructor(
-        slot: number,
-        sub: number,
-        anim: TWeaponAnim,
-        projectile: CProjectile | number,
-        config: pos2f,
-        style: TStyle,
-        offset?: TWeaponOffset
-    ) {
-        weaponSlotSub[slot] |= (sub + 1);
-
-        this.slot = slot;
-        this.sub = sub;
-        this.anim = anim;
-        this.projectile = projectile;
-        this.anim.curFrame = this.anim.startFrame;
-        this.counter = 0;
-        this.config = config;
-        this.style = style;
-        this.offsets = offset ?? {
-            offset: {
-                xy: {
-                    x: 0,
-                    y: 0
-                },
-                scale: 0,
-                ang: 0
-            }, lower: {
-                xy: {
-                    x: 0,
-                    y: 32.0
-                },
-                scale: 0,
-                ang: 0
-            }
-        };
-
-        this.curOffset.xy.x = this.offsets.lower.xy.x;
-        this.curOffset.xy.y = this.offsets.lower.xy.y;
-        this.curOffset.scale = this.offsets.lower.scale;
-        this.curOffset.ang = this.offsets.lower.ang;
-
-        this.drawCounter = 0;
-    }
-
     protected OnDraw(): void {
         const cases: IFastSwitch[] = [
             {
@@ -226,51 +188,6 @@ export class CWeapon {
         ]
 
         FastSwitch(cases, this.counter);
-    }
-
-    private Show() {
-        if(!this.active) {
-            player.weaponSystem.currWeapon = this.slot;
-            player.weaponSystem.bSubWeapon[this.slot] = this.sub;
-
-            if(this.drawCounter > 0) {
-                this.drawCounter--;
-                const step: FP16 = this.offsets.lower.xy.y / FP16(this.anim.drawWeaponDuration);
-
-                this.curOffset.xy.y -= step;
-                const end: FP16 = this.offsets.offset.xy.y + this.offsets.lower.xy.y
-
-                const y: FP16 = AnimUtils.smoothstep(this.curOffset.xy.y / end);
-
-                const final: FP16 = end * y;
-                this.curOffset.xy.y = final;
-            } else {
-                this.active = true;
-                this.curOffset.xy.y = this.offsets.offset.xy.y;
-                this.canFire = true;
-            }
-        }
-    }
-
-    private Hide() {
-        if(this.active) {
-            if(this.drawCounter < this.anim.drawWeaponDuration) {
-                this.drawCounter++;
-                const step: FP16 = this.offsets.lower.xy.y / FP16(this.anim.drawWeaponDuration);
-
-                this.curOffset.xy.y -= step;
-                const end: FP16 = this.offsets.offset.xy.y + this.offsets.lower.xy.y
-
-                const y: FP16 = AnimUtils.smoothstep(this.curOffset.xy.y / end);
-
-                const final: FP16 = end * y;
-                this.curOffset.xy.y = final;
-            } else {
-                this.active = false;
-                this.curOffset.xy.y = this.offsets.lower.xy.y;
-                this.canFire = false;
-            }
-        }
     }
 
     Events: OnEvent = {
@@ -319,12 +236,100 @@ export class CWeapon {
                 );
             }
         },
-        WeapKey2: () => {
-            if(weaponSlotSub[player.weaponSystem.currWeapon]
-                & (player.weaponSystem.bSubWeapon[this.slot] + 1)
-            ) {
-                returnVar = -1;
-                this.Show();
+        ProcessInput: () => {
+            
+        }
+        
+    }
+
+    constructor(
+        slot: number,
+        sub: number,
+        anim: TWeaponAnim,
+        projectile: CProjectile | number,
+        config: pos2f,
+        style: TStyle,
+        offset?: TWeaponOffset
+    ) {
+        weaponSlotSub[slot] |= (sub + 1);
+
+        this.slot = slot;
+        this.sub = sub;
+        this.anim = anim;
+        this.projectile = projectile;
+        this.anim.curFrame = this.anim.startFrame;
+        this.counter = 0;
+        this.config = config;
+        this.style = style;
+        this.offsets = offset ?? {
+            offset: {
+                xy: {
+                    x: 0,
+                    y: 0
+                },
+                scale: 0,
+                ang: 0
+            }, lower: {
+                xy: {
+                    x: 0,
+                    y: 32.0
+                },
+                scale: 0,
+                ang: 0
+            }
+        };
+
+        this.curOffset.xy.x = this.offsets.lower.xy.x;
+        this.curOffset.xy.y = this.offsets.lower.xy.y;
+        this.curOffset.scale = this.offsets.lower.scale;
+        this.curOffset.ang = this.offsets.lower.ang;
+
+        this.drawCounter = 0;
+
+        // Register Show and Hide methods
+        weaponShowHideFuncs[slot * 2 + sub] = {
+            show: () => {
+                if(!this.active) {
+                    player.weaponSystem.currWeapon = this.slot;
+                    player.weaponSystem.bSubWeapon[this.slot] = this.sub;
+
+                    if(this.drawCounter > 0) {
+                        this.drawCounter--;
+                        const step: FP16 = this.offsets.lower.xy.y / FP16(this.anim.drawWeaponDuration);
+
+                        this.curOffset.xy.y -= step;
+                        const end: FP16 = this.offsets.offset.xy.y + this.offsets.lower.xy.y
+
+                        const y: FP16 = AnimUtils.smoothstep(this.curOffset.xy.y / end);
+
+                        const final: FP16 = end * y;
+                        this.curOffset.xy.y = final;
+                    } else {
+                        this.active = true;
+                        this.curOffset.xy.y = this.offsets.offset.xy.y;
+                        this.canFire = true;
+                    }
+                }
+            },
+            hide: () => {
+                if(this.active) {
+                    if(this.drawCounter < this.anim.drawWeaponDuration) {
+                        this.drawCounter++;
+                        const step: FP16 = this.offsets.lower.xy.y / FP16(this.anim.drawWeaponDuration);
+
+                        this.curOffset.xy.y -= step;
+                        const end: FP16 = this.offsets.offset.xy.y + this.offsets.lower.xy.y
+
+                        const y: FP16 = AnimUtils.smoothstep(this.curOffset.xy.y / end);
+
+                        const final: FP16 = end * y;
+                        this.curOffset.xy.y = final;
+                    } else {
+                        this.active = false;
+                        this.curOffset.xy.y = this.offsets.lower.xy.y;
+                        this.canFire = false;
+                    }
+                }
             }
         }
     }
